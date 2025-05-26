@@ -25,21 +25,22 @@ var table = new DataTable("#indicatorSetsTable", {
     mark: true,
 
     language: {
-        buttons: {
-            colvis: "Toggle Columns",
-        },
+        emptyTable: "No indicators match your specified filters.  Try relaxing some filters, or clear all filters and try again.",
+        // buttons: {
+        //     colvis: "Toggle Columns",
+        // },
     },
 });
 
-new DataTable.Buttons(table, {
-    buttons: [
-        {
-            extend: "colvis",
-            columns: "th:nth-child(n+3)",
-            prefixButtons: ["colvisRestore"],
-        },
-    ],
-});
+// new DataTable.Buttons(table, {
+//     buttons: [
+//         {
+//             extend: "colvis",
+//             columns: "th:nth-child(n+3)",
+//             prefixButtons: ["colvisRestore"],
+//         },
+//     ],
+// });
 
 table.buttons(0, null).container().appendTo("#colvis");
 

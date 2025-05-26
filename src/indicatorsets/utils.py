@@ -1,10 +1,12 @@
 import ast
 import random
+from collections import defaultdict
 from datetime import datetime as dtime
 
 import requests
 from django.conf import settings
 from epiweeks import Week
+
 from indicatorsets.models import IndicatorSet
 
 
@@ -31,7 +33,6 @@ def get_list_of_indicators_filtered_by_geo(geos):
     url = f"{settings.EPIDATA_URL}covidcast/geo_coverage"
     params = {"geo": dict_to_geo_string(geos), "api_key": settings.EPIDATA_API_KEY}
     response = requests.get(url, params=params)
-    print(f"Response from Epidata: {response}")
     return response.json()
 
 
@@ -63,3 +64,20 @@ def get_original_data_provider_choices():
         .order_by("original_data_provider")
         .distinct()
     ]
+
+
+def group_by_property(list_of_dicts, property):
+    """Groups a list of dictionaries by a specified property.
+
+    Args:
+        list_of_dicts: A list of dictionaries.
+        property: The property to group by.
+
+    Returns:
+        A dictionary where keys are the unique values of the property,
+        and values are lists of dictionaries with that property value.
+    """
+    grouped_dict = defaultdict(list)
+    for item in list_of_dicts:
+        grouped_dict[item[property]].append(item)
+    return dict(grouped_dict)

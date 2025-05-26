@@ -8,7 +8,7 @@
 <link rel="stylesheet"
       href="https://cdn.datatables.net/plug-ins/1.10.13/features/mark.js/datatables.mark.min.css">
 <div class="col-10">
-    <div class="row table-responsive">
+    <div class="row table-responsive table-container">
         <table id="indicatorSetsTable" class="display cell-border" width="100%">
             <thead>
                 <tr>
@@ -316,6 +316,10 @@
             </tbody>
         </table>
     </div>
+    <!-- Loader Overlay -->
+    <div class="loader-overlay" id="loaderOverlay">
+        <div class="lds-roller"><div></div><div></div><div></div><div></div><div></div><div></div><div></div><div></div></div>
+    </div>
     <div class="float" id="showSelectedIndicatorsButton" style="display:none;">
         <a type="button"
            class="btn btn-primary"
@@ -334,7 +338,10 @@
 
     $(document).ready(function() {
         table.columns.adjust();
-        $("#totalRowsNumber").text(`Showing ${table.page.info().recordsTotal} indicator ${pluralize(table.page.info().recordsTotal, 'set')} containing ${relatedIndicators.length} individual ${pluralize(relatedIndicators.length, 'indicator')}`);
+        const totalRowsSpan = document.createElement("span");
+        totalRowsSpan.textContent = `Showing ${table.page.info().recordsTotal} indicator ${pluralize(table.page.info().recordsTotal, 'set')} containing ${relatedIndicators.length} individual ${pluralize(relatedIndicators.length, 'indicator')}`;
+        const refElement = document.getElementById("indicatorSetsTable_wrapper");
+        refElement.before(totalRowsSpan);
     });
 
     // Add event listener for openizng and closing details
@@ -352,4 +359,7 @@
         }
         
     });
+
+   
+
 </script>

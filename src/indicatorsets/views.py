@@ -3,6 +3,7 @@ import json
 import logging
 import requests
 
+
 from django.conf import settings
 from django.http import JsonResponse
 from django.views.generic import ListView
@@ -10,44 +11,15 @@ from django.views.generic import ListView
 from base.models import Geography, GeographyUnit
 from indicatorsets.filters import IndicatorSetFilter
 from indicatorsets.forms import IndicatorSetFilterForm
-from indicatorsets.models import IndicatorSet
+from indicatorsets.models import IndicatorSet, FilterDescription, ColumnDescription
 from indicatorsets.utils import (
     generate_epivis_custom_title,
     generate_random_color,
     get_epiweek,
+    group_by_property,
 )
 
 logger = logging.getLogger(__name__)
-
-FILTERS_DESCRIPTIONS = {
-    "pathogens": "List only indicators related to these pathogens, syndromes or diseases.",
-    "geographic_scope": "List only indicators that cover any of the selected countries or world regions.",
-    "geographic_levels": "List only indicators that are available at any of the selected geographic levels.",
-    "severity_pyramid_rungs": "List only indicators that are directly related to any of the selected rungs.",
-    "original_data_provider": "List only indicator that are based on data from one of the selected sources.",
-    "temporal_granularity": "The temporal resolution of this indicator (not of the reporting).  Might not be the same as Reporting Cadence (e.g. a daily indicator may be reported only once a week).",
-    "temporal_scope_end": "The latest date for which this indicator is available.",
-    "location_search": "Enter one or more locations for which you are looking for indicator coverage, or leave empty for all locations.  Start entering a location name to see all compatible locations.  Auto-complete with [Tab] or [Enter].  Currently works only for U.S. locations.",
-}
-
-COLUMNS_DESCRIPTIONS = {
-    "name": "Hover over the indicator's name to see a brief description.",
-    "geographic_coverage": "The countries or world regions covered by this indicator.  These are typically covered at finer geographic levels / jurisdictions.",
-    "geographic_levels": "All the geographic levels at which this indicator is available.  Larger jurisdictions are often based on aggregation of data from constituent jurisdictions.",
-    "temporal_scope_start": "The earliest date for which this indicator is available.",
-    "temporal_scope_end": "The latest date for which this indicator is available.",
-    "temporal_granularity": "The temporal resolution of this indicator (not of the reporting).  Might not be the same as Reporting Cadence (e.g. a daily indicator may be reported only once a week).",
-    "reporting_cadence": "The frequency with which this indicator is reported.  This may be different from the temporal granularity.",
-    "reporting_lag": 'The number of days from the last day of a reported period until the first reported value for that period is usually available in Delphi Epidata.  E.g. if reporting U.S. epiweeks (Sunday through Saturday), and the first report is usually available in Delphi Epidata on the following Friday, The Reporting Lag is 6. By "usually available" we mean when it\'s "supposed to be" available based on our current understanding of the data provider\'s operations and Delphi\'s ingestion pipeline.  That is the date on which we think of the data as showing up "on time", and relative to which we track unusual delays.',
-    "revision_cadende": 'How frequently are revised values (e.g. "backfill") usually reported (if any)?',
-    "population": 'The population or demographic group reflected by the indicator ("All" means the entire population)',
-    "population_stratifiers": "What population or demographic stratifiers are available, if any?",
-    "surveillance_categories": "Which surveillance categories or rungs in the Severity Pyramid does this indicator attempt to track?  Some indicators may approximately track multiple categories.",
-    "original_data_provider": "The owner or supplier of the original or raw data used to create this indicator.",
-    "pre_processing": "Brief description of main data processing used in creating this set of indicators, including smoothing and aggregation.  For more details, see the documentation.",
-    "censoring": "Is any of the data being censored (e.g. small counts)?  If so how, and how much impact does it have (e.g. approximate fraction of values affected).",
-    "dua_required": "Applicable data use terms (may apply even to publicly accessible indicators).",
-}
 
 HEADER_DESCRIPTION = "Discover, display and download real-time infectious disease indicators (time series) that track a variety of pathogens, diseases and syndromes in a variety of locations (primarily within the USA). Browse the list, or filter it first by locations and pathogens of interest, by surveillance categories, and more. Expand any row to expose and select from a set of related indicators, then hit 'Show Selected Indicators' at bottom to plot or export your selected indicators, or to generate code snippets to retrieve them from the Delphi Epidata API. Most indicators are served from the Delphi Epidata real-time repository, but some may be available only from third parties or may require prior approval."
 
@@ -175,6 +147,29 @@ class IndicatorSetListView(ListView):
                     url_params_str = f"{url_params_str}&{param_name}={param_value}"
         return url_params_dict, url_params_str
 
+    def get_grouped_geographic_granularities(self):
+        geographic_granularities = [
+            {
+                "id": str(geo_unit.geo_id),
+                "geoType": geo_unit.geo_level.name,
+                "text": geo_unit.display_name,
+                "geoTypeDisplayName": geo_unit.geo_level.display_name,
+            }
+            for geo_unit in GeographyUnit.objects.all()
+            .prefetch_related("geo_level")
+            .order_by("level")
+        ]
+        geographic_granularities = group_by_property(
+            geographic_granularities, "geoTypeDisplayName"
+        )
+        grouped_geographic_granularities = []
+        for key, value in geographic_granularities.items():
+            grouped_geographic_granularities.append({
+                "text": key,
+                "children": value,
+            })
+        return grouped_geographic_granularities
+
     def get_context_data(self, **kwargs):
         context = super().get_context_data(**kwargs)
         queryset = self.get_queryset()
@@ -191,20 +186,17 @@ class IndicatorSetListView(ListView):
                 filter.indicators_qs, filter.qs.values_list("id", flat=True)
             )
         )
-        context["filters_descriptions"] = FILTERS_DESCRIPTIONS
-        context["columns_descriptions"] = COLUMNS_DESCRIPTIONS
+        context["filters_descriptions"] = (
+            FilterDescription.get_all_descriptions_as_dict()
+        )
+        context["columns_descriptions"] = (
+            ColumnDescription.get_all_descriptions_as_dict()
+        )
         context["header_description"] = HEADER_DESCRIPTION
         context["available_geographies"] = Geography.objects.filter(
             used_in="indicators"
         )
-        context["geographic_granularities"] = [
-            {
-                "id": str(geo_unit.geo_id),
-                "geoType": geo_unit.geo_level.name,
-                "text": geo_unit.display_name,
-            }
-            for geo_unit in GeographyUnit.objects.all().prefetch_related("geo_level")
-        ]
+        context["geographic_granularities"] = self.get_grouped_geographic_granularities()
         return context
 
 
@@ -375,3 +367,69 @@ def preview_data(request):
                         }
                     )
         return JsonResponse(preview_data, safe=False)
+
+
+def create_query_code(request):
+    if request.method == "POST":
+        data = json.loads(request.body)
+        start_date = data.get("start_date", "")
+        end_date = data.get("end_date", "")
+        indicators = data.get("indicators", [])
+        covidcast_geos = data.get("covidCastGeographicValues", {})
+        python_code_blocks = []
+        r_code_blocks = []
+        for indicator in indicators:
+            if indicator["_endpoint"] == "covidcast":
+                for geo_type, values in covidcast_geos.items():
+                    geo_values = [
+                        (
+                            value["id"].lower()
+                            if value["geoType"] in ["nation", "state"]
+                            else value["id"]
+                        )
+                        for value in values
+                    ]
+                    r_geos = ", ".join(f'"{str(geo)}"' for geo in geo_values)
+                    if indicator["time_type"] == "week":
+                        start_day, end_day = get_epiweek(start_date, end_date)
+                        python_code_block = (
+                            '<pre class="code-block">'
+                            + "<code>from epiweeks import Week<br>"
+                            + "import covidcast<br><br>"
+                            + f'data = covidcast.signal("{indicator["data_source"]}", "{indicator["indicator"]}", Week({int(start_day[:4])}, {int(start_day[4:])}), Week({int(end_day[:4])}, {int(end_day[4:])}), "{geo_type}", {json.dumps([str(geo) for geo in geo_values])})'
+                            + "</code>"
+                            + "</pre>"
+                        )
+                        python_code_blocks.append(python_code_block)
+                        r_code_block = (
+                            '<pre class="code-block">'
+                            + "<code>libary(covidcast)<br><br>"
+                            + f'cc_data <- covidcast_signal(data_source = "{indicator["data_source"]}", signal = "{indicator["indicator"]}", start_day = "{start_day}", end_day = "{end_day}", geo_type = "{geo_type}", geo_values = c({r_geos}))'
+                            + "</code>"
+                            + "</pre>"
+                        )
+                        r_code_blocks.append(r_code_block)
+                    else:
+                        start_day = tuple(map(int, start_date.split("-")))
+                        end_day = tuple(map(int, end_date.split("-")))
+                        python_code_block = (
+                            '<pre class="code-block">'
+                            + "<code>from datetime import date<br>"
+                            + "import covidcast<br><br>"
+                            + f'data = covidcast.signal("{indicator["data_source"]}", "{indicator["indicator"]}", date{str(start_day)}, date{str(end_day)}, "{geo_type}", {json.dumps([str(geo) for geo in geo_values])})'
+                            + "</code>"
+                            + "</pre>"
+                        )
+                        python_code_blocks.append(python_code_block)
+                        r_code_block = (
+                            '<pre class="code-block">'
+                            + "<code>libary(covidcast)<br><br>"
+                            + f'cc_data <- covidcast_signal(data_source = "{indicator["data_source"]}", signal = "{indicator["indicator"]}", start_day = "{start_date}", end_day = "{end_date}", geo_type = "{geo_type}", geo_values = c({r_geos}))'
+                            + "</code>"
+                            + "</pre>"
+                        )
+                        r_code_blocks.append(r_code_block)
+        return JsonResponse(
+            {"python_code_blocks": python_code_blocks, "r_code_blocks": r_code_blocks},
+            safe=False,
+        )

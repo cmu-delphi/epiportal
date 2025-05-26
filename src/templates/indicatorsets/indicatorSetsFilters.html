@@ -3,11 +3,10 @@
 {% load static %}
 {% load dict_get %}
 <div class="col-2">
-    <form method="get" id="filterIndicatorSetsForm">
+    <form method="GET" id="filterIndicatorSetsForm">
         <div class="card">
             <div class="card-body no-padding-top-bottom">
                 <span id="totalRowsNumber"></span>
-                <div class="colvis" id="colvis"></div>
                 <h2 class="card-title font-size-25">Filters</h2>
                 <div class="accordion accordion-flush" id="accordionIndicatorSetFilters">
                     <div class="accordion-item">
@@ -48,7 +47,9 @@
                                     data-mdb-target="#flush-collapse_{{ form.pathogens.auto_id }}"
                                     aria-expanded="false"
                                     aria-controls="flush-collapse_{{ form.pathogens.auto_id }}">
-                                Pathogens/Syndromes
+                                Pathogens
+                                <br>
+                                /Syndromes
                                 <a tabindex="0"
                                    type="button"
                                    class="info-button filter-description-popover"
@@ -72,148 +73,6 @@
                                     <label class="form-check-label" for="select-all">Select all</label>
                                 </div>
                                 {{ form.pathogens|as_crispy_field }}
-                            </div>
-                        </div>
-                    </div>
-                    <div class="accordion-item">
-                        <h2 class="accordion-header"
-                            id="flush-heading_{{ form.geographic_scope.auto_id }}">
-                            <button data-mdb-collapse-init
-                                    class="accordion-button collapsed"
-                                    type="button"
-                                    data-mdb-toggle="collapse"
-                                    data-mdb-target="#flush-collapse_{{ form.geographic_scope.auto_id }}"
-                                    aria-expanded="false"
-                                    aria-controls="flush-collapse_{{ form.geographic_scope.auto_id }}">
-                                Geographic Coverage
-                                <a tabindex="0"
-                                   type="button"
-                                   class="info-button filter-description-popover"
-                                   data-mdb-container="body"
-                                   data-mdb-ripple-init
-                                   data-mdb-popover-init
-                                   data-mdb-trigger="hover"
-                                   data-mdb-placement="right"
-                                   data-mdb-content="{{ filters_descriptions|dict_get:"geographic_scope" }}">
-                                    <i class="far fa-circle-question"></i>
-                                </a>
-                            </button>
-                        </h2>
-                        <div id="flush-collapse_{{ form.geographic_scope.auto_id }}"
-                             class="accordion-collapse {% if form.geographic_scope.value %} {% else %}collapse{% endif %}"
-                             aria-labelledby="flush-heading_{{ form.geographic_scope.auto_id }}"
-                             data-mdb-parent="#accordionIndicatorSetFilters">
-                            <div class="accordion-body margin-top-1rem">
-                                <div class="bulk-select form-check">
-                                    <input type="checkbox" class="form-check-input" id="select-all" />
-                                    <label class="form-check-label" for="select-all">Select all</label>
-                                </div>
-                                {{ form.geographic_scope|as_crispy_field }}
-                            </div>
-                        </div>
-                    </div>
-                    <div class="accordion-item">
-                        <h2 class="accordion-header"
-                            id="flush-heading_{{ form.geographic_levels.auto_id }}">
-                            <button data-mdb-collapse-init
-                                    class="accordion-button collapsed"
-                                    type="button"
-                                    data-mdb-toggle="collapse"
-                                    data-mdb-target="#flush-collapse_{{ form.geographic_levels.auto_id }}"
-                                    aria-expanded="false"
-                                    aria-controls="flush-collapse_{{ form.geographic_levels.auto_id }}">
-                                Geographic Level
-                                <a tabindex="0"
-                                   type="button"
-                                   class="info-button filter-description-popover"
-                                   data-mdb-container="body"
-                                   data-mdb-ripple-init
-                                   data-mdb-popover-init
-                                   data-mdb-trigger="hover"
-                                   data-mdb-placement="right"
-                                   data-mdb-content="{{ filters_descriptions|dict_get:"geographic_levels" }}">
-                                    <i class="far fa-circle-question"></i>
-                                </a>
-                            </button>
-                        </h2>
-                        <div id="flush-collapse_{{ form.geographic_levels.auto_id }}"
-                             class="accordion-collapse {% if form.geographic_levels.value %} {% else %}collapse{% endif %}"
-                             aria-labelledby="flush-heading_{{ form.geographic_levels.auto_id }}"
-                             data-mdb-parent="#accordionIndicatorSetFilters">
-                            <div class="accordion-body margin-top-1rem">
-                                <div class="bulk-select form-check">
-                                    <input type="checkbox" class="form-check-input" id="select-all" />
-                                    <label class="form-check-label" for="select-all">Select all</label>
-                                </div>
-                                {{ form.geographic_levels|as_crispy_field }}
-                            </div>
-                        </div>
-                    </div>
-                    <div class="accordion-item">
-                        <h2 class="accordion-header"
-                            id="flush-heading_{{ form.temporal_granularity.auto_id }}">
-                            <button data-mdb-collapse-init
-                                    class="accordion-button collapsed"
-                                    type="button"
-                                    data-mdb-toggle="collapse"
-                                    data-mdb-target="#flush-collapse_{{ form.temporal_granularity.auto_id }}"
-                                    aria-expanded="false"
-                                    aria-controls="flush-collapse_{{ form.temporal_granularity.auto_id }}">
-                                Temporal Granularity
-                                <a tabindex="0"
-                                   type="button"
-                                   class="info-button filter-description-popover"
-                                   data-mdb-container="body"
-                                   data-mdb-ripple-init
-                                   data-mdb-popover-init
-                                   data-mdb-trigger="hover"
-                                   data-mdb-placement="right"
-                                   data-mdb-content="{{ filters_descriptions|dict_get:"temporal_granularity" }}">
-                                    <i class="far fa-circle-question"></i>
-                                </a>
-                            </button>
-                        </h2>
-                        <div id="flush-collapse_{{ form.temporal_granularity.auto_id }}"
-                             class="accordion-collapse {% if form.temporal_granularity.value %} {% else %}collapse{% endif %}"
-                             aria-labelledby="flush-heading_{{ form.temporal_granularity.auto_id }}"
-                             data-mdb-parent="#accordionIndicatorSetFilters">
-                            <div class="accordion-body margin-top-1rem">{{ form.temporal_granularity|as_crispy_field }}</div>
-                        </div>
-                    </div>
-                    <div class="accordion-item">
-                        <h2 class="accordion-header"
-                            id="flush-heading_{{ form.severity_pyramid_rungs.auto_id }}">
-                            <button data-mdb-collapse-init
-                                    class="accordion-button collapsed"
-                                    type="button"
-                                    data-mdb-toggle="collapse"
-                                    data-mdb-target="#flush-collapse_{{ form.severity_pyramid_rungs.auto_id }}"
-                                    aria-expanded="false"
-                                    aria-controls="flush-collapse_{{ form.severity_pyramid_rungs.auto_id }}">
-                                Surveillance Category
-                                <a tabindex="0"
-                                   type="button"
-                                   class="info-button filter-description-popover"
-                                   data-mdb-container="body"
-                                   data-mdb-ripple-init
-                                   data-mdb-popover-init
-                                   data-mdb-trigger="hover"
-                                   data-mdb-placement="right"
-                                   data-mdb-content="{{ filters_descriptions|dict_get:"severity_pyramid_rungs" }}">
-                                    <i class="far fa-circle-question"></i>
-                                </a>
-                            </button>
-                        </h2>
-                        <div id="flush-collapse_{{ form.severity_pyramid_rungs.auto_id }}"
-                             class="accordion-collapse {% if form.severity_pyramid_rungs.value %} {% else %}collapse{% endif %}"
-                             aria-labelledby="flush-heading_{{ form.severity_pyramid_rungs.auto_id }}"
-                             data-mdb-parent="#accordionIndicatorSetFilters">
-                            <div class="accordion-body margin-top-1rem">
-                                <div class="bulk-select form-check">
-                                    <input type="checkbox" class="form-check-input" id="select-all" />
-                                    <label class="form-check-label" for="select-all">Select all</label>
-                                </div>
-                                {{ form.severity_pyramid_rungs|as_crispy_field }}
                             </div>
                         </div>
                     </div>
@@ -268,13 +127,135 @@
                             <i class="far fa-circle-question"></i>
                         </a>
                     </div>
+                    <hr />
+                    <button
+                    class="btn btn-primary mb-3 additional-filters-button"
+                    type="button"
+                    data-mdb-collapse-init
+                    data-mdb-ripple-init
+                    data-mdb-target="#additional-filters"
+                    aria-expanded="false"
+                    aria-controls="additional-filters"
+                    >
+                    Additional filters
+                    </button>
+                    <div class="additional-filters {% if form.geographic_levels.value or form.temporal_granularity.value or form.severity_pyramid_rungs.value %}{% else %}collapse{% endif %}" id="additional-filters">
+                        <div class="accordion accordion-flush" id="accordionAdditionalFilters">
+                            <div class="accordion-item">
+                                <h2 class="accordion-header"
+                                    id="flush-heading_{{ form.geographic_levels.auto_id }}">
+                                    <button data-mdb-collapse-init
+                                            class="accordion-button collapsed"
+                                            type="button"
+                                            data-mdb-toggle="collapse"
+                                            data-mdb-target="#flush-collapse_{{ form.geographic_levels.auto_id }}"
+                                            aria-expanded="false"
+                                            aria-controls="flush-collapse_{{ form.geographic_levels.auto_id }}">
+                                        Geographic Level
+                                        <a tabindex="0"
+                                           type="button"
+                                           class="info-button filter-description-popover"
+                                           data-mdb-container="body"
+                                           data-mdb-ripple-init
+                                           data-mdb-popover-init
+                                           data-mdb-trigger="hover"
+                                           data-mdb-placement="right"
+                                           data-mdb-content="{{ filters_descriptions|dict_get:"geographic_levels" }}">
+                                            <i class="far fa-circle-question"></i>
+                                        </a>
+                                    </button>
+                                </h2>
+                                <div id="flush-collapse_{{ form.geographic_levels.auto_id }}"
+                                     class="accordion-collapse {% if form.geographic_levels.value %} {% else %}collapse{% endif %}"
+                                     aria-labelledby="flush-heading_{{ form.geographic_levels.auto_id }}"
+                                     data-mdb-parent="#accordionAdditionalFilters">
+                                    <div class="accordion-body margin-top-1rem">
+                                        <div class="bulk-select form-check">
+                                            <input type="checkbox" class="form-check-input" id="select-all" />
+                                            <label class="form-check-label" for="select-all">Select all</label>
+                                        </div>
+                                        {{ form.geographic_levels|as_crispy_field }}
+                                    </div>
+                                </div>
+                            </div>
+                            <div class="accordion-item">
+                                <h2 class="accordion-header"
+                                    id="flush-heading_{{ form.temporal_granularity.auto_id }}">
+                                    <button data-mdb-collapse-init
+                                            class="accordion-button collapsed"
+                                            type="button"
+                                            data-mdb-toggle="collapse"
+                                            data-mdb-target="#flush-collapse_{{ form.temporal_granularity.auto_id }}"
+                                            aria-expanded="false"
+                                            aria-controls="flush-collapse_{{ form.temporal_granularity.auto_id }}">
+                                        Temporal Granularity
+                                        <a tabindex="0"
+                                           type="button"
+                                           class="info-button filter-description-popover"
+                                           data-mdb-container="body"
+                                           data-mdb-ripple-init
+                                           data-mdb-popover-init
+                                           data-mdb-trigger="hover"
+                                           data-mdb-placement="right"
+                                           data-mdb-content="{{ filters_descriptions|dict_get:"temporal_granularity" }}">
+                                            <i class="far fa-circle-question"></i>
+                                        </a>
+                                    </button>
+                                </h2>
+                                <div id="flush-collapse_{{ form.temporal_granularity.auto_id }}"
+                                     class="accordion-collapse {% if form.temporal_granularity.value %} {% else %}collapse{% endif %}"
+                                     aria-labelledby="flush-heading_{{ form.temporal_granularity.auto_id }}"
+                                     data-mdb-parent="#accordionAdditionalFilters">
+                                    <div class="accordion-body margin-top-1rem">{{ form.temporal_granularity|as_crispy_field }}</div>
+                                </div>
+                            </div>
+                            <div class="accordion-item">
+                                <h2 class="accordion-header"
+                                    id="flush-heading_{{ form.severity_pyramid_rungs.auto_id }}">
+                                    <button data-mdb-collapse-init
+                                            class="accordion-button collapsed"
+                                            type="button"
+                                            data-mdb-toggle="collapse"
+                                            data-mdb-target="#flush-collapse_{{ form.severity_pyramid_rungs.auto_id }}"
+                                            aria-expanded="false"
+                                            aria-controls="flush-collapse_{{ form.severity_pyramid_rungs.auto_id }}">
+                                        Surveillance Category
+                                        <a tabindex="0"
+                                           type="button"
+                                           class="info-button filter-description-popover"
+                                           data-mdb-container="body"
+                                           data-mdb-ripple-init
+                                           data-mdb-popover-init
+                                           data-mdb-trigger="hover"
+                                           data-mdb-placement="right"
+                                           data-mdb-content="{{ filters_descriptions|dict_get:"severity_pyramid_rungs" }}">
+                                            <i class="far fa-circle-question"></i>
+                                        </a>
+                                    </button>
+                                </h2>
+                                <div id="flush-collapse_{{ form.severity_pyramid_rungs.auto_id }}"
+                                     class="accordion-collapse {% if form.severity_pyramid_rungs.value %} {% else %}collapse{% endif %}"
+                                     aria-labelledby="flush-heading_{{ form.severity_pyramid_rungs.auto_id }}"
+                                     data-mdb-parent="#accordionAdditionalFilters">
+                                    <div class="accordion-body margin-top-1rem">
+                                        <div class="bulk-select form-check">
+                                            <input type="checkbox" class="form-check-input" id="select-all" />
+                                            <label class="form-check-label" for="select-all">Select all</label>
+                                        </div>
+                                        {{ form.severity_pyramid_rungs|as_crispy_field }}
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
                 </div>
                 <div class="card-body no-padding-top">
                     <div class="d-grid gap-2 mt-3">
-                        <button id="filter-submit" type="submit" class="btn btn-primary">{% trans "Apply Filters" %}</button>
+                        {% comment %} <button id="filter-submit" type="submit" class="btn btn-primary">{% trans "Apply Filters" %}</button> {% endcomment %}
                         <div class="margin-left-right-auto">
                             <a href="{% url 'indicatorsets' %}">Clear filters</a>
                         </div>
+                        {% comment %} <div class="colvis margin-left-right-auto" id="colvis"></div> {% endcomment %}
                     </div>
                     <hr />
                     <div class="d-grid gap-2 mt-3 smaller-font-size">
@@ -299,16 +280,17 @@
     $(document).ready(function() {
         const geoValues = {{ geographic_granularities|safe }};
         var urlParams = JSON.parse(JSON.stringify({{ url_params_dict|safe }}));
-        const locationSearchValues = geoValues.map(item => {
-            return {
-                ...item,
-                "id": `${item.geoType}:${item.id}`
-            }
-        });
+        const locationSearchValues = geoValues.map(group => ({
+            ...group,
+            children: group.children.map(child => ({
+                ...child,
+                id: `${child.geoType}:${child.id}`
+            }))
+        }));
         initSelect2('location_search', locationSearchValues);
         if (urlParams.location_search != "") {
             var locationSearch = urlParams.location_search; 
-            $("#location_search").val(locationSearch).trigger("change");
+            $("#location_search").val(locationSearch).trigger("change.select2");
         }
     })
 </script>
