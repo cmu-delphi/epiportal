@@ -3,32 +3,32 @@ let bulkSelectDivs = document.querySelectorAll('.bulk-select');
 bulkSelectDivs.forEach(div => {
     div.addEventListener('click', function (event) {
         let form = this.nextElementSibling;
-        let showMoreLink = form.querySelector('a');
         let checkboxes = form.querySelectorAll('input[type="checkbox"]');
 
         if (event.target.checked === true) {
-            checkboxes.forEach((checkbox, index) => {
+            checkboxes.forEach((checkbox) => {
                 checkbox.checked = true;
-                if (index > 4) {
-                    checkbox.parentElement.style.display = checkbox.parentElement.style.display === 'none' ? 'block' : null;
-                }
             })
-            if (showMoreLink) {
-                showMoreLink.innerText = 'Show less...';
-            }
         } else if (event.target.checked === false) {
-            checkboxes.forEach((checkbox, index) => {
+            checkboxes.forEach((checkbox) => {
                 checkbox.checked = false
-                if (index > 4) {
-                    checkbox.parentElement.style.display = checkbox.parentElement.style.display === 'block' ? 'none' : null;
-                }
             });
-            if (showMoreLink) {
-                showMoreLink.innerText = 'Show more...';
-            }
         }
     });
 });
+
+function checkBulkSelect() {
+    bulkSelectDivs.forEach((div) => {
+        let form = div.nextElementSibling;
+        let checkboxes = form.querySelectorAll("input[type='checkbox']");
+        let allChecked = Array.from(checkboxes).every(cb => cb.checked);
+        if (allChecked) {
+            div.querySelector('#select-all').checked = true;
+        }
+    });
+}
+
+checkBulkSelect();
 
 function showLoader() {
     document.getElementById('loaderOverlay').style.display = 'flex';
