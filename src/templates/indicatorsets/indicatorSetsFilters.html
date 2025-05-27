@@ -7,6 +7,12 @@
         <div class="card">
             <div class="card-body no-padding-top-bottom">
                 <span id="totalRowsNumber"></span>
+                <br>
+                <div class="form-outline" data-mdb-input-init>
+                    <input type="text" id="tableSearch" class="form-control form-control-lg" />
+                    <label class="form-label" for="tableSearch">Search</label>
+                </div>
+                <br>
                 <h2 class="card-title font-size-25">Filters</h2>
                 <div class="accordion accordion-flush" id="accordionIndicatorSetFilters">
                     <div class="accordion-item">
@@ -128,18 +134,15 @@
                         </a>
                     </div>
                     <hr />
-                    <button
-                    class="btn btn-primary mb-3 additional-filters-button"
-                    type="button"
-                    data-mdb-collapse-init
-                    data-mdb-ripple-init
-                    data-mdb-target="#additional-filters"
-                    aria-expanded="false"
-                    aria-controls="additional-filters"
-                    >
-                    Additional filters
-                    </button>
-                    <div class="additional-filters {% if form.geographic_levels.value or form.temporal_granularity.value or form.severity_pyramid_rungs.value %}{% else %}collapse{% endif %}" id="additional-filters">
+                    <button class="btn btn-primary mb-3 additional-filters-button"
+                            type="button"
+                            data-mdb-collapse-init
+                            data-mdb-ripple-init
+                            data-mdb-target="#additional-filters"
+                            aria-expanded="false"
+                            aria-controls="additional-filters">Additional filters</button>
+                    <div class="additional-filters {% if form.geographic_levels.value or form.temporal_granularity.value or form.severity_pyramid_rungs.value %}{% else %}collapse{% endif %}"
+                         id="additional-filters">
                         <div class="accordion accordion-flush" id="accordionAdditionalFilters">
                             <div class="accordion-item">
                                 <h2 class="accordion-header"
