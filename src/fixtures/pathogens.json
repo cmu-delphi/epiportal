@@ -1,7 +1,6 @@
 [
     {
         "model": "base.pathogen",
-        "pk": 23,
         "fields": {
             "name": "adenovirus",
             "display_name": "adenovirus",
@@ -171,7 +170,6 @@
     },
     {
         "model": "base.pathogen",
-        "pk": 24,
         "fields": {
             "name": "rotavirus",
             "display_name": "rotavirus",
