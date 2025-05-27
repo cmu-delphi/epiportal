@@ -12,7 +12,6 @@ function calculate_table_height() {
 
 var table = new DataTable("#indicatorSetsTable", {
     fixedHeader: true,
-    searching: false,
     paging: false,
     scrollCollapse: true,
     scrollX: true,
@@ -30,6 +29,11 @@ var table = new DataTable("#indicatorSetsTable", {
         //     colvis: "Toggle Columns",
         // },
     },
+    search: {
+        smart: true,
+        highlight: true,
+    },
+    sDom: 'ltipr'
 });
 
 // new DataTable.Buttons(table, {
@@ -42,7 +46,11 @@ var table = new DataTable("#indicatorSetsTable", {
 //     ],
 // });
 
-table.buttons(0, null).container().appendTo("#colvis");
+// table.buttons(0, null).container().appendTo("#colvis");
+
+$("#tableSearch").keyup(function () {
+    table.search(this.value).draw();
+});
 
 function format(indicatorSetId, relatedIndicators, indicatorSetDescription) {
     var indicators = relatedIndicators.filter(
