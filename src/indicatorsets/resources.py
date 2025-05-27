@@ -42,7 +42,7 @@ def process_pathogens(row) -> None:
                 name=pathogen_name,
                 used_in="indicatorsets",
                 defaults={
-                    "display_name": pathogen_name.capitalize(),
+                    "display_name": pathogen_name,
                     "used_in": "indicatorsets",
                 },
             )
