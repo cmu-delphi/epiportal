@@ -2,6 +2,7 @@
 {% load crispy_forms_tags %}
 {% load static %}
 {% load dict_get %}
+{% load split_filter %}
 <!-- Data Table -->
 <link rel="stylesheet"
       href="https://cdn.datatables.net/v/dt/dt-2.1.8/b-3.2.0/b-colvis-3.2.0/cr-2.0.4/fc-5.0.4/fh-4.0.1/kt-2.12.1/r-3.0.3/rg-1.5.1/rr-1.5.0/sc-2.4.3/sp-2.3.3/sl-2.1.0/datatables.min.css">
@@ -283,7 +284,9 @@
                         <td>{{ indicator_set.temporal_scope_start }}</td>
                         <td>{{ indicator_set.temporal_scope_end }}</td>
                         <td>
-                            <span class="badge rounded-pill bg-dark">{{ indicator_set.temporal_granularity }}</span>
+                            {% for item in indicator_set.temporal_granularity|split:"," %}
+                                <span class="badge rounded-pill bg-dark">{{ item }}</span>
+                            {% endfor %}
                         </td>
                         <td>{{ indicator_set.reporting_cadence }}</td>
                         <td>{{ indicator_set.reporting_lag }}</td>
@@ -318,7 +321,16 @@
     </div>
     <!-- Loader Overlay -->
     <div class="loader-overlay" id="loaderOverlay">
-        <div class="lds-roller"><div></div><div></div><div></div><div></div><div></div><div></div><div></div><div></div></div>
+        <div class="lds-roller">
+            <div></div>
+            <div></div>
+            <div></div>
+            <div></div>
+            <div></div>
+            <div></div>
+            <div></div>
+            <div></div>
+        </div>
     </div>
     <div class="float" id="showSelectedIndicatorsButton" style="display:none;">
         <a type="button"
