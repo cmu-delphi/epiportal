@@ -24,21 +24,27 @@ class IndicatorSetFilter(django_filters.FilterSet):
 
     pathogens = django_filters.ModelMultipleChoiceFilter(
         field_name="pathogens",
-        queryset=Pathogen.objects.filter(used_in="indicatorsets"),
+        queryset=Pathogen.objects.filter(
+            id__in=IndicatorSet.objects.values_list("pathogens", flat=True)
+        ).order_by("display_order_number"),
         widget=QueryArrayWidget,
         required=False,
     )
 
     geographic_levels = django_filters.ModelMultipleChoiceFilter(
         field_name="geographic_levels",
-        queryset=Geography.objects.filter(used_in="indicatorsets"),
+        queryset=Geography.objects.filter(
+            id__in=IndicatorSet.objects.values_list("geographic_levels", flat=True)
+        ).order_by("display_order_number"),
         widget=QueryArrayWidget,
         required=False,
     )
 
     severity_pyramid_rungs = django_filters.ModelMultipleChoiceFilter(
         field_name="severity_pyramid_rungs",
-        queryset=SeverityPyramidRung.objects.filter(used_in="indicatorsets"),
+        queryset=SeverityPyramidRung.objects.filter(
+            id__in=IndicatorSet.objects.values_list("severity_pyramid_rungs", flat=True)
+        ).order_by("display_order_number"),
         widget=QueryArrayWidget,
         required=False,
     )
