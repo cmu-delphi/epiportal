@@ -7,12 +7,15 @@
         <div class="card">
             <div class="card-body no-padding-top-bottom">
                 <span id="totalRowsNumber"></span>
-                <br>
                 <!-- <div class="form-outline" data-mdb-input-init>
                     <input type="text" id="tableSearch" class="form-control form-control-lg" />
                     <label class="form-label" for="tableSearch">Search</label>
                 </div> -->
-                <br>
+                <div class="d-grid gap-2 mt-3">
+                    <div class="margin-left-right-auto">
+                        <a href="{% url 'indicatorsets' %}" type="button" class="btn btn-link btn-rounded" data-mdb-ripple-init  data-mdb-ripple-color="dark">Clear all filters</a>
+                    </div>
+                </div>
                 <h2 class="card-title font-size-25">Filters</h2>
                 <div class="accordion accordion-flush" id="accordionIndicatorSetFilters">
                     <div class="accordion-item">
@@ -255,9 +258,9 @@
                 <div class="card-body no-padding-top">
                     <div class="d-grid gap-2 mt-3">
                         {% comment %} <button id="filter-submit" type="submit" class="btn btn-primary">{% trans "Apply Filters" %}</button> {% endcomment %}
-                        <div class="margin-left-right-auto">
+                        {% comment %} <div class="margin-left-right-auto">
                             <a href="{% url 'indicatorsets' %}">Clear filters</a>
-                        </div>
+                        </div> {% endcomment %}
                         {% comment %} <div class="colvis margin-left-right-auto" id="colvis"></div> {% endcomment %}
                     </div>
                     <hr />
