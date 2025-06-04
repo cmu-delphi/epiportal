@@ -5,7 +5,7 @@
         "fields": {
             "geo_id": "1",
             "name": "Boston",
-            "display_name": "HHS Region 1 Boston",
+            "display_name": "HHS Region 1",
             "level": 2,
             "geo_level": 2
         }
@@ -16,7 +16,7 @@
         "fields": {
             "geo_id": "2",
             "name": "New York",
-            "display_name": "HHS Region 2 New York",
+            "display_name": "HHS Region 2",
             "level": 2,
             "geo_level": 2
         }
@@ -27,7 +27,7 @@
         "fields": {
             "geo_id": "3",
             "name": "Philadelphia",
-            "display_name": "HHS Region 3 Philadelphia",
+            "display_name": "HHS Region 3",
             "level": 2,
             "geo_level": 2
         }
@@ -38,7 +38,7 @@
         "fields": {
             "geo_id": "4",
             "name": "Atlanta",
-            "display_name": "HHS Region 4 Atlanta",
+            "display_name": "HHS Region 4",
             "level": 2,
             "geo_level": 2
         }
@@ -49,7 +49,7 @@
         "fields": {
             "geo_id": "5",
             "name": "Chicago",
-            "display_name": "HHS Region 5 Chicago",
+            "display_name": "HHS Region 5",
             "level": 2,
             "geo_level": 2
         }
@@ -60,7 +60,7 @@
         "fields": {
             "geo_id": "6",
             "name": "Dallas",
-            "display_name": "HHS Region 6 Dallas",
+            "display_name": "HHS Region 6",
             "level": 2,
             "geo_level": 2
         }
@@ -71,7 +71,7 @@
         "fields": {
             "geo_id": "7",
             "name": "Kansas City",
-            "display_name": "HHS Region 7 Kansas City",
+            "display_name": "HHS Region 7",
             "level": 2,
             "geo_level": 2
         }
@@ -82,7 +82,7 @@
         "fields": {
             "geo_id": "8",
             "name": "Denver",
-            "display_name": "HHS Region 8 Denver",
+            "display_name": "HHS Region 8",
             "level": 2,
             "geo_level": 2
         }
@@ -93,7 +93,7 @@
         "fields": {
             "geo_id": "9",
             "name": "San Francisco",
-            "display_name": "HHS Region 9 San Francisco",
+            "display_name": "HHS Region 9",
             "level": 2,
             "geo_level": 2
         }
@@ -104,7 +104,7 @@
         "fields": {
             "geo_id": "10",
             "name": "Seattle",
-            "display_name": "HHS Region 10 Seattle",
+            "display_name": "HHS Region 10",
             "level": 2,
             "geo_level": 2
         }
