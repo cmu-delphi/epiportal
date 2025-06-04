@@ -48,9 +48,9 @@ var table = new DataTable("#indicatorSetsTable", {
 
 // table.buttons(0, null).container().appendTo("#colvis");
 
-$("#tableSearch").keyup(function () {
-    table.search(this.value).draw();
-});
+// $("#tableSearch").keyup(function () {
+//     table.search(this.value).draw();
+// });
 
 function format(indicatorSetId, relatedIndicators, indicatorSetDescription) {
     var indicators = relatedIndicators.filter(
