@@ -11,12 +11,13 @@
                     <input type="text" id="tableSearch" class="form-control form-control-lg" />
                     <label class="form-label" for="tableSearch">Search</label>
                 </div> -->
-                <div class="d-grid gap-2 mt-3">
-                    <div class="margin-left-right-auto">
-                        <a href="{% url 'indicatorsets' %}" type="button" class="btn btn-link btn-rounded" data-mdb-ripple-init  data-mdb-ripple-color="dark">Clear all filters</a>
-                    </div>
-                </div>
-                <h2 class="card-title font-size-25">Filters</h2>
+                <br>
+                <span class="card-title font-size-25 margin-top-1rem">Filters <a href="{% url 'indicatorsets' %}"
+                        type="button"
+                        class="btn btn-link btn-rounded"
+                        data-mdb-ripple-init
+                        data-mdb-ripple-color="dark">Clear all filters</a>
+                </span>
                 <div class="accordion accordion-flush" id="accordionIndicatorSetFilters">
                     <div class="accordion-item">
                         <p class="accordion-header" id="flush-heading_location_search">
