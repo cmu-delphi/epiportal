@@ -7,6 +7,7 @@ import requests
 from django.conf import settings
 from django.http import JsonResponse
 from django.views.generic import ListView
+from django.db.models import Case, When, Value, IntegerField, Q
 
 from base.models import Geography, GeographyUnit
 from indicatorsets.filters import IndicatorSetFilter
@@ -180,7 +181,24 @@ class IndicatorSetListView(ListView):
         context["epidata_url"] = settings.EPIDATA_URL
         context["form"] = IndicatorSetFilterForm(initial=url_params_dict)
         context["filter"] = filter
-        context["indicator_sets"] = filter.qs
+        context["indicator_sets"] = filter.qs.annotate(
+            is_ongoing=Case(
+                When(
+                    temporal_scope_end="Ongoing",
+                    then=Value(1),
+                ),
+                default=Value(0),
+                output_field=IntegerField(),
+            ),
+            is_dua_required=Case(
+                When(
+                    dua_required="No",
+                    then=Value(1),
+                ),
+                default=Value(0),
+                output_field=IntegerField(),
+            ),
+        ).order_by('-is_ongoing', '-is_dua_required', "name")
         context["related_indicators"] = json.dumps(
             self.get_related_indicators(
                 filter.indicators_qs, filter.qs.values_list("id", flat=True)

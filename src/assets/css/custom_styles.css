@@ -162,3 +162,7 @@
 .additional-filters-button {
     width: 100%;
 }
+
+td.dt-empty {
+    text-align: left!important;
+}

@@ -6,7 +6,7 @@
             "name": "COVID-19",
             "display_name": "COVID-19",
             "used_in": "indicatorsets",
-            "display_order_number": 1
+            "display_order_number": 2
         }
     },
     {
@@ -16,7 +16,7 @@
             "name": "Ebola",
             "display_name": "Ebola",
             "used_in": "indicatorsets",
-            "display_order_number": 2
+            "display_order_number": 3
         }
     },
     {
@@ -24,9 +24,9 @@
         "pk": 3,
         "fields": {
             "name": "Dengue",
-            "display_name": "Dengue",
+            "display_name": "dengue",
             "used_in": "indicatorsets",
-            "display_order_number": 3
+            "display_order_number": 4
         }
     },
     {
@@ -36,7 +36,7 @@
             "name": "H5N1",
             "display_name": "H5N1",
             "used_in": "indicatorsets",
-            "display_order_number": 4
+            "display_order_number": 5
         }
     },
     {
@@ -46,7 +46,7 @@
             "name": "HIV",
             "display_name": "HIV",
             "used_in": "indicatorsets",
-            "display_order_number": 5
+            "display_order_number": 6
         }
     },
     {
@@ -56,7 +56,7 @@
             "name": "HIV 1",
             "display_name": "HIV 1",
             "used_in": "indicatorsets",
-            "display_order_number": 6
+            "display_order_number": 7
         }
     },
     {
@@ -66,7 +66,7 @@
             "name": "HIV 2",
             "display_name": "HIV 2",
             "used_in": "indicatorsets",
-            "display_order_number": 7
+            "display_order_number": 8
         }
     },
     {
@@ -74,9 +74,9 @@
         "pk": 8,
         "fields": {
             "name": "Human orthopneumovirus",
-            "display_name": "Human orthopneumovirus",
+            "display_name": "human orthopneumovirus",
             "used_in": "indicatorsets",
-            "display_order_number": 8
+            "display_order_number": 9
         }
     },
     {
@@ -86,7 +86,7 @@
             "name": "ILI",
             "display_name": "ILI",
             "used_in": "indicatorsets",
-            "display_order_number": 9
+            "display_order_number": 10
         }
     },
     {
@@ -94,9 +94,9 @@
         "pk": 10,
         "fields": {
             "name": "Influenza",
-            "display_name": "Influenza",
+            "display_name": "influenza",
             "used_in": "indicatorsets",
-            "display_order_number": 10
+            "display_order_number": 11
         }
     },
     {
@@ -106,7 +106,7 @@
             "name": "measles",
             "display_name": "measles",
             "used_in": "indicatorsets",
-            "display_order_number": 11
+            "display_order_number": 12
         }
     },
     {
@@ -114,9 +114,9 @@
         "pk": 12,
         "fields": {
             "name": "Mpox",
-            "display_name": "Mpox",
+            "display_name": "mpox",
             "used_in": "indicatorsets",
-            "display_order_number": 12
+            "display_order_number": 13
         }
     },
     {
@@ -126,7 +126,7 @@
             "name": "mumps",
             "display_name": "mumps",
             "used_in": "indicatorsets",
-            "display_order_number": 13
+            "display_order_number": 14
         }
     },
     {
@@ -134,9 +134,9 @@
         "pk": 14,
         "fields": {
             "name": "Norovirus",
-            "display_name": "Norovirus",
+            "display_name": "norovirus",
             "used_in": "indicatorsets",
-            "display_order_number": 14
+            "display_order_number": 15
         }
     },
     {
@@ -146,7 +146,7 @@
             "name": "Plasmodium",
             "display_name": "Plasmodium",
             "used_in": "indicatorsets",
-            "display_order_number": 15
+            "display_order_number": 16
         }
     },
     {
@@ -154,9 +154,9 @@
         "pk": 16,
         "fields": {
             "name": "Pneumonia",
-            "display_name": "Pneumonia",
+            "display_name": "pneumonia",
             "used_in": "indicatorsets",
-            "display_order_number": 16
+            "display_order_number": 17
         }
     },
     {
@@ -166,7 +166,7 @@
             "name": "RSV",
             "display_name": "RSV",
             "used_in": "indicatorsets",
-            "display_order_number": 17
+            "display_order_number": 19
         }
     },
     {
@@ -174,9 +174,9 @@
         "pk": 18,
         "fields": {
             "name": "tuberculosis",
-            "display_name": "Tuberculosis",
+            "display_name": "tuberculosis",
             "used_in": "indicatorsets",
-            "display_order_number": 18
+            "display_order_number": 20
         }
     },
     {
@@ -186,7 +186,7 @@
             "name": "Zika",
             "display_name": "Zika",
             "used_in": "indicatorsets",
-            "display_order_number": 19
+            "display_order_number": 21
         }
     },
     {
@@ -194,9 +194,9 @@
         "pk": 20,
         "fields": {
             "name": "pathogen independent",
-            "display_name": "Pathogen Independent",
+            "display_name": "pathogen independent",
             "used_in": "indicatorsets",
-            "display_order_number": 20
+            "display_order_number": 22
         }
     }
 ]
