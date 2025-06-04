@@ -19,11 +19,6 @@
     padding-top: 0 !important;
 }
 
-.margin-left-right-auto {
-    margin-left: auto !important;
-    margin-right: auto !important;
-}
-
 .smaller-font-size {
     font-size: 0.9rem;
 }
@@ -165,4 +160,9 @@
 
 td.dt-empty {
     text-align: left!important;
+}
+
+.margin-left-right-auto {
+    margin-left: auto!important;
+    margin-right: auto!important;
 }
