@@ -2,13 +2,14 @@
 {% load crispy_forms_tags %}
 {% load static %}
 {% load dict_get %}
+{% load split_filter %}
 <!-- Data Table -->
 <link rel="stylesheet"
       href="https://cdn.datatables.net/v/dt/dt-2.1.8/b-3.2.0/b-colvis-3.2.0/cr-2.0.4/fc-5.0.4/fh-4.0.1/kt-2.12.1/r-3.0.3/rg-1.5.1/rr-1.5.0/sc-2.4.3/sp-2.3.3/sl-2.1.0/datatables.min.css">
 <link rel="stylesheet"
       href="https://cdn.datatables.net/plug-ins/1.10.13/features/mark.js/datatables.mark.min.css">
 <div class="col-10">
-    <div class="row table-responsive">
+    <div class="row table-responsive table-container">
         <table id="indicatorSetsTable" class="display cell-border" width="100%">
             <thead>
                 <tr>
@@ -242,6 +243,7 @@
                             <i class="far fa-circle-question"></i>
                         </a>
                     </th>
+                    <th class="text-center">Hosted by Delphi?</th>
                     <th class="text-center">DUA required?</th>
                     <th class="text-center">
                         Data Use Terms
@@ -282,7 +284,9 @@
                         <td>{{ indicator_set.temporal_scope_start }}</td>
                         <td>{{ indicator_set.temporal_scope_end }}</td>
                         <td>
-                            <span class="badge rounded-pill bg-dark">{{ indicator_set.temporal_granularity }}</span>
+                            {% for item in indicator_set.temporal_granularity|split:"," %}
+                                <span class="badge rounded-pill bg-dark">{{ item }}</span>
+                            {% endfor %}
                         </td>
                         <td>{{ indicator_set.reporting_cadence }}</td>
                         <td>{{ indicator_set.reporting_lag }}</td>
@@ -298,6 +302,13 @@
                         <td>{{ indicator_set.preprocessing_description }}</td>
                         <td>{{ indicator_set.censoring }}</td>
                         <td>{{ indicator_set.missingness }}</td>
+                        <td>
+                            {% if indicator_set.source_type == "non_delphi" %}
+                                No
+                            {% else %}
+                                Yes
+                            {% endif %}
+                        </td>
                         <td>{{ indicator_set.dua_required }}</td>
                         <td>{{ indicator_set.license }}</td>
                         <td>
@@ -307,6 +318,19 @@
                 {% endfor %}
             </tbody>
         </table>
+    </div>
+    <!-- Loader Overlay -->
+    <div class="loader-overlay" id="loaderOverlay">
+        <div class="lds-roller">
+            <div></div>
+            <div></div>
+            <div></div>
+            <div></div>
+            <div></div>
+            <div></div>
+            <div></div>
+            <div></div>
+        </div>
     </div>
     <div class="float" id="showSelectedIndicatorsButton" style="display:none;">
         <a type="button"
@@ -326,7 +350,10 @@
 
     $(document).ready(function() {
         table.columns.adjust();
-        $("#totalRowsNumber").text(`Showing ${table.page.info().recordsTotal} indicator ${pluralize(table.page.info().recordsTotal, 'set')} containing ${relatedIndicators.length} individual ${pluralize(relatedIndicators.length, 'indicator')}`);
+        const totalRowsSpan = document.createElement("span");
+        totalRowsSpan.textContent = `Showing ${table.page.info().recordsTotal} indicator ${pluralize(table.page.info().recordsTotal, 'set')} containing ${relatedIndicators.length} individual ${pluralize(relatedIndicators.length, 'indicator')}`;
+        const refElement = document.getElementById("indicatorSetsTable_wrapper");
+        refElement.before(totalRowsSpan);
     });
 
     // Add event listener for openizng and closing details
@@ -344,4 +371,7 @@
         }
         
     });
+
+   
+
 </script>

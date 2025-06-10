@@ -104,8 +104,13 @@ function handleModeChange(mode) {
             el.style.display = 'flex';
         });
         $('#modeSubmitResult').html('');
-    } else {
+    } else if (mode === 'preview') {
         currentMode = 'preview';
+        choose_dates.forEach((el) => {
+            el.style.display = 'flex';
+        });
+    } else if (mode === 'create_query_code') {
+        currentMode = 'create_query_code'
         choose_dates.forEach((el) => {
             el.style.display = 'flex';
         });
@@ -204,7 +209,14 @@ $("#showSelectedIndicatorsButton").click(function () {
         $("#differentLocationNote").html(otherEndpointLocationsWarning)
         if (document.getElementsByName("fluviewRegions").length === 0) {
             indicatorHandler.showFluviewRegions();
+        } else {
+            // IF code goes here, we assume that otherEndpointLocationWarning & fluviewRegion selector is already on the page, but is just hidden, so we should just show it.
+            $("#otherEndpointLocationsWrapper").show();
         }
+    } else {
+        // If there are no non-covidcast indicators selected (only fluview is supported for now) then hide otherEndpointLocationWarning & fliviewRegions selector.
+        $("#fluviewRegions").val(null).trigger("change");
+        $("#otherEndpointLocationsWrapper").hide();
     }
 });
 
@@ -224,7 +236,9 @@ function submitMode(event) {
         indicatorHandler.plotData();
     } else if (currentMode === 'export') {
         indicatorHandler.exportData();
-    } else {
+    } else if (currentMode === 'preview') {
         indicatorHandler.previewData();
+    } else if (currentMode === 'create_query_code') {
+        indicatorHandler.createQueryCode();
     }
 }

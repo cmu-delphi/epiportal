@@ -5,6 +5,12 @@ USED_IN_CHOICES = (
     ("indicatorsets", "Indicator Sets"),
 )
 
+SOURCE_TYPES = [
+    ("covidcast", "Covidcast"),
+    ("other_endpoint", "Other Endpoint"),
+    ("non_delphi", "Non Delphi"),
+]
+
 
 class Pathogen(models.Model):
 

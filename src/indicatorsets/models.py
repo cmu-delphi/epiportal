@@ -1,4 +1,5 @@
 from django.db import models
+from base.models import SOURCE_TYPES
 
 
 DUA_REQUIRED_CHOICES = (
@@ -184,6 +185,16 @@ class IndicatorSet(models.Model):
         help_text="Link to the documentation for the Indicator Set",
     )
 
+    source_type: models.CharField = models.CharField(
+        verbose_name="Source Type",
+        max_length=255,
+        choices=SOURCE_TYPES,
+        default="covidcast",
+        help_text="Type of source for the indicator",
+        blank=True,
+        null=True,
+    )
+
     class Meta:
         verbose_name = "Indicator Set"
         verbose_name_plural = "Indicator Sets"
@@ -212,3 +223,53 @@ class NonDelphiIndicatorSet(IndicatorSet):
         proxy = True
         verbose_name = "Non-Delphi Indicator Set"
         verbose_name_plural = "Non-Delphi Indicators Sets"
+
+
+class FilterDescription(models.Model):
+
+    name = models.CharField(verbose_name="Name", max_length=255, unique=True)
+    description: models.TextField = models.TextField(
+        verbose_name="Description", blank=True
+    )
+
+    class Meta:
+        verbose_name = "Filter Description"
+        verbose_name_plural = "Filter Descriptions"
+        ordering = ["name"]
+        indexes = [
+            models.Index(fields=["name"], name="filter_description_name_idx"),
+        ]
+
+    def __str__(self):
+        return self.name
+
+    @classmethod
+    def get_all_descriptions_as_dict(cls):
+        descriptions = cls.objects.values("name", "description")
+        return {desc["name"]: desc["description"] for desc in descriptions}
+
+
+class ColumnDescription(models.Model):
+
+    name: models.CharField = models.CharField(
+        verbose_name="Name", max_length=255, unique=True
+    )
+    description: models.TextField = models.TextField(
+        verbose_name="Description", blank=True
+    )
+
+    class Meta:
+        verbose_name = "Column Description"
+        verbose_name_plural = "Column Descriptions"
+        ordering = ["name"]
+        indexes = [
+            models.Index(fields=["name"], name="column_description_name_idx"),
+        ]
+
+    def __str__(self):
+        return self.name
+
+    @classmethod
+    def get_all_descriptions_as_dict(cls):
+        descriptions = cls.objects.values("name", "description")
+        return {desc["name"]: desc["description"] for desc in descriptions}

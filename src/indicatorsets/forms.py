@@ -1,50 +1,34 @@
 from django import forms
 
-from base.models import Pathogen, GeographicScope, Geography, SeverityPyramidRung
+from base.models import Pathogen, Geography, SeverityPyramidRung
 from indicatorsets.models import IndicatorSet
-
-
-try:
-    ORIGINAL_DATA_PROVIDER_CHOICES = [
-        (el, el)
-        for el in set(
-            IndicatorSet.objects.values_list("original_data_provider", flat=True)
-        )
-    ]
-except Exception as e:
-    ORIGINAL_DATA_PROVIDER_CHOICES = [("", "No original data provider available")]
-    print(f"Error fetching original data provider choices: {e}")
+from indicatorsets.utils import get_original_data_provider_choices
 
 
 class IndicatorSetFilterForm(forms.ModelForm):
 
     pathogens = forms.ModelMultipleChoiceField(
-        queryset=Pathogen.objects.filter(used_in="indicatorsets"),
-        widget=forms.CheckboxSelectMultiple(),
-    )
-
-    geographic_scope = forms.ModelChoiceField(
-        queryset=GeographicScope.objects.filter(used_in="indicatorsets").order_by(
-            "display_order_number"
-        ),
+        queryset=Pathogen.objects.filter(
+            id__in=IndicatorSet.objects.values_list("pathogens", flat=True)
+        ).order_by("display_order_number"),
         widget=forms.CheckboxSelectMultiple(),
     )
 
     geographic_levels = forms.ModelMultipleChoiceField(
-        queryset=Geography.objects.filter(used_in="indicatorsets").order_by(
-            "display_order_number"
-        ),
+        queryset=Geography.objects.filter(
+            id__in=IndicatorSet.objects.values_list("geographic_levels", flat=True)
+        ).order_by("display_order_number"),
         widget=forms.CheckboxSelectMultiple(),
     )
     severity_pyramid_rungs = forms.ModelMultipleChoiceField(
-        queryset=SeverityPyramidRung.objects.filter(used_in="indicatorsets").order_by(
-            "display_order_number"
-        ),
+        queryset=SeverityPyramidRung.objects.filter(
+            id__in=IndicatorSet.objects.values_list("severity_pyramid_rungs", flat=True)
+        ).order_by("display_order_number"),
         widget=forms.CheckboxSelectMultiple(),
     )
 
     original_data_provider = forms.ChoiceField(
-        choices=ORIGINAL_DATA_PROVIDER_CHOICES,
+        choices=get_original_data_provider_choices,
         widget=forms.CheckboxSelectMultiple(),
     )
 
@@ -77,7 +61,6 @@ class IndicatorSetFilterForm(forms.ModelForm):
         model = IndicatorSet
         fields: list[str] = [
             "pathogens",
-            "geographic_scope",
             "geographic_levels",
             "severity_pyramid_rungs",
             "original_data_provider",

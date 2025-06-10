@@ -17,12 +17,13 @@ class PathogenAdmin(admin.ModelAdmin):
     Admin interface for Pathogen model.
     """
 
-    list_display = ["name", "used_in"]
+    list_display = ["name", "display_name", "display_order_number", "used_in"]
     search_fields = ["name"]
     ordering = ["name"]
     list_filter = ["used_in"]
     list_per_page = 20
     list_display_links = ["name"]
+    list_editable = ["display_name", "display_order_number"]
 
 
 @admin.register(GeographicScope)

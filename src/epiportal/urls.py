@@ -43,7 +43,7 @@ urlpatterns = [
         include("indicatorsets.urls"),
     ),
     path(
-        f"{settings.MAIN_PAGE}/base" if settings.MAIN_PAGE else "",
+        f"{settings.MAIN_PAGE}/" if settings.MAIN_PAGE else "",
         include("base.urls"),
     ),
     path("__debug__/", include("debug_toolbar.urls")),

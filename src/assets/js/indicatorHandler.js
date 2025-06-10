@@ -273,4 +273,44 @@ class IndicatorHandler {
             $('#modeSubmitResult').html(JSON.stringify(data, null, 2));
         });
     }
+
+    createQueryCode() {
+
+        var fluviewRegions = $("#fluviewRegions").select2("data");
+
+        var covidCastGeographicValues = Object.groupBy(
+            $("#geographic_value").select2("data"),
+            ({ geoType }) => [geoType]
+        );
+
+        const submitData = {
+            start_date: document.getElementById("start_date").value,
+            end_date: document.getElementById("end_date").value,
+            indicators: this.indicators,
+            covidCastGeographicValues: covidCastGeographicValues,
+            fluviewRegions: fluviewRegions,
+        }
+        const csrftoken = Cookies.get("csrftoken");
+        var createQueryCodePython = `<h4>PYTHON PACKAGE</h4>`
+            + `<p>Install <code class="highlight-code">covidcast</code> via pip: </p>`
+            + `<pre class="code-block"><code>pip install covidcast</code></pre><br>`
+            + `<p>Fetch data: </p>`;
+        var createQueryCodeR = `<h4>R PACKAGE</h4>`
+            + `<p>Install <code class="highlight-code">covidcast</code> via CRAN: </p>`
+            + `<pre class="code-block"><code>install.packages('covidcast')</code></pre><br>`
+            + `<p> Fetch data: </p>`
+        $.ajax({
+            url: "create_query_code/",
+            type: "POST",
+            dataType: "json",
+            contentType: "application/json",
+            headers: { "X-CSRFToken": csrftoken },
+            data: JSON.stringify(submitData),
+        }).done(function (data) {
+            createQueryCodePython += data["python_code_blocks"].join("<br>");
+            createQueryCodeR += data["r_code_blocks"].join("<br>");
+            $('#modeSubmitResult').html(createQueryCodePython+"<br>"+createQueryCodeR);
+        });
+
+    }
 }

@@ -7,23 +7,15 @@ from django_filters.widgets import QueryArrayWidget
 
 
 from indicatorsets.models import IndicatorSet
-from indicatorsets.utils import get_list_of_indicators_filtered_by_geo
+from indicatorsets.utils import (
+    get_list_of_indicators_filtered_by_geo,
+    get_original_data_provider_choices,
+)
 from indicators.models import Indicator
-from base.models import Pathogen, GeographicScope, Geography, SeverityPyramidRung
+from base.models import Pathogen, Geography, SeverityPyramidRung
 
 
 logger = logging.getLogger(__name__)
-
-try:
-    ORIGINAL_DATA_PROVIDER_CHOICES = [
-        (el, el)
-        for el in set(
-            IndicatorSet.objects.values_list("original_data_provider", flat=True)
-        )
-    ]
-except Exception as e:
-    ORIGINAL_DATA_PROVIDER_CHOICES = [("", "No original data provider available")]
-    print(f"Error fetching original data provider choices: {e}")
 
 
 class IndicatorSetFilter(django_filters.FilterSet):
@@ -32,35 +24,34 @@ class IndicatorSetFilter(django_filters.FilterSet):
 
     pathogens = django_filters.ModelMultipleChoiceFilter(
         field_name="pathogens",
-        queryset=Pathogen.objects.filter(used_in="indicatorsets"),
-        widget=QueryArrayWidget,
-        required=False,
-    )
-
-    geographic_scope = django_filters.ModelMultipleChoiceFilter(
-        field_name="geographic_scope",
-        queryset=GeographicScope.objects.filter(used_in="indicatorsets"),
+        queryset=Pathogen.objects.filter(
+            id__in=IndicatorSet.objects.values_list("pathogens", flat=True)
+        ).order_by("display_order_number"),
         widget=QueryArrayWidget,
         required=False,
     )
 
     geographic_levels = django_filters.ModelMultipleChoiceFilter(
         field_name="geographic_levels",
-        queryset=Geography.objects.filter(used_in="indicatorsets"),
+        queryset=Geography.objects.filter(
+            id__in=IndicatorSet.objects.values_list("geographic_levels", flat=True)
+        ).order_by("display_order_number"),
         widget=QueryArrayWidget,
         required=False,
     )
 
     severity_pyramid_rungs = django_filters.ModelMultipleChoiceFilter(
         field_name="severity_pyramid_rungs",
-        queryset=SeverityPyramidRung.objects.filter(used_in="indicatorsets"),
+        queryset=SeverityPyramidRung.objects.filter(
+            id__in=IndicatorSet.objects.values_list("severity_pyramid_rungs", flat=True)
+        ).order_by("display_order_number"),
         widget=QueryArrayWidget,
         required=False,
     )
 
     original_data_provider = django_filters.MultipleChoiceFilter(
         field_name="original_data_provider",
-        choices=ORIGINAL_DATA_PROVIDER_CHOICES,
+        choices=get_original_data_provider_choices,
         widget=QueryArrayWidget,
         lookup_expr="exact",
         required=False,
@@ -98,7 +89,6 @@ class IndicatorSetFilter(django_filters.FilterSet):
         model = IndicatorSet
         fields = [
             "pathogens",
-            "geographic_scope",
             "geographic_levels",
             "severity_pyramid_rungs",
             "original_data_provider",
@@ -110,9 +100,9 @@ class IndicatorSetFilter(django_filters.FilterSet):
     def location_search_filter(self, queryset, name, value):
         if not value:
             return queryset
-        filtered_signals = get_list_of_indicators_filtered_by_geo(value)
+        filtered_indicators = get_list_of_indicators_filtered_by_geo(value)
         query = Q()
-        for item in filtered_signals["epidata"]:
+        for item in filtered_indicators["epidata"]:
             query |= Q(source__name=item["source"], name=item["signal"])
         self.indicators_qs = self.indicators_qs.filter(query)
         indicator_sets = self.indicators_qs.values_list(

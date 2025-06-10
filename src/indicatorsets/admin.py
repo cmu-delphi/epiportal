@@ -1,7 +1,12 @@
 from django.contrib import admin
 
 from import_export.admin import ImportExportModelAdmin
-from indicatorsets.models import IndicatorSet, NonDelphiIndicatorSet
+from indicatorsets.models import (
+    IndicatorSet,
+    NonDelphiIndicatorSet,
+    FilterDescription,
+    ColumnDescription,
+)
 from indicatorsets.resources import IndicatorSetResource, NonDelphiIndicatorSetResource
 
 
@@ -50,7 +55,34 @@ class NonDelphiIndicatorSetAdmin(ImportExportModelAdmin):
         "version_number",
         "original_data_provider",
         "origin_datasource",
+        "source_type",
     )
     search_fields = ("name", "short_name", "description")
     ordering = ["name"]
-    list_filter = ["original_data_provider"]
+    list_filter = ["original_data_provider", "source_type"]
+
+
+@admin.register(FilterDescription)
+class FilterDescriptionAdmin(admin.ModelAdmin):
+    """
+    Admin interface for the FilterDescription model.
+    """
+
+    list_display = ("name", "description")
+    search_fields = ("name", "description")
+    ordering = ["name"]
+    list_filter = ["name"]
+    list_editable = ("description",)
+
+
+@admin.register(ColumnDescription)
+class ColumnDescriptionAdmin(admin.ModelAdmin):
+    """
+    Admin interface for the ColumnDescription model.
+    """
+
+    list_display = ("name", "description")
+    search_fields = ("name", "description")
+    ordering = ["name"]
+    list_filter = ["name"]
+    list_editable = ("description",)
