@@ -212,6 +212,10 @@ class IndicatorHandler {
             data: JSON.stringify(submitData),
         }).done(function (data) {
             window.open(data["epivis_url"], '_blank').focus();
+            window.dataLayer.push({
+                event: "epivis_plot_data",
+                epivis_data: submitData
+            })
         });
     }
 
