@@ -212,6 +212,7 @@ class IndicatorHandler {
             data: JSON.stringify(submitData),
         }).done(function (data) {
             window.open(data["epivis_url"], '_blank').focus();
+            console.log(currentMode, this.indicators);
             window.dataLayer.push({
                 event: "submitSelectedIndicators",
                 mode: currentMode,
