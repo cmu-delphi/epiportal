@@ -257,7 +257,6 @@ class IndicatorHandler {
             headers: { "X-CSRFToken": csrftoken },
             data: JSON.stringify(submitData),
         }).done(function (data) {
-            $('#modeSubmitResult').html(data["data_export_block"]);
             const payload = {
                 event: "submitSelectedIndicators",
                 formMode: "export",
@@ -268,6 +267,7 @@ class IndicatorHandler {
                 fluviewGeoValues: submitData["fluviewRegions"],
             }
             this.dataLayerPush(payload);
+            $('#modeSubmitResult').html(data["data_export_block"]);
         });
     }
 
