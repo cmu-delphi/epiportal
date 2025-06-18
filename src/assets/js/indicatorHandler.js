@@ -216,7 +216,7 @@ class IndicatorHandler {
             console.log(currentMode, indicators);
             window.dataLayer.push({
                 event: "submitSelectedIndicators",
-                mode: currentMode,
+                formMode: currentMode,
                 indicators: indicators,
                 covidcastGeoValues: covidCastGeographicValues,
                 fluviewGeoValues: fluviewRegions,
