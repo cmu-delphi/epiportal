@@ -192,17 +192,24 @@ class IndicatorHandler {
         }
     }
 
+    dataLayerPush(payload) {
+        if (window.dataLayer) {
+            window.dataLayer.push(function (){
+                this.reset();
+            });
+            window.dataLayer.push(payload);
+        }
+    }
+
     plotData() {
         const covidCastGeographicValues =
             $("#geographic_value").select2("data");
         const fluviewRegions = $("#fluviewRegions").select2("data");
-        const indicators = this.indicators;
         const submitData = {
-            indicators: indicators,
+            indicators: this.indicators,
             covidCastGeographicValues: covidCastGeographicValues,
             fluviewRegions: fluviewRegions,
         };
-        const formMode = currentMode;
         const csrftoken = Cookies.get("csrftoken");
         $.ajax({
             url: "epivis/",
@@ -213,15 +220,16 @@ class IndicatorHandler {
             headers: { "X-CSRFToken": csrftoken },
             data: JSON.stringify(submitData),
         }).done(function (data) {
-            window.open(data["epivis_url"], '_blank').focus();
-            window.dataLayer.push({
+            const payload = {
                 event: "submitSelectedIndicators",
-                formMode: formMode,
-                indicators: indicators,
-                covidcastGeoValues: covidCastGeographicValues,
-                fluviewGeoValues: fluviewRegions,
+                formMode: "epivis",
+                indicators: submitData["indicators"],
+                covidcastGeoValues: submitData["covidCastGeographicValues"],
+                fluviewGeoValues: submitData["fluviewRegions"],
                 epivisUrl: data["epivis_url"],
-            })
+            }
+            this.dataLayerPush(payload);
+            window.open(data["epivis_url"], '_blank').focus();
         });
     }
 
@@ -232,7 +240,6 @@ class IndicatorHandler {
             $("#geographic_value").select2("data"),
             ({ geoType }) => [geoType]
         );
-
         const submitData = {
             start_date: document.getElementById("start_date").value,
             end_date: document.getElementById("end_date").value,
@@ -251,6 +258,16 @@ class IndicatorHandler {
             data: JSON.stringify(submitData),
         }).done(function (data) {
             $('#modeSubmitResult').html(data["data_export_block"]);
+            const payload = {
+                event: "submitSelectedIndicators",
+                formMode: "export",
+                formStartDate: submitData["start_date"],
+                formEndDate: submitData["end_date"],
+                indicators: submitData["indicators"],
+                covidcastGeoValues: submitData["covidCastGeographicValues"],
+                fluviewGeoValues: submitData["fluviewRegions"],
+            }
+            this.dataLayerPush(payload);
         });
     }
 
@@ -281,6 +298,16 @@ class IndicatorHandler {
         }).done(function (data) {
             $('#loader').hide();
             $('#modeSubmitResult').html(JSON.stringify(data, null, 2));
+            const payload = {
+                event: "submitSelectedIndicators",
+                formMode: "preview",
+                formStartDate: submitData["start_date"],
+                formEndDate: submitData["end_date"],
+                indicators: submitData["indicators"],
+                covidcastGeoValues: submitData["covidCastGeographicValues"],
+                fluviewGeoValues: submitData["fluviewRegions"],
+            }
+            this.dataLayerPush(payload);
         });
     }
 
@@ -320,6 +347,16 @@ class IndicatorHandler {
             createQueryCodePython += data["python_code_blocks"].join("<br>");
             createQueryCodeR += data["r_code_blocks"].join("<br>");
             $('#modeSubmitResult').html(createQueryCodePython+"<br>"+createQueryCodeR);
+            const payload = {
+                event: "submitSelectedIndicators",
+                formMode: "queryCode",
+                formStartDate: submitData["start_date"],
+                formEndDate: submitData["end_date"],
+                indicators: submitData["indicators"],
+                covidcastGeoValues: submitData["covidCastGeographicValues"],
+                fluviewGeoValues: submitData["fluviewRegions"],
+            }
+            this.dataLayerPush(payload);
         });
 
     }
