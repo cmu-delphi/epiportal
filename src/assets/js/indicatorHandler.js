@@ -225,9 +225,9 @@ class IndicatorHandler {
             const payload = {
                 event: "submitSelectedIndicators",
                 formMode: "epivis",
-                indicators: submitData["indicators"],
-                covidcastGeoValues: submitData["covidCastGeographicValues"],
-                fluviewGeoValues: submitData["fluviewRegions"],
+                indicators: JSON.stringify(submitData["indicators"]),
+                covidcastGeoValues: JSON.stringify(submitData["covidCastGeographicValues"]),
+                fluviewGeoValues: JSON.stringify(submitData["fluviewRegions"]),
                 epivisUrl: data["epivis_url"],
             }
             dataLayerPush(payload);
@@ -264,9 +264,9 @@ class IndicatorHandler {
                 formMode: "export",
                 formStartDate: submitData["start_date"],
                 formEndDate: submitData["end_date"],
-                indicators: submitData["indicators"],
-                covidcastGeoValues: submitData["covidCastGeographicValues"],
-                fluviewGeoValues: submitData["fluviewRegions"],
+                indicators: JSON.stringify(submitData["indicators"]),
+                covidcastGeoValues: JSON.stringify(submitData["covidCastGeographicValues"]),
+                fluviewGeoValues: JSON.stringify(submitData["fluviewRegions"]),
             }
             console.log(payload);
             dataLayerPush(payload);
@@ -306,9 +306,9 @@ class IndicatorHandler {
                 formMode: "preview",
                 formStartDate: submitData["start_date"],
                 formEndDate: submitData["end_date"],
-                indicators: submitData["indicators"],
-                covidcastGeoValues: submitData["covidCastGeographicValues"],
-                fluviewGeoValues: submitData["fluviewRegions"],
+                indicators: JSON.stringify(submitData["indicators"]),
+                covidcastGeoValues: JSON.stringify(submitData["covidCastGeographicValues"]),
+                fluviewGeoValues: JSON.stringify(submitData["fluviewRegions"]),
             }
             dataLayerPush(payload);
         });
@@ -355,9 +355,9 @@ class IndicatorHandler {
                 formMode: "queryCode",
                 formStartDate: submitData["start_date"],
                 formEndDate: submitData["end_date"],
-                indicators: submitData["indicators"],
-                covidcastGeoValues: submitData["covidCastGeographicValues"],
-                fluviewGeoValues: submitData["fluviewRegions"],
+                indicators: JSON.stringify(submitData["indicators"]),
+                covidcastGeoValues: JSON.stringify(submitData["covidCastGeographicValues"]),
+                fluviewGeoValues: JSON.stringify(submitData["fluviewRegions"]),
             }
             dataLayerPush(payload);
         });
