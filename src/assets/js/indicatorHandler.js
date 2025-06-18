@@ -196,8 +196,9 @@ class IndicatorHandler {
         const covidCastGeographicValues =
             $("#geographic_value").select2("data");
         const fluviewRegions = $("#fluviewRegions").select2("data");
+        const indicators = this.indicators;
         const submitData = {
-            indicators: this.indicators,
+            indicators: indicators,
             covidCastGeographicValues: covidCastGeographicValues,
             fluviewRegions: fluviewRegions,
         };
@@ -212,11 +213,11 @@ class IndicatorHandler {
             data: JSON.stringify(submitData),
         }).done(function (data) {
             window.open(data["epivis_url"], '_blank').focus();
-            console.log(currentMode, this.indicators);
+            console.log(currentMode, indicators);
             window.dataLayer.push({
                 event: "submitSelectedIndicators",
                 mode: currentMode,
-                indicators: this.indicators,
+                indicators: indicators,
                 covidcastGeoValues: covidCastGeographicValues,
                 fluviewGeoValues: fluviewRegions,
                 epivisUrl: data["epivis_url"],
