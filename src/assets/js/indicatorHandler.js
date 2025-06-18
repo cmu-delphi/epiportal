@@ -218,6 +218,7 @@ class IndicatorHandler {
                 indicators: this.indicators,
                 covidcastGeoValues: covidCastGeographicValues,
                 fluviewGeoValues: fluviewRegions,
+                epivisUrl: data["epivis_url"],
             })
         });
     }
