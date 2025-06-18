@@ -1,3 +1,12 @@
+function dataLayerPush(payload) {
+    if (window.dataLayer) {
+        window.dataLayer.push(function () {
+            this.reset();
+        });
+        window.dataLayer.push(payload);
+    }
+}
+
 class IndicatorHandler {
     constructor() {
         this.indicators = {};
@@ -192,14 +201,7 @@ class IndicatorHandler {
         }
     }
 
-    dataLayerPush(payload) {
-        if (window.dataLayer) {
-            window.dataLayer.push(function (){
-                this.reset();
-            });
-            window.dataLayer.push(payload);
-        }
-    }
+
 
     plotData() {
         const covidCastGeographicValues =
@@ -228,7 +230,7 @@ class IndicatorHandler {
                 fluviewGeoValues: submitData["fluviewRegions"],
                 epivisUrl: data["epivis_url"],
             }
-            this.dataLayerPush(payload);
+            dataLayerPush(payload);
             window.open(data["epivis_url"], '_blank').focus();
         });
     }
@@ -266,7 +268,8 @@ class IndicatorHandler {
                 covidcastGeoValues: submitData["covidCastGeographicValues"],
                 fluviewGeoValues: submitData["fluviewRegions"],
             }
-            this.dataLayerPush(payload);
+            console.log(payload);
+            dataLayerPush(payload);
             $('#modeSubmitResult').html(data["data_export_block"]);
         });
     }
@@ -307,7 +310,7 @@ class IndicatorHandler {
                 covidcastGeoValues: submitData["covidCastGeographicValues"],
                 fluviewGeoValues: submitData["fluviewRegions"],
             }
-            this.dataLayerPush(payload);
+            dataLayerPush(payload);
         });
     }
 
@@ -346,7 +349,7 @@ class IndicatorHandler {
         }).done(function (data) {
             createQueryCodePython += data["python_code_blocks"].join("<br>");
             createQueryCodeR += data["r_code_blocks"].join("<br>");
-            $('#modeSubmitResult').html(createQueryCodePython+"<br>"+createQueryCodeR);
+            $('#modeSubmitResult').html(createQueryCodePython + "<br>" + createQueryCodeR);
             const payload = {
                 event: "submitSelectedIndicators",
                 formMode: "queryCode",
@@ -356,7 +359,7 @@ class IndicatorHandler {
                 covidcastGeoValues: submitData["covidCastGeographicValues"],
                 fluviewGeoValues: submitData["fluviewRegions"],
             }
-            this.dataLayerPush(payload);
+            dataLayerPush(payload);
         });
 
     }
