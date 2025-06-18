@@ -202,6 +202,7 @@ class IndicatorHandler {
             covidCastGeographicValues: covidCastGeographicValues,
             fluviewRegions: fluviewRegions,
         };
+        const formMode = currentMode;
         const csrftoken = Cookies.get("csrftoken");
         $.ajax({
             url: "epivis/",
@@ -213,10 +214,9 @@ class IndicatorHandler {
             data: JSON.stringify(submitData),
         }).done(function (data) {
             window.open(data["epivis_url"], '_blank').focus();
-            console.log(currentMode, indicators);
             window.dataLayer.push({
                 event: "submitSelectedIndicators",
-                formMode: currentMode,
+                formMode: formMode,
                 indicators: indicators,
                 covidcastGeoValues: covidCastGeographicValues,
                 fluviewGeoValues: fluviewRegions,
