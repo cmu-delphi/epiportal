@@ -213,8 +213,11 @@ class IndicatorHandler {
         }).done(function (data) {
             window.open(data["epivis_url"], '_blank').focus();
             window.dataLayer.push({
-                event: "epivis_plot_data",
-                epivis_data: submitData
+                event: "submitSelectedIndicators",
+                mode: currentMode,
+                indicators: this.indicators,
+                covidcastGeoValues: covidCastGeographicValues,
+                fluviewGeoValues: fluviewRegions,
             })
         });
     }
