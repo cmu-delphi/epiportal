@@ -1,3 +1,12 @@
+function dataLayerPush(payload) {
+    if (window.dataLayer) {
+        window.dataLayer.push(function () {
+            this.reset();
+        });
+        window.dataLayer.push(payload);
+    }
+}
+
 class IndicatorHandler {
     constructor() {
         this.indicators = {};
@@ -211,6 +220,15 @@ class IndicatorHandler {
             headers: { "X-CSRFToken": csrftoken },
             data: JSON.stringify(submitData),
         }).done(function (data) {
+            const payload = {
+                event: "submitSelectedIndicators",
+                formMode: "epivis",
+                indicators: JSON.stringify(submitData["indicators"]),
+                covidcastGeoValues: JSON.stringify(submitData["covidCastGeographicValues"]),
+                fluviewGeoValues: JSON.stringify(submitData["fluviewRegions"]),
+                epivisUrl: data["epivis_url"],
+            }
+            dataLayerPush(payload);
             window.open(data["epivis_url"], '_blank').focus();
         });
     }
@@ -240,6 +258,16 @@ class IndicatorHandler {
             headers: { "X-CSRFToken": csrftoken },
             data: JSON.stringify(submitData),
         }).done(function (data) {
+            const payload = {
+                event: "submitSelectedIndicators",
+                formMode: "export",
+                formStartDate: submitData["start_date"],
+                formEndDate: submitData["end_date"],
+                indicators: JSON.stringify(submitData["indicators"]),
+                covidcastGeoValues: JSON.stringify(submitData["covidCastGeographicValues"]),
+                fluviewGeoValues: JSON.stringify(submitData["fluviewRegions"]),
+            }
+            dataLayerPush(payload);
             $('#modeSubmitResult').html(data["data_export_block"]);
         });
     }
@@ -269,6 +297,16 @@ class IndicatorHandler {
             headers: { "X-CSRFToken": csrftoken },
             data: JSON.stringify(submitData),
         }).done(function (data) {
+            const payload = {
+                event: "submitSelectedIndicators",
+                formMode: "preview",
+                formStartDate: submitData["start_date"],
+                formEndDate: submitData["end_date"],
+                indicators: JSON.stringify(submitData["indicators"]),
+                covidcastGeoValues: JSON.stringify(submitData["covidCastGeographicValues"]),
+                fluviewGeoValues: JSON.stringify(submitData["fluviewRegions"]),
+            }
+            dataLayerPush(payload);
             $('#loader').hide();
             $('#modeSubmitResult').html(JSON.stringify(data, null, 2));
         });
@@ -307,6 +345,16 @@ class IndicatorHandler {
             headers: { "X-CSRFToken": csrftoken },
             data: JSON.stringify(submitData),
         }).done(function (data) {
+            const payload = {
+                event: "submitSelectedIndicators",
+                formMode: "queryCode",
+                formStartDate: submitData["start_date"],
+                formEndDate: submitData["end_date"],
+                indicators: JSON.stringify(submitData["indicators"]),
+                covidcastGeoValues: JSON.stringify(submitData["covidCastGeographicValues"]),
+                fluviewGeoValues: JSON.stringify(submitData["fluviewRegions"]),
+            }
+            dataLayerPush(payload);
             createQueryCodePython += data["python_code_blocks"].join("<br>");
             createQueryCodeR += data["r_code_blocks"].join("<br>");
             $('#modeSubmitResult').html(createQueryCodePython+"<br>"+createQueryCodeR);
