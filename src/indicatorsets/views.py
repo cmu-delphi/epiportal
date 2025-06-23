@@ -151,7 +151,7 @@ class IndicatorSetListView(ListView):
     def get_grouped_geographic_granularities(self):
         geographic_granularities = [
             {
-                "id": str(geo_unit.geo_id),
+                "id": f"{geo_unit.geo_level.name}:{geo_unit.geo_id}",
                 "geoType": geo_unit.geo_level.name,
                 "text": geo_unit.display_name,
                 "geoTypeDisplayName": geo_unit.geo_level.display_name,

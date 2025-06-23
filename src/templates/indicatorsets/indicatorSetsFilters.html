@@ -291,7 +291,7 @@
             ...group,
             children: group.children.map(child => ({
                 ...child,
-                id: `${child.geoType}:${child.id}`
+                id: child.id
             }))
         }));
         initSelect2('location_search', locationSearchValues);
