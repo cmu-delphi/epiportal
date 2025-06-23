@@ -143,7 +143,7 @@ function showNotCoveredGeoWarningMessage(notCoveredIndicators, geoValue) {
     appendAlert(warningMessage, "warning");
 }
 
-async function checkGeoCoverage(geoType, geoValue) {
+async function checkGeoCoverage(geoValue) {
     const notCoveredIndicators = [];
 
     try {
@@ -151,7 +151,7 @@ async function checkGeoCoverage(geoType, geoValue) {
             url: "epidata/covidcast/geo_coverage/",
             type: "GET",
             data: {
-                geo: `${geoType}:${geoValue}`,
+                geo: geoValue,
             },
         });
 
@@ -177,7 +177,7 @@ async function checkGeoCoverage(geoType, geoValue) {
 
 $("#geographic_value").on("select2:select", function (e) {
     var geo = e.params.data;
-    checkGeoCoverage(geo.geoType, geo.id).then((notCoveredIndicators) => {
+    checkGeoCoverage(geo.id).then((notCoveredIndicators) => {
         if (notCoveredIndicators.length > 0) {
             showNotCoveredGeoWarningMessage(notCoveredIndicators, geo.text);
         }
@@ -193,8 +193,10 @@ $("#showSelectedIndicatorsButton").click(function () {
     } else {
         $("#geographic_value").prop("disabled", false);
     }
+    console.log($('#geographic_value').select2("data"))
     $('#geographic_value').select2("data").forEach(geo => {
-        checkGeoCoverage(geo.geoType, geo.id).then((notCoveredIndicators) => {
+        console.log(geo);
+        checkGeoCoverage(geo.id).then((notCoveredIndicators) => {
             if (notCoveredIndicators.length > 0) {
                 showNotCoveredGeoWarningMessage(notCoveredIndicators, geo.text);
             }

@@ -4,11 +4,6 @@ GEOGRAPHIC_GRANULARITY_MAPPING = {
         "display_order_number": 1,
         "short_name": "National",
     },
-    "hhs-region": {
-        "display_name": "U.S. HHS Region",
-        "display_order_number": 2,
-        "short_name": "HHS",
-    },
     "hhs": {
         "display_name": "U.S. HHS Region",
         "display_order_number": 2,

@@ -139,7 +139,7 @@
         initSelect2('geographic_value', geoValues);
         if (urlParams.location_search != "") {
             var locationSearch = urlParams.location_search; 
-            var locationIds = locationSearch.map((item) => item.split(":")[1]);
+            var locationIds = locationSearch.map((item) => item);
             $('#geographic_value').val(locationIds).trigger('change');
         }
     });

@@ -14,7 +14,7 @@
         "model": "base.Geography",
         "pk": 2,
         "fields": {
-            "name": "hhs-region",
+            "name": "hhs",
             "display_name": "U.S. HHS Region",
             "display_order_number": 2,
             "used_in": "indicatorsets",
