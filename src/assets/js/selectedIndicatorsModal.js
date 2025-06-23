@@ -193,9 +193,7 @@ $("#showSelectedIndicatorsButton").click(function () {
     } else {
         $("#geographic_value").prop("disabled", false);
     }
-    console.log($('#geographic_value').select2("data"))
     $('#geographic_value').select2("data").forEach(geo => {
-        console.log(geo);
         checkGeoCoverage(geo.id).then((notCoveredIndicators) => {
             if (notCoveredIndicators.length > 0) {
                 showNotCoveredGeoWarningMessage(notCoveredIndicators, geo.text);
