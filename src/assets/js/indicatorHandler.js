@@ -222,8 +222,6 @@ class IndicatorHandler {
             $("#geographic_value").select2("data"),
             ({ geoType }) => [geoType]
         );
-        console.log(covidCastGeographicValues);
-
         const submitData = {
             start_date: document.getElementById("start_date").value,
             end_date: document.getElementById("end_date").value,
