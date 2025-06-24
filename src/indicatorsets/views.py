@@ -229,9 +229,9 @@ def epivis(request):
             if indicator["_endpoint"] == "covidcast":
                 for geo in covidcast_geos:
                     geo_value = (
-                        geo["id"].lower()
+                        geo["id"].split(":")[1].lower()
                         if geo["geoType"] in ["nation", "state"]
-                        else geo["id"]
+                        else geo["id"].split(":")[1]
                     )
                     datasets.append(
                         {
@@ -291,9 +291,9 @@ def generate_export_data_url(request):
                     geo_values = ",".join(
                         [
                             (
-                                value["id"].lower()
+                                value["id"].split(":")[1].lower()
                                 if value["geoType"] in ["nation", "state"]
-                                else value["id"]
+                                else value["id"].split(":")[1]
                             )
                             for value in values
                         ]
@@ -338,9 +338,9 @@ def preview_data(request):
                     geo_values = ",".join(
                         [
                             (
-                                value["id"].lower()
+                                value["id"].split(":")[1].lower()
                                 if value["geoType"] in ["nation", "state"]
-                                else value["id"]
+                                else value["id"].split(":")[1]
                             )
                             for value in values
                         ]
@@ -401,9 +401,9 @@ def create_query_code(request):
                 for geo_type, values in covidcast_geos.items():
                     geo_values = [
                         (
-                            value["id"].lower()
+                            value["id"].split(":")[1].lower()
                             if value["geoType"] in ["nation", "state"]
-                            else value["id"]
+                            else value["id"].split(":")[1]
                         )
                         for value in values
                     ]
