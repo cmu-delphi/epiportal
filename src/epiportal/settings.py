@@ -26,7 +26,7 @@ from sentry_sdk.integrations.redis import RedisIntegration
 
 
 EPIVIS_URL = os.environ.get("EPIVIS_URL", "https://delphi.cmu.edu/epivis/")
-EPIDATA_URL = os.environ.get("EPIDATA_URL", "https://api.delphi.cmu.edu/epidata/")
+EPIDATA_URL = os.environ.get("EPIDATA_URL", "http://delphi_web_epidata/epidata/")
 EPIDATA_API_KEY = os.environ.get("EPIDATA_API_KEY", "")
 
 SENTRY_DSN = os.environ.get('SENTRY_DSN')

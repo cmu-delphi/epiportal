@@ -372,6 +372,7 @@ def preview_data(request):
             params = {
                 "regions": regions,
                 "epiweeks": f"{date_from}-{date_to}",
+                "api_key": settings.EPIDATA_API_KEY,
             }
             response = requests.get(f"{settings.EPIDATA_URL}fluview", params=params)
             if response.status_code == 200:
@@ -451,3 +452,42 @@ def create_query_code(request):
             {"python_code_blocks": python_code_blocks, "r_code_blocks": r_code_blocks},
             safe=False,
         )
+
+
+def get_available_geos(request):
+    if request.method == "POST":
+        geo_values = []
+        data = json.loads(request.body)
+        indicators = data.get("indicators", [])
+        grouped_indicators = group_by_property(indicators, "data_source")
+        for data_source, indicators in grouped_indicators.items():
+            indicators_str = ",".join(indicator["indicator"] for indicator in indicators)
+            response = requests.get(f"{settings.EPIDATA_URL}covidcast/indicator_geo_coverage", params={"data_source": data_source, "signals": indicators_str}, auth=("epidata", settings.EPIDATA_API_KEY))
+            if response.status_code == 200:
+                data = response.json()
+                if len(data["epidata"]):
+                    geo_values.extend(data["epidata"])
+        unique_values = set(geo_values)
+        geo_levels = set([el.split(":")[0] for el in unique_values])
+        geo_unit_ids = set([geo_value.split(":")[1] for geo_value in unique_values])
+        geographic_granularities = [
+            {
+                "id": f"{geo_unit.geo_level.name}:{geo_unit.geo_id}",
+                "geoType": geo_unit.geo_level.name,
+                "text": geo_unit.display_name,
+                "geoTypeDisplayName": geo_unit.geo_level.display_name,
+            }
+            for geo_unit in GeographyUnit.objects.filter(geo_level__name__in=geo_levels).filter(geo_id__in=geo_unit_ids)
+            .prefetch_related("geo_level")
+            .order_by("level")
+        ]
+        grouped_geographic_granularities = group_by_property(
+            geographic_granularities, "geoTypeDisplayName"
+        )
+        geographic_granularities = []
+        for key, value in grouped_geographic_granularities.items():
+            geographic_granularities.append({
+                "text": key,
+                "children": value,
+            })
+        return JsonResponse({"geographic_granularities": geographic_granularities}, safe=False)
