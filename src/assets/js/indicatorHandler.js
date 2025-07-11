@@ -201,8 +201,6 @@ class IndicatorHandler {
         }
     }
 
-
-
     plotData() {
         const covidCastGeographicValues =
             $("#geographic_value").select2("data");
@@ -268,7 +266,6 @@ class IndicatorHandler {
                 covidcastGeoValues: JSON.stringify(submitData["covidCastGeographicValues"]),
                 fluviewGeoValues: JSON.stringify(submitData["fluviewRegions"]),
             }
-            console.log(payload);
             dataLayerPush(payload);
             $('#modeSubmitResult').html(data["data_export_block"]);
         });
@@ -299,8 +296,6 @@ class IndicatorHandler {
             headers: { "X-CSRFToken": csrftoken },
             data: JSON.stringify(submitData),
         }).done(function (data) {
-            $('#loader').hide();
-            $('#modeSubmitResult').html(JSON.stringify(data, null, 2));
             const payload = {
                 event: "submitSelectedIndicators",
                 formMode: "preview",
@@ -311,6 +306,8 @@ class IndicatorHandler {
                 fluviewGeoValues: JSON.stringify(submitData["fluviewRegions"]),
             }
             dataLayerPush(payload);
+            $('#loader').hide();
+            $('#modeSubmitResult').html(JSON.stringify(data, null, 2));
         });
     }
 
@@ -347,9 +344,6 @@ class IndicatorHandler {
             headers: { "X-CSRFToken": csrftoken },
             data: JSON.stringify(submitData),
         }).done(function (data) {
-            createQueryCodePython += data["python_code_blocks"].join("<br>");
-            createQueryCodeR += data["r_code_blocks"].join("<br>");
-            $('#modeSubmitResult').html(createQueryCodePython + "<br>" + createQueryCodeR);
             const payload = {
                 event: "submitSelectedIndicators",
                 formMode: "queryCode",
@@ -360,6 +354,9 @@ class IndicatorHandler {
                 fluviewGeoValues: JSON.stringify(submitData["fluviewRegions"]),
             }
             dataLayerPush(payload);
+            createQueryCodePython += data["python_code_blocks"].join("<br>");
+            createQueryCodeR += data["r_code_blocks"].join("<br>");
+            $('#modeSubmitResult').html(createQueryCodePython+"<br>"+createQueryCodeR);
         });
 
     }
