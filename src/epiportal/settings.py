@@ -327,6 +327,6 @@ GRAPH_MODELS: dict[str, Any] = {
     'group_models': True,
 }
 
-# django docs
+# django docsxzzz
 # https://django-docs.readthedocs.io/en/latest/
 DOCS_ROOT = os.path.join(BASE_DIR, 'docs', 'build', 'html')
