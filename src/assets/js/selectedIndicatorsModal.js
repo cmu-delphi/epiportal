@@ -175,6 +175,29 @@ async function checkGeoCoverage(geoValue) {
     }
 }
 
+function getAvailableGeos(indicators) {
+    var availableGeos = null;
+
+    const csrftoken = Cookies.get("csrftoken");
+
+    const submitData = {
+        indicators: indicators
+    }
+
+    $.ajax({
+        url: "get_available_geos/",
+        type: "POST",
+        async: false, // Synchronous request to ensure availableGeos is populated before returning
+        dataType: "json",
+        contentType: "application/json",
+        headers: { "X-CSRFToken": csrftoken },
+        data: JSON.stringify(submitData),
+    }).done(function (data) {
+        availableGeos = data.geographic_granularities;
+    });
+    return availableGeos;
+}
+
 $("#geographic_value").on("select2:select", function (e) {
     var geo = e.params.data;
     checkGeoCoverage(geo.id).then((notCoveredIndicators) => {
@@ -187,6 +210,14 @@ $("#geographic_value").on("select2:select", function (e) {
 
 $("#showSelectedIndicatorsButton").click(function () {
     alertPlaceholder.innerHTML = "";
+    const availableGeos = getAvailableGeos(checkedIndicatorMembers);
+    const locationIds = $("#location_search").select2("data").map((item) => item.id);
+    $("#geographic_value").select2({
+        data: availableGeos,
+        minimumInputLength: 0,
+        maximumSelectionLength: 5,
+    });
+    $('#geographic_value').val(locationIds).trigger('change');
     if (!indicatorHandler.checkForCovidcastIndicators()) {
         $('#geographic_value').val(null).trigger('change');
         $("#geographic_value").prop("disabled", true);
@@ -200,11 +231,10 @@ $("#showSelectedIndicatorsButton").click(function () {
             }
         })
     });
-    var otherEndpointLocationsWarning = `<div class="alert alert-info" data-mdb-alert-init role="alert">` +
-        `   <div>Please, note that some indicator sets may require to select location(s) that is/are different from location(s) above.<br> `
     nonCovidcastIndicatorSets = [...new Set(checkedIndicatorMembers.filter(indicator => indicator["_endpoint"] != "covidcast").map((indicator) => indicator["indicator_set"]))];
-    otherEndpointLocationsWarning += `Different location is required for following Indicator Set(s): ${nonCovidcastIndicatorSets.join(", ")}`
-    otherEndpointLocationsWarning += `</div></div>`
+    var otherEndpointLocationsWarning = `<div class="alert alert-info" data-mdb-alert-init role="alert">`
+    otherEndpointLocationsWarning += `For Indicator Set(s): ${nonCovidcastIndicatorSets.join(", ")}, please use the Location menu below:`
+    otherEndpointLocationsWarning += `</div>`
     if (indicatorHandler.getFluviewIndicators().length > 0) {
         $("#differentLocationNote").html(otherEndpointLocationsWarning)
         if (document.getElementsByName("fluviewRegions").length === 0) {
