@@ -209,7 +209,7 @@ class IndicatorHandler {
             indicators: this.indicators,
             covidCastGeographicValues: covidCastGeographicValues,
             fluviewRegions: fluviewRegions,
-            apiKey: document.getElementById("apiKey").value;,
+            apiKey: document.getElementById("apiKey").value,
         };
         const csrftoken = Cookies.get("csrftoken");
         $.ajax({
