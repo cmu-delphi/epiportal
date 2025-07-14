@@ -283,6 +283,7 @@ def generate_export_data_url(request):
         indicators = data.get("indicators", [])
         covidcast_geos = data.get("covidCastGeographicValues", {})
         fluview_geos = data.get("fluviewRegions", [])
+        api_key = data.get("apiKey", None)
 
         for indicator in indicators:
             if indicator["_endpoint"] == "covidcast":
@@ -299,6 +300,8 @@ def generate_export_data_url(request):
                         ]
                     )
                     data_export_url = f"{settings.EPIDATA_URL}covidcast/csv?signal={indicator['data_source']}:{indicator['indicator']}&start_day={dates[0]}&end_day={dates[1]}&geo_type={type}&geo_values={geo_values}"
+                    if api_key:
+                        data_export_url += f"&api_key={api_key}"
                     data_export_commands.append(
                         f'wget --content-disposition <a href="{data_export_url}">{data_export_url}</a>'
                     )
@@ -306,6 +309,8 @@ def generate_export_data_url(request):
             regions = ",".join([region["id"] for region in fluview_geos])
             date_from, date_to = get_epiweek(start_date, end_date)
             data_export_url = f"{settings.EPIDATA_URL}fluview/?regions={regions}&epiweeks={date_from}-{date_to}&format=csv"
+            if api_key:
+                data_export_url += f"&api_key={api_key}"
             data_export_commands.append(
                 f'wget --content-disposition <a href="{data_export_url}">{data_export_url}</a>'
             )
@@ -325,6 +330,7 @@ def preview_data(request):
         indicators = data.get("indicators", [])
         covidcast_geos = data.get("covidCastGeographicValues", {})
         fluview_geos = data.get("fluviewRegions", [])
+        api_key = data.get("apiKey", None)
 
         preview_data = []
 
@@ -352,6 +358,7 @@ def preview_data(request):
                         "signal": indicator["indicator"],
                         "geo_type": geo_type,
                         "geo_values": geo_values,
+                        "api_key": api_key if api_key else settings.EPIDATA_API_KEY,
                     }
                     response = requests.get(
                         f"{settings.EPIDATA_URL}covidcast", params=params
@@ -366,12 +373,20 @@ def preview_data(request):
                                     "message": data["message"],
                                 }
                             )
+                    elif response.status_code == 401:
+                        preview_data = {
+                            "epidata": [],
+                            "result": -2,
+                            "message": "API key does not exist. Register a new key at https://api.delphi.cmu.edu/epidata/admin/registration_form or contact delphi-support+privacy@andrew.cmu.edu to troubleshoot"
+                        }
+                        return JsonResponse(preview_data, safe=False)
         if fluview_geos:
             regions = ",".join([region["id"] for region in fluview_geos])
             date_from, date_to = get_epiweek(start_date, end_date)
             params = {
                 "regions": regions,
                 "epiweeks": f"{date_from}-{date_to}",
+                "api_key": api_key if api_key else settings.EPIDATA_API_KEY,
             }
             response = requests.get(f"{settings.EPIDATA_URL}fluview", params=params)
             if response.status_code == 200:
@@ -384,6 +399,13 @@ def preview_data(request):
                             "message": data["message"],
                         }
                     )
+            elif response.status_code == 401:
+                preview_data = {
+                    "epidata": [],
+                    "result": -2,
+                    "message": "API key does not exist. Register a new key at https://api.delphi.cmu.edu/epidata/admin/registration_form or contact delphi-support+privacy@andrew.cmu.edu to troubleshoot"
+                }
+                return JsonResponse(preview_data, safe=False)
         return JsonResponse(preview_data, safe=False)
 
 
@@ -394,6 +416,7 @@ def create_query_code(request):
         end_date = data.get("end_date", "")
         indicators = data.get("indicators", [])
         covidcast_geos = data.get("covidCastGeographicValues", {})
+        api_key = data.get("apiKey", None)
         python_code_blocks = []
         r_code_blocks = []
         for indicator in indicators:
@@ -414,7 +437,7 @@ def create_query_code(request):
                             '<pre class="code-block">'
                             + "<code>from epiweeks import Week<br>"
                             + "import covidcast<br><br>"
-                            + f'data = covidcast.signal("{indicator["data_source"]}", "{indicator["indicator"]}", Week({int(start_day[:4])}, {int(start_day[4:])}), Week({int(end_day[:4])}, {int(end_day[4:])}), "{geo_type}", {json.dumps([str(geo) for geo in geo_values])})'
+                            + f'data = covidcast.signal("{indicator["data_source"]}", "{indicator["indicator"]}", Week({int(start_day[:4])}, {int(start_day[4:])}), Week({int(end_day[:4])}, {int(end_day[4:])}), "{geo_type}", {json.dumps([str(geo) for geo in geo_values])}, api_key="{api_key}")'
                             + "</code>"
                             + "</pre>"
                         )
@@ -434,7 +457,7 @@ def create_query_code(request):
                             '<pre class="code-block">'
                             + "<code>from datetime import date<br>"
                             + "import covidcast<br><br>"
-                            + f'data = covidcast.signal("{indicator["data_source"]}", "{indicator["indicator"]}", date{str(start_day)}, date{str(end_day)}, "{geo_type}", {json.dumps([str(geo) for geo in geo_values])})'
+                            + f'data = covidcast.signal("{indicator["data_source"]}", "{indicator["indicator"]}", date{str(start_day)}, date{str(end_day)}, "{geo_type}", {json.dumps([str(geo) for geo in geo_values])}, api_key="{api_key}")'
                             + "</code>"
                             + "</pre>"
                         )

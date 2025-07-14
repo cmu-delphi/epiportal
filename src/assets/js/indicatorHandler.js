@@ -209,6 +209,7 @@ class IndicatorHandler {
             indicators: this.indicators,
             covidCastGeographicValues: covidCastGeographicValues,
             fluviewRegions: fluviewRegions,
+            apiKey: document.getElementById("apiKey").value,
         };
         const csrftoken = Cookies.get("csrftoken");
         $.ajax({
@@ -227,6 +228,7 @@ class IndicatorHandler {
                 covidcastGeoValues: JSON.stringify(submitData["covidCastGeographicValues"]),
                 fluviewGeoValues: JSON.stringify(submitData["fluviewRegions"]),
                 epivisUrl: data["epivis_url"],
+                apiKey: submitData["apiKey"] ? submitData["apiKey"] : "Not provided",
             }
             dataLayerPush(payload);
             window.open(data["epivis_url"], '_blank').focus();
@@ -246,6 +248,7 @@ class IndicatorHandler {
             indicators: this.indicators,
             covidCastGeographicValues: covidCastGeographicValues,
             fluviewRegions: fluviewRegions,
+            apiKey: document.getElementById("apiKey").value,
         }
         const csrftoken = Cookies.get("csrftoken");
         $.ajax({
@@ -265,6 +268,7 @@ class IndicatorHandler {
                 indicators: JSON.stringify(submitData["indicators"]),
                 covidcastGeoValues: JSON.stringify(submitData["covidCastGeographicValues"]),
                 fluviewGeoValues: JSON.stringify(submitData["fluviewRegions"]),
+                apiKey: submitData["apiKey"] ? submitData["apiKey"] : "Not provided",
             }
             dataLayerPush(payload);
             $('#modeSubmitResult').html(data["data_export_block"]);
@@ -279,13 +283,13 @@ class IndicatorHandler {
             $("#geographic_value").select2("data"),
             ({ geoType }) => [geoType]
         );
-
         const submitData = {
             start_date: document.getElementById("start_date").value,
             end_date: document.getElementById("end_date").value,
             indicators: this.indicators,
             covidCastGeographicValues: covidCastGeographicValues,
             fluviewRegions: fluviewRegions,
+            apiKey: document.getElementById("apiKey").value,
         }
         const csrftoken = Cookies.get("csrftoken");
         $.ajax({
@@ -304,6 +308,7 @@ class IndicatorHandler {
                 indicators: JSON.stringify(submitData["indicators"]),
                 covidcastGeoValues: JSON.stringify(submitData["covidCastGeographicValues"]),
                 fluviewGeoValues: JSON.stringify(submitData["fluviewRegions"]),
+                apiKey: submitData["apiKey"] ? submitData["apiKey"] : "Not provided",
             }
             dataLayerPush(payload);
             $('#loader').hide();
@@ -326,6 +331,7 @@ class IndicatorHandler {
             indicators: this.indicators,
             covidCastGeographicValues: covidCastGeographicValues,
             fluviewRegions: fluviewRegions,
+            apiKey: document.getElementById("apiKey").value,
         }
         const csrftoken = Cookies.get("csrftoken");
         var createQueryCodePython = `<h4>PYTHON PACKAGE</h4>`
@@ -352,6 +358,7 @@ class IndicatorHandler {
                 indicators: JSON.stringify(submitData["indicators"]),
                 covidcastGeoValues: JSON.stringify(submitData["covidCastGeographicValues"]),
                 fluviewGeoValues: JSON.stringify(submitData["fluviewRegions"]),
+                apiKey: submitData["apiKey"] ? submitData["apiKey"] : "Not provided",
             }
             dataLayerPush(payload);
             createQueryCodePython += data["python_code_blocks"].join("<br>");
