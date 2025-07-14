@@ -373,6 +373,13 @@ def preview_data(request):
                                     "message": data["message"],
                                 }
                             )
+                    elif response.status_code == 401:
+                        preview_data = {
+                            "epidata": [],
+                            "result": -2,
+                            "message": "API key does not exist. Register a new key at https://api.delphi.cmu.edu/epidata/admin/registration_form or contact delphi-support+privacy@andrew.cmu.edu to troubleshoot"
+                        }
+                        return JsonResponse(preview_data, safe=False)
         if fluview_geos:
             regions = ",".join([region["id"] for region in fluview_geos])
             date_from, date_to = get_epiweek(start_date, end_date)
@@ -392,6 +399,13 @@ def preview_data(request):
                             "message": data["message"],
                         }
                     )
+            elif response.status_code == 401:
+                preview_data = {
+                    "epidata": [],
+                    "result": -2,
+                    "message": "API key does not exist. Register a new key at https://api.delphi.cmu.edu/epidata/admin/registration_form or contact delphi-support+privacy@andrew.cmu.edu to troubleshoot"
+                }
+                return JsonResponse(preview_data, safe=False)
         return JsonResponse(preview_data, safe=False)
 
 
