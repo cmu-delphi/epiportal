@@ -7,7 +7,7 @@ import requests
 from django.conf import settings
 from django.http import JsonResponse
 from django.views.generic import ListView
-from django.db.models import Case, When, Value, IntegerField, Q
+from django.db.models import Case, When, Value, IntegerField
 
 from base.models import Geography, GeographyUnit
 from indicatorsets.filters import IndicatorSetFilter
@@ -165,10 +165,12 @@ class IndicatorSetListView(ListView):
         )
         grouped_geographic_granularities = []
         for key, value in geographic_granularities.items():
-            grouped_geographic_granularities.append({
-                "text": key,
-                "children": value,
-            })
+            grouped_geographic_granularities.append(
+                {
+                    "text": key,
+                    "children": value,
+                }
+            )
         return grouped_geographic_granularities
 
     def get_context_data(self, **kwargs):
@@ -198,7 +200,7 @@ class IndicatorSetListView(ListView):
                 default=Value(0),
                 output_field=IntegerField(),
             ),
-        ).order_by('-is_ongoing', '-is_dua_required', "name")
+        ).order_by("-is_ongoing", "-is_dua_required", "name")
         context["related_indicators"] = json.dumps(
             self.get_related_indicators(
                 filter.indicators_qs, filter.qs.values_list("id", flat=True)
@@ -214,7 +216,9 @@ class IndicatorSetListView(ListView):
         context["available_geographies"] = Geography.objects.filter(
             used_in="indicators"
         )
-        context["geographic_granularities"] = self.get_grouped_geographic_granularities()
+        context["geographic_granularities"] = (
+            self.get_grouped_geographic_granularities()
+        )
         return context
 
 
@@ -377,7 +381,7 @@ def preview_data(request):
                         preview_data = {
                             "epidata": [],
                             "result": -2,
-                            "message": "API key does not exist. Register a new key at https://api.delphi.cmu.edu/epidata/admin/registration_form or contact delphi-support+privacy@andrew.cmu.edu to troubleshoot"
+                            "message": "API key does not exist. Register a new key at https://api.delphi.cmu.edu/epidata/admin/registration_form or contact delphi-support+privacy@andrew.cmu.edu to troubleshoot",
                         }
                         return JsonResponse(preview_data, safe=False)
         if fluview_geos:
@@ -403,7 +407,7 @@ def preview_data(request):
                 preview_data = {
                     "epidata": [],
                     "result": -2,
-                    "message": "API key does not exist. Register a new key at https://api.delphi.cmu.edu/epidata/admin/registration_form or contact delphi-support+privacy@andrew.cmu.edu to troubleshoot"
+                    "message": "API key does not exist. Register a new key at https://api.delphi.cmu.edu/epidata/admin/registration_form or contact delphi-support+privacy@andrew.cmu.edu to troubleshoot",
                 }
                 return JsonResponse(preview_data, safe=False)
         return JsonResponse(preview_data, safe=False)
@@ -416,11 +420,22 @@ def create_query_code(request):
         end_date = data.get("end_date", "")
         indicators = data.get("indicators", [])
         covidcast_geos = data.get("covidCastGeographicValues", {})
+        fluview_geos = data.get("fluviewRegions", [])
         api_key = data.get("apiKey", None)
-        python_code_blocks = []
+        python_code_blocks = [(
+            '<pre class="code-block">'
+            + "<code>from epidatpy import CovidcastEpidata, EpiDataContext, EpiRange<br><br>"
+            + "# All calls using the `epidata` object will now be cached for 7 days<br>"
+            + "epidata = EpiDataContext(use_cache=True, cache_max_age_days=7)<br><br>"
+        )]
         r_code_blocks = []
-        for indicator in indicators:
-            if indicator["_endpoint"] == "covidcast":
+        grouped_indicators = group_by_property(indicators, "data_source")
+        for data_source, indicators in grouped_indicators.items():
+            indicators_str = ",".join(
+                [indicator["indicator"] for indicator in indicators]
+            )
+            if indicators[0].get("_endpoint") == "covidcast":
+                time_type = indicators[0].get("time_type")
                 for geo_type, values in covidcast_geos.items():
                     geo_values = [
                         (
@@ -431,45 +446,65 @@ def create_query_code(request):
                         for value in values
                     ]
                     r_geos = ", ".join(f'"{str(geo)}"' for geo in geo_values)
-                    if indicator["time_type"] == "week":
+                    if time_type == "week":
                         start_day, end_day = get_epiweek(start_date, end_date)
                         python_code_block = (
-                            '<pre class="code-block">'
-                            + "<code>from epiweeks import Week<br>"
-                            + "import covidcast<br><br>"
-                            + f'data = covidcast.signal("{indicator["data_source"]}", "{indicator["indicator"]}", Week({int(start_day[:4])}, {int(start_day[4:])}), Week({int(end_day[:4])}, {int(end_day[4:])}), "{geo_type}", {json.dumps([str(geo) for geo in geo_values])}, api_key="{api_key}")'
-                            + "</code>"
-                            + "</pre>"
+                            f"{data_source.replace('-', '_')}_df = epidata.pub_covidcast(<br>"
+                            + f'    data_source="{data_source}",<br>'
+                            + f'    signals="{indicators_str}",<br>'
+                            + f'    geo_type="{geo_type}",<br>'
+                            + '     time_type="week",<br>'
+                            + f'    geo_values="{",".join([geo for geo in geo_values])}",<br>'
+                            + f"    time_values=EpiRange({start_day}, {end_day}),<br>"
+                            + ").df()<br>"
+                            
                         )
                         python_code_blocks.append(python_code_block)
-                        r_code_block = (
-                            '<pre class="code-block">'
-                            + "<code>libary(covidcast)<br><br>"
-                            + f'cc_data <- covidcast_signal(data_source = "{indicator["data_source"]}", signal = "{indicator["indicator"]}", start_day = "{start_day}", end_day = "{end_day}", geo_type = "{geo_type}", geo_values = c({r_geos}))'
-                            + "</code>"
-                            + "</pre>"
-                        )
-                        r_code_blocks.append(r_code_block)
+                        # r_code_block = (
+                        #     '<pre class="code-block">'
+                        #     + "<code>libary(covidcast)<br><br>"
+                        #     + f'cc_data <- covidcast_signal(data_source = "{indicator["data_source"]}", signal = "{indicator["indicator"]}", start_day = "{start_day}", end_day = "{end_day}", geo_type = "{geo_type}", geo_values = c({r_geos}))'
+                        #     + "</code>"
+                        #     + "</pre>"
+                        # )
+                        # r_code_blocks.append(r_code_block)
                     else:
-                        start_day = tuple(map(int, start_date.split("-")))
-                        end_day = tuple(map(int, end_date.split("-")))
                         python_code_block = (
-                            '<pre class="code-block">'
-                            + "<code>from datetime import date<br>"
-                            + "import covidcast<br><br>"
-                            + f'data = covidcast.signal("{indicator["data_source"]}", "{indicator["indicator"]}", date{str(start_day)}, date{str(end_day)}, "{geo_type}", {json.dumps([str(geo) for geo in geo_values])}, api_key="{api_key}")'
-                            + "</code>"
-                            + "</pre>"
+                            f"{data_source.replace('-', '_')}_df = epidata.pub_covidcast(<br>"
+                            + f'    data_source="{data_source}",<br>'
+                            + f'    signals="{indicators_str}",<br>'
+                            + f'    geo_type="{geo_type}",<br>'
+                            + '    time_type="day",<br>'
+                            + f'    geo_values="{",".join([geo for geo in geo_values])}",<br>'
+                            + f'    time_values=EpiRange({start_date.replace("-", "")}, {end_date.replace("-", "")}),<br>'
+                            + ").df()<br>"
                         )
                         python_code_blocks.append(python_code_block)
-                        r_code_block = (
-                            '<pre class="code-block">'
-                            + "<code>libary(covidcast)<br><br>"
-                            + f'cc_data <- covidcast_signal(data_source = "{indicator["data_source"]}", signal = "{indicator["indicator"]}", start_day = "{start_date}", end_day = "{end_date}", geo_type = "{geo_type}", geo_values = c({r_geos}))'
-                            + "</code>"
-                            + "</pre>"
-                        )
-                        r_code_blocks.append(r_code_block)
+                        # r_code_block = (
+                        #     '<pre class="code-block">'
+                        #     + "<code>library(covidcast)<br><br>"
+                        #     + f'cc_data <- covidcast_signal(data_source = "{indicator["data_source"]}", signal = "{indicator["indicator"]}", start_day = "{start_date}", end_day = "{end_date}", geo_type = "{geo_type}", geo_values = c({r_geos}))'
+                        #     + "</code>"
+                        #     + "</pre>"
+                        # )
+                        # r_code_blocks.append(r_code_block)
+        if fluview_geos:
+            regions = ",".join([region["id"] for region in fluview_geos])
+            date_from, date_to = get_epiweek(start_date, end_date)
+            # params = {
+            #     "regions": regions,
+            #     "epiweeks": f"{date_from}-{date_to}",
+            #     "api_key": api_key if api_key else settings.EPIDATA_API_KEY,
+            # }
+            python_code_block = (
+                "fluview_df = epidata.pub_fluview(<br>"
+                + f'    regions="{regions}",<br>'
+                + f'    epiweeks="{date_from}-{date_to}",<br>'
+                + f'    auth="{api_key if api_key else ""}"<br>'
+                + ").df()<br>"
+            )
+            python_code_blocks.append(python_code_block)
+        python_code_blocks.append("</code></pre>")
         return JsonResponse(
             {"python_code_blocks": python_code_blocks, "r_code_blocks": r_code_blocks},
             safe=False,
