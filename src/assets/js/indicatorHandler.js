@@ -335,12 +335,12 @@ class IndicatorHandler {
         }
         const csrftoken = Cookies.get("csrftoken");
         var createQueryCodePython = `<h4>PYTHON PACKAGE</h4>`
-            + `<p>Install <code class="highlight-code">covidcast</code> via pip: </p>`
-            + `<pre class="code-block"><code>pip install covidcast</code></pre><br>`
+            + `<p>Install <code class="highlight-code"><a href="https://github.com/cmu-delphi/epidatpy">epidatpy</a></code> via pip: </p>`
+            + `<pre class="code-block"><code>pip install -e "git+https://github.com/cmu-delphi/epidatpy.git#egg=epidatpy"</code></pre><br>`
             + `<p>Fetch data: </p>`;
         var createQueryCodeR = `<h4>R PACKAGE</h4>`
-            + `<p>Install <code class="highlight-code">covidcast</code> via CRAN: </p>`
-            + `<pre class="code-block"><code>install.packages('covidcast')</code></pre><br>`
+            + `<p>Install <code class="highlight-code"><a href="https://github.com/cmu-delphi/epidatr">epidatr</a></code> via CRAN: </p>`
+            + `<pre class="code-block"><code>pak::pkg_install("epidatr")</code></pre><br>`
             + `<p> Fetch data: </p>`
         $.ajax({
             url: "create_query_code/",
