@@ -462,7 +462,7 @@ def get_available_geos(request):
         grouped_indicators = group_by_property(indicators, "data_source")
         for data_source, indicators in grouped_indicators.items():
             indicators_str = ",".join(indicator["indicator"] for indicator in indicators)
-            response = requests.get(f"{settings.EPIDATA_URL}covidcast/indicator_geo_coverage", params={"data_source": data_source, "signals": indicators_str}, auth=("epidata", settings.EPIDATA_API_KEY))
+            response = requests.get(f"{settings.EPIDATA_URL}covidcast/geo_indicator_coverage", params={"data_source": data_source, "signals": indicators_str}, auth=("epidata", settings.EPIDATA_API_KEY))
             if response.status_code == 200:
                 data = response.json()
                 if len(data["epidata"]):
