@@ -144,19 +144,9 @@
         </div>
     </div>
 </div>
+<script>
+    const geographicGranularities = {{ geographic_granularities|safe }};
+</script>
 <script src="{% static 'js/indicatorHandler.js' %}"></script>
 <script src="{% static 'js/selectedIndicatorsModal.js' %}"></script>
 <script src="{% static 'js/select2_init.js' %}"></script>
-<script>
-    $(document).ready(function () {
-        const geoValues = {{ geographic_granularities|safe }};
-        var urlParams = JSON.parse(JSON.stringify({{ url_params_dict|safe }}));
-        initSelect2('geographic_value', geoValues);
-        if (urlParams.location_search != "") {
-            var locationSearch = urlParams.location_search; 
-            var locationIds = locationSearch.map((item) => item);
-            $('#geographic_value').val(locationIds).trigger('change');
-        }
-    });
-    
-</script>
