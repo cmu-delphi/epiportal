@@ -1,3 +1,12 @@
+function dataLayerPush(payload) {
+    if (window.dataLayer) {
+        window.dataLayer.push(function () {
+            this.reset();
+        });
+        window.dataLayer.push(payload);
+    }
+}
+
 class IndicatorHandler {
     constructor() {
         this.indicators = {};
@@ -200,6 +209,7 @@ class IndicatorHandler {
             indicators: this.indicators,
             covidCastGeographicValues: covidCastGeographicValues,
             fluviewRegions: fluviewRegions,
+            apiKey: document.getElementById("apiKey").value,
         };
         const csrftoken = Cookies.get("csrftoken");
         $.ajax({
@@ -211,6 +221,16 @@ class IndicatorHandler {
             headers: { "X-CSRFToken": csrftoken },
             data: JSON.stringify(submitData),
         }).done(function (data) {
+            const payload = {
+                event: "submitSelectedIndicators",
+                formMode: "epivis",
+                indicators: JSON.stringify(submitData["indicators"]),
+                covidcastGeoValues: JSON.stringify(submitData["covidCastGeographicValues"]),
+                fluviewGeoValues: JSON.stringify(submitData["fluviewRegions"]),
+                epivisUrl: data["epivis_url"],
+                apiKey: submitData["apiKey"] ? submitData["apiKey"] : "Not provided",
+            }
+            dataLayerPush(payload);
             window.open(data["epivis_url"], '_blank').focus();
         });
     }
@@ -228,6 +248,7 @@ class IndicatorHandler {
             indicators: this.indicators,
             covidCastGeographicValues: covidCastGeographicValues,
             fluviewRegions: fluviewRegions,
+            apiKey: document.getElementById("apiKey").value,
         }
         const csrftoken = Cookies.get("csrftoken");
         $.ajax({
@@ -239,6 +260,17 @@ class IndicatorHandler {
             headers: { "X-CSRFToken": csrftoken },
             data: JSON.stringify(submitData),
         }).done(function (data) {
+            const payload = {
+                event: "submitSelectedIndicators",
+                formMode: "export",
+                formStartDate: submitData["start_date"],
+                formEndDate: submitData["end_date"],
+                indicators: JSON.stringify(submitData["indicators"]),
+                covidcastGeoValues: JSON.stringify(submitData["covidCastGeographicValues"]),
+                fluviewGeoValues: JSON.stringify(submitData["fluviewRegions"]),
+                apiKey: submitData["apiKey"] ? submitData["apiKey"] : "Not provided",
+            }
+            dataLayerPush(payload);
             $('#modeSubmitResult').html(data["data_export_block"]);
         });
     }
@@ -251,13 +283,13 @@ class IndicatorHandler {
             $("#geographic_value").select2("data"),
             ({ geoType }) => [geoType]
         );
-
         const submitData = {
             start_date: document.getElementById("start_date").value,
             end_date: document.getElementById("end_date").value,
             indicators: this.indicators,
             covidCastGeographicValues: covidCastGeographicValues,
             fluviewRegions: fluviewRegions,
+            apiKey: document.getElementById("apiKey").value,
         }
         const csrftoken = Cookies.get("csrftoken");
         $.ajax({
@@ -268,6 +300,17 @@ class IndicatorHandler {
             headers: { "X-CSRFToken": csrftoken },
             data: JSON.stringify(submitData),
         }).done(function (data) {
+            const payload = {
+                event: "submitSelectedIndicators",
+                formMode: "preview",
+                formStartDate: submitData["start_date"],
+                formEndDate: submitData["end_date"],
+                indicators: JSON.stringify(submitData["indicators"]),
+                covidcastGeoValues: JSON.stringify(submitData["covidCastGeographicValues"]),
+                fluviewGeoValues: JSON.stringify(submitData["fluviewRegions"]),
+                apiKey: submitData["apiKey"] ? submitData["apiKey"] : "Not provided",
+            }
+            dataLayerPush(payload);
             $('#loader').hide();
             $('#modeSubmitResult').html(JSON.stringify(data, null, 2));
         });
@@ -288,15 +331,16 @@ class IndicatorHandler {
             indicators: this.indicators,
             covidCastGeographicValues: covidCastGeographicValues,
             fluviewRegions: fluviewRegions,
+            apiKey: document.getElementById("apiKey").value,
         }
         const csrftoken = Cookies.get("csrftoken");
         var createQueryCodePython = `<h4>PYTHON PACKAGE</h4>`
-            + `<p>Install <code class="highlight-code">covidcast</code> via pip: </p>`
-            + `<pre class="code-block"><code>pip install covidcast</code></pre><br>`
+            + `<p>Install <code class="highlight-code"><a href="https://github.com/cmu-delphi/epidatpy">epidatpy</a></code> via pip: </p>`
+            + `<pre class="code-block"><code>pip install -e "git+https://github.com/cmu-delphi/epidatpy.git#egg=epidatpy"</code></pre><br>`
             + `<p>Fetch data: </p>`;
         var createQueryCodeR = `<h4>R PACKAGE</h4>`
-            + `<p>Install <code class="highlight-code">covidcast</code> via CRAN: </p>`
-            + `<pre class="code-block"><code>install.packages('covidcast')</code></pre><br>`
+            + `<p>Install <code class="highlight-code"><a href="https://github.com/cmu-delphi/epidatr">epidatr</a></code> via CRAN: </p>`
+            + `<pre class="code-block"><code>pak::pkg_install("epidatr")</code></pre><br>`
             + `<p> Fetch data: </p>`
         $.ajax({
             url: "create_query_code/",
@@ -306,6 +350,17 @@ class IndicatorHandler {
             headers: { "X-CSRFToken": csrftoken },
             data: JSON.stringify(submitData),
         }).done(function (data) {
+            const payload = {
+                event: "submitSelectedIndicators",
+                formMode: "queryCode",
+                formStartDate: submitData["start_date"],
+                formEndDate: submitData["end_date"],
+                indicators: JSON.stringify(submitData["indicators"]),
+                covidcastGeoValues: JSON.stringify(submitData["covidCastGeographicValues"]),
+                fluviewGeoValues: JSON.stringify(submitData["fluviewRegions"]),
+                apiKey: submitData["apiKey"] ? submitData["apiKey"] : "Not provided",
+            }
+            dataLayerPush(payload);
             createQueryCodePython += data["python_code_blocks"].join("<br>");
             createQueryCodeR += data["r_code_blocks"].join("<br>");
             $('#modeSubmitResult').html(createQueryCodePython+"<br>"+createQueryCodeR);

@@ -272,3 +272,53 @@ function submitMode(event) {
         indicatorHandler.createQueryCode();
     }
 }
+
+
+function manageApiKeys(isChecked, apiKeyValue) {
+    try {
+        // Store checkbox state in localStorage
+        localStorage.setItem('storeApiKey', String(isChecked));
+
+        if (isChecked) {
+            // Set api-key in localStorage from input value
+            localStorage.setItem('apiKey', apiKeyValue || '');
+        } else {
+            // Remove api-key from localStorage when unchecked
+            localStorage.removeItem('apiKey');
+        }
+    } catch (error) {
+        console.error('Storage operation failed:', error);
+    }
+}
+
+// Initialize input and checkbox from localStorage
+window.addEventListener('DOMContentLoaded', () => {
+    const apiKeyInput = document.getElementById('apiKey');
+    const storeApiKeyCheckbox = document.getElementById('storeApiKey');
+
+    // Pre-populate input and checkbox from localStorage
+    const storedApiKey = localStorage.getItem('apiKey');
+    const storedCheckboxState = localStorage.getItem('storeApiKey');
+
+    if (storedApiKey) {
+        apiKeyInput.value = storedApiKey;
+    }
+    if (storedCheckboxState === 'true') {
+        storeApiKeyCheckbox.checked = true;
+    }
+
+    // Handle checkbox change
+    storeApiKeyCheckbox.addEventListener('change', (event) => {
+        const isChecked = event.target.checked;
+        const apiKeyValue = apiKeyInput.value;
+        manageApiKeys(isChecked, apiKeyValue);
+    });
+
+    // Handle input change (save API key if checkbox is already checked)
+    apiKeyInput.addEventListener('input', () => {
+        if (storeApiKeyCheckbox.checked) {
+            const apiKeyValue = apiKeyInput.value;
+            manageApiKeys(true, apiKeyValue);
+        }
+    });
+});
