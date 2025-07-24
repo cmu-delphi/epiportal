@@ -184,6 +184,7 @@ class IndicatorSetListView(ListView):
         context["epidata_url"] = settings.EPIDATA_URL
         context["form"] = IndicatorSetFilterForm(initial=url_params_dict)
         context["filter"] = filter
+        context["APP_VERSION"] = settings.APP_VERSION
         context["indicator_sets"] = filter.qs.annotate(
             is_ongoing=Case(
                 When(
@@ -264,7 +265,7 @@ def epivis(request):
                                 indicator["indicator"], indicator["indicator"]
                             ),
                             "params": {
-                                "_endpoint": indicator["_endpoint"],
+                                "_endpoint": indicator["_endpoint"] if indicator["data_source"] == "fluview" else "fluview_clinical",
                                 "regions": geo["id"],
                                 "custom_title": generate_epivis_custom_title(
                                     indicator, geo["text"]
