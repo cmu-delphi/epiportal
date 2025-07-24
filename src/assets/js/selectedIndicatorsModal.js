@@ -233,7 +233,8 @@ $("#showSelectedIndicatorsButton").click(function () {
     });
     nonCovidcastIndicatorSets = [...new Set(checkedIndicatorMembers.filter(indicator => indicator["_endpoint"] != "covidcast").map((indicator) => indicator["indicator_set"]))];
     var otherEndpointLocationsWarning = `<div class="alert alert-info" data-mdb-alert-init role="alert">`
-    otherEndpointLocationsWarning += `For Indicator Set(s): ${nonCovidcastIndicatorSets.join(", ")}, please use the Location menu below:`
+    otherEndpointLocationsWarning += `Please, note that some indicator sets may require to select location(s) that is/are different from location(s) above. <br>
+                                    Different location is required for following Indicator Set(s): ${nonCovidcastIndicatorSets.join(", ")}. `;
     otherEndpointLocationsWarning += `</div>`
     if (indicatorHandler.getFluviewIndicators().length > 0) {
         $("#differentLocationNote").html(otherEndpointLocationsWarning)
