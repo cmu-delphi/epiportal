@@ -214,7 +214,7 @@ class IndicatorSet(models.Model):
 
     @property
     def get_geographic_levels(self):
-        return [geo.display_name for geo in self.geographic_levels.all()]
+        return [geo.display_name for geo in self.geographic_levels.all().order_by("display_order_number")]
 
 
 class NonDelphiIndicatorSet(IndicatorSet):
