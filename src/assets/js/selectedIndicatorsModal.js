@@ -175,27 +175,24 @@ async function checkGeoCoverage(geoValue) {
     }
 }
 
-function getAvailableGeos(indicators) {
-    var availableGeos = null;
-
+async function getAvailableGeos(indicators) {
     const csrftoken = Cookies.get("csrftoken");
+    const submitData = { indicators: indicators };
 
-    const submitData = {
-        indicators: indicators
+    try {
+        const data = await $.ajax({
+            url: "get_available_geos/",
+            type: "POST",
+            dataType: "json",
+            contentType: "application/json",
+            headers: { "X-CSRFToken": csrftoken },
+            data: JSON.stringify(submitData),
+        });
+        return data.geographic_granularities;
+    } catch (error) {
+        console.error("Error fetching available geos:", error);
+        return null;
     }
-
-    $.ajax({
-        url: "get_available_geos/",
-        type: "POST",
-        async: false, // Synchronous request to ensure availableGeos is populated before returning
-        dataType: "json",
-        contentType: "application/json",
-        headers: { "X-CSRFToken": csrftoken },
-        data: JSON.stringify(submitData),
-    }).done(function (data) {
-        availableGeos = data.geographic_granularities;
-    });
-    return availableGeos;
 }
 
 $("#geographic_value").on("select2:select", function (e) {
@@ -208,20 +205,38 @@ $("#geographic_value").on("select2:select", function (e) {
 });
 
 
-$("#showSelectedIndicatorsButton").click(function () {
+$("#showSelectedIndicatorsButton").click(async function () {
     alertPlaceholder.innerHTML = "";
-    const availableGeos = getAvailableGeos(checkedIndicatorMembers);
-    const locationIds = $("#location_search").select2("data").map((item) => item.id);
+
+    const prevSelectedIds = $('#geographic_value').val() || [];
+
 
     if ($('#geographic_value').hasClass("select2-hidden-accessible")) {
         $('#geographic_value').select2('destroy').empty();
     }
+
+    // Show loader in #geographic_value
+    $('#geographic_value').hide();
+    $('#geographic_value').after('<div id="geo-loader" class="lds-ellipsis"><div></div><div></div><div></div><div></div></div>');
+
+    const availableGeos = await getAvailableGeos(checkedIndicatorMembers);
+    const locationIds = $("#location_search").select2("data").map((item) => item.id);
+
+    // Remove loader and show Select2
+    $('#geo-loader').remove();
+    $('#geographic_value').show();
+    
     $("#geographic_value").select2({
         data: availableGeos,
         minimumInputLength: 0,
         maximumSelectionLength: 5,
     });
-    $('#geographic_value').val(locationIds).trigger('change');
+
+    const availableGeoIds = availableGeos.flatMap(group => group.children.map(child => child.id));
+    const preservedIds = prevSelectedIds.filter(id => availableGeoIds.includes(id));
+
+    const selectedGeos = [...locationIds, ...preservedIds];
+    $('#geographic_value').val(selectedGeos).trigger('change');
     if (!indicatorHandler.checkForCovidcastIndicators()) {
         $('#geographic_value').val(null).trigger('change');
         $("#geographic_value").prop("disabled", true);
