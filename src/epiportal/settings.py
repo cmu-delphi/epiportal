@@ -24,7 +24,7 @@ import sentry_sdk
 from sentry_sdk.integrations.django import DjangoIntegration
 from sentry_sdk.integrations.redis import RedisIntegration
 
-APP_VERSION = "1.0.1"
+APP_VERSION = "1.0.2"
 
 
 EPIVIS_URL = os.environ.get("EPIVIS_URL", "https://delphi.cmu.edu/epivis/")
