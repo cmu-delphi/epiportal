@@ -33,7 +33,12 @@ var table = new DataTable("#indicatorSetsTable", {
         smart: true,
         highlight: true,
     },
-    sDom: 'ltipr'
+    sDom: 'ltipr',
+    rowCallback: function(row, data, index) {
+        if (index % 2 === 0) {
+            $(row).addClass('odd-row');
+        }
+    }
 });
 
 // new DataTable.Buttons(table, {

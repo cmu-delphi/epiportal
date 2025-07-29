@@ -32,7 +32,7 @@
     border: 1px solid #ddd;
     border-radius: 4px;
     padding: 15px;
-    font-family: 'Courier New', Courier, monospace;
+    font-family: "Courier New", Courier, monospace;
     font-size: 14px;
     line-height: 1.6;
     overflow-x: auto;
@@ -41,12 +41,10 @@
 }
 
 .highlight-code {
-    font-size: 0.875em!important;
-    color: var(--mdb-code-color)!important;
-    word-wrap: break-word!important;
+    font-size: 0.875em !important;
+    color: var(--mdb-code-color) !important;
+    word-wrap: break-word !important;
 }
-
-
 
 /* Loader Overlay */
 .loader-overlay {
@@ -159,10 +157,23 @@
 }
 
 td.dt-empty {
-    text-align: left!important;
+    text-align: left !important;
 }
 
 .margin-left-right-auto {
-    margin-left: auto!important;
-    margin-right: auto!important;
+    margin-left: auto !important;
+    margin-right: auto !important;
+}
+
+.table-striped > tbody > tr.odd-row {
+    background-color: rgb(230, 230, 230) !important;
+}
+
+
+table.dataTable tbody tr>.dtfc-fixed-start, table.dataTable tbody tr>.dtfc-fixed-end {
+    background-color: transparent !important; /* Match the table header background */
+}
+
+tr.transparent-background {
+    background-color: transparent !important;
 }
