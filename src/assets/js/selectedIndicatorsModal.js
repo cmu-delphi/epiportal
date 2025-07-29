@@ -212,6 +212,10 @@ $("#showSelectedIndicatorsButton").click(function () {
     alertPlaceholder.innerHTML = "";
     const availableGeos = getAvailableGeos(checkedIndicatorMembers);
     const locationIds = $("#location_search").select2("data").map((item) => item.id);
+
+    if ($('#geographic_value').hasClass("select2-hidden-accessible")) {
+        $('#geographic_value').select2('destroy').empty();
+    }
     $("#geographic_value").select2({
         data: availableGeos,
         minimumInputLength: 0,
