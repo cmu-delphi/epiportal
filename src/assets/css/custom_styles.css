@@ -169,11 +169,12 @@ td.dt-empty {
     background-color: rgb(230, 230, 230) !important;
 }
 
-
-table.dataTable tbody tr>.dtfc-fixed-start, table.dataTable tbody tr>.dtfc-fixed-end {
-    background-color: transparent !important; /* Match the table header background */
+.odd-row > .dtfc-fixed-start,
+.odd-row > .dtfc-fixed-end {
+    background-color: rgb(230, 230, 230) !important;
 }
 
-tr.transparent-background {
-    background-color: transparent !important;
+tr:not(.odd-row) > .dtfc-fixed-start,
+tr:not(.odd-row) > .dtfc-fixed-end {
+    background-color: #f6f9ff !important;
 }
