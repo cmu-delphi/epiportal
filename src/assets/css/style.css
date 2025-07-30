@@ -1347,7 +1347,7 @@ h6 {
     top: 50%;
     right: 5px;
     transform: translateY(-50%);
-    pointer-events: none;
+    cursor: pointer;
 }
 
 .select2-container--default.select2-container--open .select2-selection--multiple:after {
