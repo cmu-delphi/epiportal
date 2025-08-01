@@ -211,7 +211,6 @@ class IndicatorHandler {
             fluviewRegions: fluviewRegions,
             apiKey: document.getElementById("apiKey").value,
         };
-        console.log(this.indicators);
         const csrftoken = Cookies.get("csrftoken");
         $.ajax({
             url: "epivis/",
