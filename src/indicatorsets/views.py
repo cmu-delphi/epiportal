@@ -234,28 +234,29 @@ def epivis(request):
         for indicator in indicators:
             if indicator["_endpoint"] == "covidcast":
                 for geo in covidcast_geos:
-                    geo_value = (
-                        geo["id"].split(":")[1].lower()
-                        if geo["geoType"] in ["nation", "state"]
-                        else geo["id"].split(":")[1]
-                    )
-                    datasets.append(
-                        {
-                            "color": generate_random_color(),
-                            "title": "value",
-                            "params": {
-                                "_endpoint": indicator["_endpoint"],
-                                "data_source": indicator["data_source"],
-                                "signal": indicator["indicator"],
-                                "time_type": indicator["time_type"],
-                                "geo_type": geo["geoType"],
-                                "geo_value": geo_value,
-                                "custom_title": generate_epivis_custom_title(
-                                    indicator, geo["text"]
-                                ),
-                            },
-                        }
-                    )
+                    if geo["id"] not in indicator.get("notCoveredGeos", []):
+                        geo_value = (
+                            geo["id"].split(":")[1].lower()
+                            if geo["geoType"] in ["nation", "state"]
+                            else geo["id"].split(":")[1]
+                        )
+                        datasets.append(
+                            {
+                                "color": generate_random_color(),
+                                "title": "value",
+                                "params": {
+                                    "_endpoint": indicator["_endpoint"],
+                                    "data_source": indicator["data_source"],
+                                    "signal": indicator["indicator"],
+                                    "time_type": indicator["time_type"],
+                                    "geo_type": geo["geoType"],
+                                    "geo_value": geo_value,
+                                    "custom_title": generate_epivis_custom_title(
+                                        indicator, geo["text"]
+                                    ),
+                                },
+                            }
+                        )
             elif indicator["_endpoint"] == "fluview":
                 for geo in fluview_geos:
                     datasets.append(
@@ -273,10 +274,12 @@ def epivis(request):
                             },
                         }
                     )
-        datasets_json = json.dumps({"datasets": datasets})
-        datasets_b64 = base64.b64encode(datasets_json.encode("ascii")).decode("ascii")
-        response = {"epivis_url": f"{settings.EPIVIS_URL}#{datasets_b64}"}
-        return JsonResponse(response)
+        if datasets:
+            datasets_json = json.dumps({"datasets": datasets})
+            datasets_b64 = base64.b64encode(datasets_json.encode("ascii")).decode("ascii")
+            return JsonResponse({"epivis_url": f"{settings.EPIVIS_URL}#{datasets_b64}"})
+        else:
+            return JsonResponse({"epivis_url": settings.EPIVIS_URL})
 
 
 def generate_export_data_url(request):
