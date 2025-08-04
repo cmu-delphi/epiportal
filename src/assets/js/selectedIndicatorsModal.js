@@ -133,11 +133,11 @@ function showNotCoveredGeoWarningMessage(notCoveredIndicators, geoValue) {
     var warningMessage = "";
     notCoveredIndicators.forEach((indicator) => {
         if (currentMode === "epivis") {
-            warningMessage += `Indicator ${indicator.display_name} is not available for Location ${geoValue} <br>`;
+            warningMessage += `Indicator ${indicator.display_name} is not available for Location ${geoValue.text} <br>`;
         } else {
             var startDate = document.getElementById("start_date").value;
             var endDate = document.getElementById("end_date").value;
-            warningMessage += `Indicator ${indicator.display_name} is not available for Location ${geoValue} for the time period from ${startDate} to ${endDate} <br>`;
+            warningMessage += `Indicator ${indicator.display_name} is not available for Location ${geoValue.text} for the time period from ${startDate} to ${endDate} <br>`;
         }
     });
     appendAlert(warningMessage, "warning");
@@ -164,6 +164,12 @@ async function checkGeoCoverage(geoValue) {
                         e.signal === indicator.indicator
                 );
                 if (!covered) {
+                    if (!indicator["notCoveredGeos"]) {
+                        indicator["notCoveredGeos"] = [];
+                    }
+                    if (!indicator["notCoveredGeos"].includes(geoValue)) {
+                        indicator["notCoveredGeos"].push(geoValue);
+                    }
                     notCoveredIndicators.push(indicator);
                 }
             });
@@ -199,7 +205,7 @@ $("#geographic_value").on("select2:select", function (e) {
     var geo = e.params.data;
     checkGeoCoverage(geo.id).then((notCoveredIndicators) => {
         if (notCoveredIndicators.length > 0) {
-            showNotCoveredGeoWarningMessage(notCoveredIndicators, geo.text);
+            showNotCoveredGeoWarningMessage(notCoveredIndicators, geo);
         }
     });
 });
@@ -246,7 +252,7 @@ $("#showSelectedIndicatorsButton").click(async function () {
     $('#geographic_value').select2("data").forEach(geo => {
         checkGeoCoverage(geo.id).then((notCoveredIndicators) => {
             if (notCoveredIndicators.length > 0) {
-                showNotCoveredGeoWarningMessage(notCoveredIndicators, geo.text);
+                showNotCoveredGeoWarningMessage(notCoveredIndicators, geo);
             }
         })
     });
