@@ -272,20 +272,20 @@
                         </td>
                         <td>
                             {% for pathogen in indicator_set.pathogens.all %}
-                                <span class="badge rounded-pill bg-dark">{{ pathogen }}</span>
+                                <span class="badge badge-pill-outline">{{ pathogen }}</span>
                             {% endfor %}
                         </td>
                         <td>{{ indicator_set.geographic_scope }}</td>
                         <td>
                             {% for geo_level in indicator_set.get_geographic_levels %}
-                                <span class="badge rounded-pill bg-dark">{{ geo_level }}</span>
+                                <span class="badge badge-pill-outline">{{ geo_level }}</span>
                             {% endfor %}
                         </td>
                         <td>{{ indicator_set.temporal_scope_start }}</td>
                         <td>{{ indicator_set.temporal_scope_end }}</td>
                         <td>
                             {% for item in indicator_set.temporal_granularity|split:"," %}
-                                <span class="badge rounded-pill bg-dark">{{ item }}</span>
+                                <span class="badge badge-pill-outline">{{ item }}</span>
                             {% endfor %}
                         </td>
                         <td>{{ indicator_set.reporting_cadence }}</td>
@@ -295,7 +295,7 @@
                         <td>{{ indicator_set.demographic_granularity }}</td>
                         <td>
                             {% for severity_pyramid_rung in indicator_set.severity_pyramid_rungs.all %}
-                                <span class="badge rounded-pill bg-dark">{{ severity_pyramid_rung }}</span>
+                                <span class="badge badge-pill-outline">{{ severity_pyramid_rung }}</span>
                             {% endfor %}
                         </td>
                         <td>{{ indicator_set.original_data_provider }}</td>

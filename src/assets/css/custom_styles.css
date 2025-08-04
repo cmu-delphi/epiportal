@@ -247,3 +247,14 @@ tr:not(.odd-row) > .dtfc-fixed-end {
   }
 }
 
+
+.badge-pill-outline {
+    border: 1px solid #000;
+    background-color: #fff;
+    color: #000;
+    border-radius: 50rem;
+    padding: 0.35em 0.65em;
+    font-size: 0.85em;
+    margin-right: 0.4em;
+    margin-bottom: 0.25em;
+}
