@@ -5,7 +5,7 @@ ENV PYTHONUNBUFFERED=1
 
 
 RUN apt-get update -y
-RUN apt-get install -y gcc default-libmysqlclient-dev pkg-config
+RUN apt-get install -y gcc default-libmysqlclient-dev pkg-config git
 RUN apt-get install mysql-client -y
 RUN apt-get install graphviz graphviz-dev -y
 RUN apt-get install python3 -y
