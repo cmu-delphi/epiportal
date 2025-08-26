@@ -1,0 +1,16 @@
+{% extends "admin/change_list.html" %}
+
+{% block object-tools-items %}
+    {{ block.super }}
+    <li>
+        {% if opts.model_name == "indicatorset" %}
+            <a class="button" href="{% url 'admin:import_indicatorsets' %}">
+                Import data from spreadsheet
+            </a>
+        {% elif opts.model_name == "nondelphiindicatorset" %}
+            <a class="button" href="{% url 'admin:import_nondelphi_indicatorsets' %}">
+                Import data from spreadsheet
+            </a>
+        {% endif %}
+    </li>
+{% endblock %}
