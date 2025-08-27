@@ -3,8 +3,14 @@
 {% block object-tools-items %}
     {{ block.super }}
     <li>
+        {% if opts.model_name == "sourcesubdivision" %}
         <a class="button" href="{% url 'admin:import_sourcesubdivisions' %}">
             Import data from spreadsheet
         </a>
+        {% elif opts.model_name == "otherendpointsourcesubdivision" %}
+        <a class="button" href="{% url 'admin:import_other_endpoint_sourcesubdivisions' %}">
+            Import data from spreadsheet
+        </a>
+        {% endif %}
     </li>
-{% endblock %}
+{% endblock object-tools-items %}

@@ -50,3 +50,10 @@ class SourceSubdivision(models.Model):
 
     def get_display_name(self):
         return self.display_name if self.display_name else self.name
+
+
+class OtherEndpointSourceSubdivision(SourceSubdivision):
+    class Meta:
+        proxy = True
+        verbose_name = "Other Endpoint Source Subdivision"
+        verbose_name_plural = "Other Endpoint Source Subdivisions"
