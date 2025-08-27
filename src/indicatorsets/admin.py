@@ -1,5 +1,3 @@
-import csv
-import sys
 from io import BytesIO, TextIOWrapper
 
 import requests
