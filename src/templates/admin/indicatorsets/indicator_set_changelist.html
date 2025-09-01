@@ -7,9 +7,15 @@
             <a class="button" href="{% url 'admin:import_indicatorsets' %}">
                 Import data from spreadsheet
             </a>
+            <a class="button" href="{% url 'admin:download_indicator_set' %}">
+                Download source file
+            </a>
         {% elif opts.model_name == "nondelphiindicatorset" %}
             <a class="button" href="{% url 'admin:import_nondelphi_indicatorsets' %}">
                 Import data from spreadsheet
+            </a>
+            <a class="button" href="{% url 'admin:download_nondelphi_indicator_set' %}">
+                Download source file
             </a>
         {% endif %}
     </li>

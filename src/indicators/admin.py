@@ -3,7 +3,7 @@ from django.contrib import admin
 from django.urls import path
 from import_export.admin import ImportExportModelAdmin
 
-from base.utils import import_data
+from base.utils import download_source_file, import_data
 from indicators.models import (Category, FormatType, Indicator,
                                IndicatorGeography, IndicatorType,
                                NonDelphiIndicator, OtherEndpointIndicator)
@@ -81,12 +81,22 @@ class IndicatorAdmin(ImportExportModelAdmin):
                 self.admin_site.admin_view(self.import_from_spreadsheet),
                 name="import_indicators",
             ),
+            path(
+                "download-source-file",
+                self.admin_site.admin_view(self.download_indicator),
+                name="download_indicator",
+            ),
         ]
         return custom_urls + urls
 
     def import_from_spreadsheet(self, request):
         return import_data(
             self, request, IndicatorResource, settings.SPREADSHEET_URLS["indicators"]
+        )
+
+    def download_indicator(self, request):
+        return download_source_file(
+            settings.SPREADSHEET_URLS["indicators"], "Indicators.csv"
         )
 
 
@@ -125,6 +135,13 @@ class OtherEndpointIndicatorAdmin(ImportExportModelAdmin):
                 self.admin_site.admin_view(self.import_from_spreadsheet),
                 name="import_otherendpoint_indicators",
             ),
+            path(
+                "download-source-file",
+                self.admin_site.admin_view(
+                    self.download_other_endpoint_indicator
+                ),
+                name="download_other_endpoint_indicator",
+            ),
         ]
         return custom_urls + urls
 
@@ -134,6 +151,12 @@ class OtherEndpointIndicatorAdmin(ImportExportModelAdmin):
             request,
             OtherEndpointIndicatorResource,
             settings.SPREADSHEET_URLS["other_endpoint_indicators"],
+        )
+
+    def download_other_endpoint_indicator(self, request):
+        return download_source_file(
+            settings.SPREADSHEET_URLS["other_endpoint_indicators"],
+            "Other_Endpoint_Indicators.csv",
         )
 
 
@@ -169,6 +192,11 @@ class NonDelphiIndicatorAdmin(ImportExportModelAdmin):
                 self.admin_site.admin_view(self.import_from_spreadsheet),
                 name="import_nondelphi_indicators",
             ),
+            path(
+                "download-source-file",
+                self.admin_site.admin_view(self.download_nondelphi_indicator),
+                name="download_nondelphi_indicator",
+            ),
         ]
         return custom_urls + urls
 
@@ -176,3 +204,9 @@ class NonDelphiIndicatorAdmin(ImportExportModelAdmin):
         spreadsheet_url = "https://docs.google.com/spreadsheets/d/1zb7ItJzY5oq1n-2xtvnPBiJu2L3AqmCKubrLkKJZVHs/export?format=csv&gid=493612863"
 
         return import_data(self, request, NonDelphiIndicatorResource, spreadsheet_url)
+
+    def download_nondelphi_indicator(self, request):
+        return download_source_file(
+            settings.SPREADSHEET_URLS["non_delphi_indicators"],
+            "Non_Delphi_Indicators.csv",
+        )

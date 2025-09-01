@@ -7,9 +7,15 @@
         <a class="button" href="{% url 'admin:import_sourcesubdivisions' %}">
             Import data from spreadsheet
         </a>
+        <a class="button" href="{% url 'admin:download_source_subdivision' %}">
+            Download source file
+        </a>
         {% elif opts.model_name == "otherendpointsourcesubdivision" %}
         <a class="button" href="{% url 'admin:import_other_endpoint_sourcesubdivisions' %}">
             Import data from spreadsheet
+        </a>
+        <a class="button" href="{% url 'admin:download_other_endpoint_sourcesubdivision' %}">
+            Download source file
         </a>
         {% endif %}
     </li>

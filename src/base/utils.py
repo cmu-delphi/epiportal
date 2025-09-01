@@ -4,6 +4,7 @@ import requests
 from django.contrib import messages
 from django.shortcuts import redirect
 from django.utils.module_loading import import_string
+from django.http import FileResponse
 from import_export.results import RowResult
 
 
@@ -27,7 +28,9 @@ def import_data(admin_instance, request, resource_class, spreadsheet_url):
         for line, errors in result.row_errors():
             for error in errors:
                 error_messages.append(f"Line number: {line} - {repr(error.error)}")
-        admin_instance.message_user(request, "\n".join(error_messages), level=messages.ERROR)
+        admin_instance.message_user(
+            request, "\n".join(error_messages), level=messages.ERROR
+        )
     else:
         success_message = (
             "Import finished: {} new, {} updated, {} deleted and {} skipped {}."
@@ -40,3 +43,10 @@ def import_data(admin_instance, request, resource_class, spreadsheet_url):
         )
         admin_instance.message_user(request, success_message, level=messages.SUCCESS)
     return redirect(".")
+
+
+def download_source_file(url, file_name):
+    response = requests.get(url)
+    response.raise_for_status()
+    return FileResponse(BytesIO(response.content), as_attachment=True, filename=file_name)
+
