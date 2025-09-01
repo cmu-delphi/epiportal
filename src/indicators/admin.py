@@ -1,13 +1,9 @@
-from io import BytesIO, TextIOWrapper
-
-import requests
-from django.contrib import admin, messages
-from django.shortcuts import redirect
+from django.conf import settings
+from django.contrib import admin
 from django.urls import path
-from django.utils.module_loading import import_string
 from import_export.admin import ImportExportModelAdmin
-from import_export.results import RowResult
 
+from base.utils import import_data
 from indicators.models import (Category, FormatType, Indicator,
                                IndicatorGeography, IndicatorType,
                                NonDelphiIndicator, OtherEndpointIndicator)
@@ -89,40 +85,9 @@ class IndicatorAdmin(ImportExportModelAdmin):
         return custom_urls + urls
 
     def import_from_spreadsheet(self, request):
-        resource = IndicatorResource()
-        format_class = import_string("import_export.formats.base_formats.CSV")
-
-        spreadsheet_url = "https://docs.google.com/spreadsheets/d/1zb7ItJzY5oq1n-2xtvnPBiJu2L3AqmCKubrLkKJZVHs/export?format=csv&gid=329338228"
-
-        response = requests.get(spreadsheet_url)
-        response.raise_for_status()
-
-        csvfile = TextIOWrapper(BytesIO(response.content), encoding="utf-8")
-
-        dataset = format_class().create_dataset(csvfile.read())
-
-        result = resource.import_data(dataset, dry_run=False, raise_errors=True)
-
-        if result.has_errors():
-            error_messages = ["Import errors!"]
-            for error in result.base_errors:
-                error_messages.append(repr(error.error))
-            for line, errors in result.row_errors():
-                for error in errors:
-                    error_messages.append(f"Line number: {line} - {repr(error.error)}")
-            self.message_user(request, "\n".join(error_messages), level=messages.ERROR)
-        else:
-            success_message = (
-                "Import finished: {} new, {} updated, {} deleted and {} skipped {}."
-            ).format(
-                result.totals[RowResult.IMPORT_TYPE_NEW],
-                result.totals[RowResult.IMPORT_TYPE_UPDATE],
-                result.totals[RowResult.IMPORT_TYPE_DELETE],
-                result.totals[RowResult.IMPORT_TYPE_SKIP],
-                resource._meta.model._meta.verbose_name_plural,
-            )
-            self.message_user(request, success_message, level=messages.SUCCESS)
-        return redirect(".")
+        return import_data(
+            self, request, IndicatorResource, settings.SPREADSHEET_URLS["indicators"]
+        )
 
 
 @admin.register(OtherEndpointIndicator)
@@ -145,6 +110,8 @@ class OtherEndpointIndicatorAdmin(ImportExportModelAdmin):
 
     resource_classes = [OtherEndpointIndicatorResource]
 
+    change_list_template = "admin/indicators/indicator_changelist.html"
+
     def get_queryset(self, request):
         # Exclude proxy model objects
         qs = super().get_queryset(request)
@@ -162,40 +129,12 @@ class OtherEndpointIndicatorAdmin(ImportExportModelAdmin):
         return custom_urls + urls
 
     def import_from_spreadsheet(self, request):
-        resource = OtherEndpointIndicatorResource()
-        format_class = import_string("import_export.formats.base_formats.CSV")
-
-        spreadsheet_url = "https://docs.google.com/spreadsheets/d/1zb7ItJzY5oq1n-2xtvnPBiJu2L3AqmCKubrLkKJZVHs/export?format=csv&gid=1364181703"
-
-        response = requests.get(spreadsheet_url)
-        response.raise_for_status()
-
-        csvfile = TextIOWrapper(BytesIO(response.content), encoding="utf-8")
-
-        dataset = format_class().create_dataset(csvfile.read())
-
-        result = resource.import_data(dataset, dry_run=False, raise_errors=True)
-
-        if result.has_errors():
-            error_messages = ["Import errors!"]
-            for error in result.base_errors:
-                error_messages.append(repr(error.error))
-            for line, errors in result.row_errors():
-                for error in errors:
-                    error_messages.append(f"Line number: {line} - {repr(error.error)}")
-            self.message_user(request, "\n".join(error_messages), level=messages.ERROR)
-        else:
-            success_message = (
-                "Import finished: {} new, {} updated, {} deleted and {} skipped {}."
-            ).format(
-                result.totals[RowResult.IMPORT_TYPE_NEW],
-                result.totals[RowResult.IMPORT_TYPE_UPDATE],
-                result.totals[RowResult.IMPORT_TYPE_DELETE],
-                result.totals[RowResult.IMPORT_TYPE_SKIP],
-                resource._meta.model._meta.verbose_name_plural,
-            )
-            self.message_user(request, success_message, level=messages.SUCCESS)
-        return redirect(".")
+        return import_data(
+            self,
+            request,
+            OtherEndpointIndicatorResource,
+            settings.SPREADSHEET_URLS["other_endpoint_indicators"],
+        )
 
 
 @admin.register(NonDelphiIndicator)
@@ -215,6 +154,8 @@ class NonDelphiIndicatorAdmin(ImportExportModelAdmin):
 
     resource_classes = [NonDelphiIndicatorResource]
 
+    change_list_template = "admin/indicators/indicator_changelist.html"
+
     def get_queryset(self, request):
         # Exclude proxy model objects
         qs = super().get_queryset(request)
@@ -232,37 +173,6 @@ class NonDelphiIndicatorAdmin(ImportExportModelAdmin):
         return custom_urls + urls
 
     def import_from_spreadsheet(self, request):
-        resource = NonDelphiIndicatorResource()
-        format_class = import_string("import_export.formats.base_formats.CSV")
-
         spreadsheet_url = "https://docs.google.com/spreadsheets/d/1zb7ItJzY5oq1n-2xtvnPBiJu2L3AqmCKubrLkKJZVHs/export?format=csv&gid=493612863"
 
-        response = requests.get(spreadsheet_url)
-        response.raise_for_status()
-
-        csvfile = TextIOWrapper(BytesIO(response.content), encoding="utf-8")
-
-        dataset = format_class().create_dataset(csvfile.read())
-
-        result = resource.import_data(dataset, dry_run=False, raise_errors=True)
-
-        if result.has_errors():
-            error_messages = ["Import errors!"]
-            for error in result.base_errors:
-                error_messages.append(repr(error.error))
-            for line, errors in result.row_errors():
-                for error in errors:
-                    error_messages.append(f"Line number: {line} - {repr(error.error)}")
-            self.message_user(request, "\n".join(error_messages), level=messages.ERROR)
-        else:
-            success_message = (
-                "Import finished: {} new, {} updated, {} deleted and {} skipped {}."
-            ).format(
-                result.totals[RowResult.IMPORT_TYPE_NEW],
-                result.totals[RowResult.IMPORT_TYPE_UPDATE],
-                result.totals[RowResult.IMPORT_TYPE_DELETE],
-                result.totals[RowResult.IMPORT_TYPE_SKIP],
-                resource._meta.model._meta.verbose_name_plural,
-            )
-            self.message_user(request, success_message, level=messages.SUCCESS)
-        return redirect(".")
+        return import_data(self, request, NonDelphiIndicatorResource, spreadsheet_url)

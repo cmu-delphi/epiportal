@@ -65,3 +65,7 @@ class OtherEndpointSourceSubdivisionResource(SourceSubdivisionResource):
             "dua",
             "datasource_name",
         )
+
+    def after_save_instance(self, instance, row, **kwargs):
+        instance.source_type = "other_endpoint"
+        instance.save()
