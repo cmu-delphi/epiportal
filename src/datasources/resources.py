@@ -36,7 +36,7 @@ class SourceSubdivisionResource(resources.ModelResource):
 
     class Meta:
         model = SourceSubdivision
-        import_id_fields = ("name", "display_name")
+        import_id_fields = ("name")
         skip_unchanged = True
         report_skipped = True
         fields = (
@@ -54,7 +54,7 @@ class SourceSubdivisionResource(resources.ModelResource):
 class OtherEndpointSourceSubdivisionResource(SourceSubdivisionResource):
     class Meta:
         model = OtherEndpointSourceSubdivision
-        import_id_fields = ("name", "display_name")
+        import_id_fields = ("name",)
         skip_unchanged = True
         report_skipped = True
         fields = (
