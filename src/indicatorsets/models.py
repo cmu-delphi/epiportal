@@ -190,7 +190,7 @@ class IndicatorSet(models.Model):
         max_length=255,
         choices=SOURCE_TYPES,
         default="covidcast",
-        help_text="Type of source for the indicator",
+        help_text="Type of source for the indicator set",
         blank=True,
         null=True,
     )
