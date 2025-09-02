@@ -38,7 +38,7 @@ class SourceSubdivisionResource(resources.ModelResource):
         model = SourceSubdivision
         import_id_fields = ("name", "display_name")
         skip_unchanged = True
-        report_skipped = False
+        report_skipped = True
         fields = (
             "name",
             "display_name",
@@ -48,6 +48,7 @@ class SourceSubdivisionResource(resources.ModelResource):
             "dua",
             "datasource_name",
         )
+        exclude = ("id", )
 
 
 class OtherEndpointSourceSubdivisionResource(SourceSubdivisionResource):
@@ -55,7 +56,7 @@ class OtherEndpointSourceSubdivisionResource(SourceSubdivisionResource):
         model = OtherEndpointSourceSubdivision
         import_id_fields = ("name", "display_name")
         skip_unchanged = True
-        report_skipped = False
+        report_skipped = True
         fields = (
             "name",
             "display_name",
@@ -65,6 +66,7 @@ class OtherEndpointSourceSubdivisionResource(SourceSubdivisionResource):
             "dua",
             "datasource_name",
         )
+        exclude = ("id", )
 
     def after_save_instance(self, instance, row, **kwargs):
         instance.source_type = "other_endpoint"
