@@ -19,7 +19,7 @@ def import_data(admin_instance, request, resource_class, spreadsheet_url):
 
     dataset = format_class().create_dataset(csvfile.read())
 
-    result = resource.import_data(dataset, dry_run=False, raise_errors=True)
+    result = resource.import_data(dataset, dry_run=False, raise_errors=False, collect_failed_rows=True)
 
     if result.has_errors():
         error_messages = ["Import errors!"]
