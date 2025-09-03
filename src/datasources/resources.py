@@ -1,7 +1,7 @@
 from import_export import resources
 from import_export.fields import Field
 
-from datasources.models import SourceSubdivision
+from datasources.models import SourceSubdivision, OtherEndpointSourceSubdivision
 
 
 class SourceSubdivisionResource(resources.ModelResource):
@@ -36,9 +36,9 @@ class SourceSubdivisionResource(resources.ModelResource):
 
     class Meta:
         model = SourceSubdivision
-        import_id_fields = ("name", "display_name")
+        import_id_fields = ("name",)
         skip_unchanged = True
-        report_skipped = False
+        report_skipped = True
         fields = (
             "name",
             "display_name",
@@ -48,3 +48,26 @@ class SourceSubdivisionResource(resources.ModelResource):
             "dua",
             "datasource_name",
         )
+        exclude = ("id", )
+
+
+class OtherEndpointSourceSubdivisionResource(SourceSubdivisionResource):
+    class Meta:
+        model = OtherEndpointSourceSubdivision
+        import_id_fields = ("name",)
+        skip_unchanged = True
+        report_skipped = True
+        fields = (
+            "name",
+            "display_name",
+            "external_name",
+            "description",
+            "license",
+            "dua",
+            "datasource_name",
+        )
+        exclude = ("id", )
+
+    def after_save_instance(self, instance, row, **kwargs):
+        instance.source_type = "other_endpoint"
+        instance.save()
