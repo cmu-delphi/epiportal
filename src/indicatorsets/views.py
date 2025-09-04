@@ -40,6 +40,9 @@ class IndicatorSetListView(ListView):
         try:
             return IndicatorSet.objects.all().prefetch_related(
                 "geographic_scope",
+                "pathogens",
+                "severity_pyramid_rungs",
+                "geographic_levels",
             )
         except Exception as e:
             indicatorsets_logger.error(f"Error fetching indicator sets: {e}")
@@ -47,9 +50,7 @@ class IndicatorSetListView(ListView):
 
     def get_related_indicators(self, queryset, indicator_set_ids: list):
         related_indicators = []
-        for indicator in queryset.filter(
-            indicator_set__id__in=indicator_set_ids
-        ).prefetch_related("indicator_set", "source", "severity_pyramid_rungs"):
+        for indicator in queryset.filter(indicator_set__id__in=indicator_set_ids):
             related_indicators.append(
                 {
                     "id": indicator.id,
@@ -235,7 +236,13 @@ def epivis(request):
         covidcast_geos = data.get("covidCastGeographicValues", [])
         fluview_geos = data.get("fluviewRegions", [])
         api_key = data.get("apiKey", "")
-        form_activity_logger.info(mode="epivis", indicator_count=len(indicators), covidcast_geos_count=len(covidcast_geos), fluview_geos_count=len(fluview_geos), api_key=api_key)  # noqa: E501
+        form_activity_logger.info(
+            mode="epivis",
+            indicator_count=len(indicators),
+            covidcast_geos_count=len(covidcast_geos),
+            fluview_geos_count=len(fluview_geos),
+            api_key=api_key,
+        )  # noqa: E501
         for indicator in indicators:
             if indicator["_endpoint"] == "covidcast":
                 for geo in covidcast_geos:
@@ -262,7 +269,15 @@ def epivis(request):
                                 },
                             }
                         )
-                        form_activity_logger.info(mode="epivis", endpoint=indicator["_endpoint"], data_source=indicator["data_source"], indicator=indicator["indicator"], geo_type=geo["geoType"], geo_value=geo_value, api_key=api_key)  # noqa: E501
+                        form_activity_logger.info(
+                            mode="epivis",
+                            endpoint=indicator["_endpoint"],
+                            data_source=indicator["data_source"],
+                            indicator=indicator["indicator"],
+                            geo_type=geo["geoType"],
+                            geo_value=geo_value,
+                            api_key=api_key,
+                        )  # noqa: E501
             elif indicator["_endpoint"] == "fluview":
                 for geo in fluview_geos:
                     datasets.append(
@@ -272,7 +287,11 @@ def epivis(request):
                                 indicator["indicator"], indicator["indicator"]
                             ),
                             "params": {
-                                "_endpoint": indicator["_endpoint"] if indicator["data_source"] == "fluview" else "fluview_clinical",
+                                "_endpoint": (
+                                    indicator["_endpoint"]
+                                    if indicator["data_source"] == "fluview"
+                                    else "fluview_clinical"
+                                ),
                                 "regions": geo["id"],
                                 "custom_title": generate_epivis_custom_title(
                                     indicator, geo["text"]
@@ -280,10 +299,19 @@ def epivis(request):
                             },
                         }
                     )
-                    form_activity_logger.info(mode="epivis", endpoint=indicator["_endpoint"], data_source=indicator["data_source"], indicator=indicator["indicator"], geo_value=geo["id"], api_key=api_key)  # noqa: E501
+                    form_activity_logger.info(
+                        mode="epivis",
+                        endpoint=indicator["_endpoint"],
+                        data_source=indicator["data_source"],
+                        indicator=indicator["indicator"],
+                        geo_value=geo["id"],
+                        api_key=api_key,
+                    )  # noqa: E501
         if datasets:
             datasets_json = json.dumps({"datasets": datasets})
-            datasets_b64 = base64.b64encode(datasets_json.encode("ascii")).decode("ascii")
+            datasets_b64 = base64.b64encode(datasets_json.encode("ascii")).decode(
+                "ascii"
+            )
             return JsonResponse({"epivis_url": f"{settings.EPIVIS_URL}#{datasets_b64}"})
         else:
             return JsonResponse({"epivis_url": settings.EPIVIS_URL})
@@ -300,7 +328,13 @@ def generate_export_data_url(request):
         covidcast_geos = data.get("covidCastGeographicValues", {})
         fluview_geos = data.get("fluviewRegions", [])
         api_key = data.get("apiKey", None)
-        form_activity_logger.info(mode="data_export", indicator_count=len(indicators), covidcast_geos_count=len(covidcast_geos), fluview_geos_count=len(fluview_geos), api_key=api_key)  # noqa: E501
+        form_activity_logger.info(
+            mode="data_export",
+            indicator_count=len(indicators),
+            covidcast_geos_count=len(covidcast_geos),
+            fluview_geos_count=len(fluview_geos),
+            api_key=api_key,
+        )  # noqa: E501
         for indicator in indicators:
             if indicator["_endpoint"] == "covidcast":
                 dates = get_epiweek(start_date, end_date) if indicator["time_type"] == "week" else [start_date, end_date]  # fmt: skip
@@ -315,7 +349,15 @@ def generate_export_data_url(request):
                             for value in values
                         ]
                     )
-                    form_activity_logger.info(mode="data_export", endpoint=indicator["_endpoint"], data_source=indicator["data_source"], indicator=indicator["indicator"], geo_type=type, geo_value=geo_values, api_key=api_key)  # noqa: E501
+                    form_activity_logger.info(
+                        mode="data_export",
+                        endpoint=indicator["_endpoint"],
+                        data_source=indicator["data_source"],
+                        indicator=indicator["indicator"],
+                        geo_type=type,
+                        geo_value=geo_values,
+                        api_key=api_key,
+                    )  # noqa: E501
                     data_export_url = f"{settings.EPIDATA_URL}covidcast/csv?signal={indicator['data_source']}:{indicator['indicator']}&start_day={dates[0]}&end_day={dates[1]}&geo_type={type}&geo_values={geo_values}"
                     if api_key:
                         data_export_url += f"&api_key={api_key}"
@@ -325,7 +367,13 @@ def generate_export_data_url(request):
         if fluview_geos:
             regions = ",".join([region["id"] for region in fluview_geos])
             date_from, date_to = get_epiweek(start_date, end_date)
-            form_activity_logger.info(mode="data_export", endpoint="fluview", regions=regions, epiweeks=f"{date_from}-{date_to}", api_key=api_key)  # noqa: E501
+            form_activity_logger.info(
+                mode="data_export",
+                endpoint="fluview",
+                regions=regions,
+                epiweeks=f"{date_from}-{date_to}",
+                api_key=api_key,
+            )  # noqa: E501
             data_export_url = f"{settings.EPIDATA_URL}fluview/?regions={regions}&epiweeks={date_from}-{date_to}&format=csv"
             if api_key:
                 data_export_url += f"&api_key={api_key}"
@@ -351,7 +399,13 @@ def preview_data(request):
         api_key = data.get("apiKey", None)
 
         preview_data = []
-        form_activity_logger.info(mode="preview_data", indicator_count=len(indicators), covidcast_geos_count=len(covidcast_geos), fluview_geos_count=len(fluview_geos), api_key=api_key)  # noqa: E501
+        form_activity_logger.info(
+            mode="preview_data",
+            indicator_count=len(indicators),
+            covidcast_geos_count=len(covidcast_geos),
+            fluview_geos_count=len(fluview_geos),
+            api_key=api_key,
+        )  # noqa: E501
         for indicator in indicators:
             if indicator["_endpoint"] == "covidcast":
                 time_values = f"{start_date}--{end_date}"
@@ -378,7 +432,15 @@ def preview_data(request):
                         "geo_values": geo_values,
                         "api_key": api_key if api_key else settings.EPIDATA_API_KEY,
                     }
-                    form_activity_logger.info(mode="preview_data", endpoint=indicator["_endpoint"], data_source=indicator["data_source"], indicator=indicator["indicator"], geo_type=geo_type, geo_value=geo_values, api_key=api_key)  # noqa: E501
+                    form_activity_logger.info(
+                        mode="preview_data",
+                        endpoint=indicator["_endpoint"],
+                        data_source=indicator["data_source"],
+                        indicator=indicator["indicator"],
+                        geo_type=geo_type,
+                        geo_value=geo_values,
+                        api_key=api_key,
+                    )  # noqa: E501
                     response = requests.get(
                         f"{settings.EPIDATA_URL}covidcast", params=params
                     )
@@ -407,7 +469,13 @@ def preview_data(request):
                 "epiweeks": f"{date_from}-{date_to}",
                 "api_key": api_key if api_key else settings.EPIDATA_API_KEY,
             }
-            form_activity_logger.info(mode="data_export", endpoint="fluview", regions=regions, epiweeks=f"{date_from}-{date_to}", api_key=api_key)  # noqa: E501
+            form_activity_logger.info(
+                mode="data_export",
+                endpoint="fluview",
+                regions=regions,
+                epiweeks=f"{date_from}-{date_to}",
+                api_key=api_key,
+            )  # noqa: E501
             response = requests.get(f"{settings.EPIDATA_URL}fluview", params=params)
             if response.status_code == 200:
                 data = response.json()
@@ -474,7 +542,15 @@ def create_query_code(request):
                         for value in values
                     ]
                     for indicator in indicators:
-                        form_activity_logger.info(mode="data_export", endpoint="covidcast", data_source=data_source, indicator=indicator["indicator"], geo_type=geo_type, geo_value=','.join(geo_values), api_key=api_key)  # noqa: E501
+                        form_activity_logger.info(
+                            mode="data_export",
+                            endpoint="covidcast",
+                            data_source=data_source,
+                            indicator=indicator["indicator"],
+                            geo_type=geo_type,
+                            geo_value=",".join(geo_values),
+                            api_key=api_key,
+                        )  # noqa: E501
                     if time_type == "week":
                         start_week, end_week = get_epiweek(start_date, end_date)
                         python_code_block = dedent(
@@ -488,7 +564,7 @@ def create_query_code(request):
                                 time_values=EpiRange({start_week}, {end_week}),
                             ).df()
                         """
-                        ) 
+                        )
                         python_code_blocks.append(python_code_block)
                         r_code_block = dedent(
                             f"""\
@@ -541,7 +617,13 @@ def create_query_code(request):
                 ).df()
             """
             )
-            form_activity_logger.info(mode="data_export", endpoint="fluview", regions=regions, epiweeks=f"{start_week}-{end_week}", api_key=api_key)  # noqa: E501
+            form_activity_logger.info(
+                mode="data_export",
+                endpoint="fluview",
+                regions=regions,
+                epiweeks=f"{start_week}-{end_week}",
+                api_key=api_key,
+            )  # noqa: E501
             python_code_blocks.append(python_code_block)
             r_code_block = dedent(
                 f"""\
@@ -567,8 +649,14 @@ def get_available_geos(request):
         indicators = data.get("indicators", [])
         grouped_indicators = group_by_property(indicators, "data_source")
         for data_source, indicators in grouped_indicators.items():
-            indicators_str = ",".join(indicator["indicator"] for indicator in indicators)
-            response = requests.get(f"{settings.EPIDATA_URL}covidcast/geo_indicator_coverage", params={"data_source": data_source, "signals": indicators_str}, auth=("epidata", settings.EPIDATA_API_KEY))
+            indicators_str = ",".join(
+                indicator["indicator"] for indicator in indicators
+            )
+            response = requests.get(
+                f"{settings.EPIDATA_URL}covidcast/geo_indicator_coverage",
+                params={"data_source": data_source, "signals": indicators_str},
+                auth=("epidata", settings.EPIDATA_API_KEY),
+            )
             if response.status_code == 200:
                 data = response.json()
                 if len(data["epidata"]):
@@ -583,7 +671,8 @@ def get_available_geos(request):
                 "text": geo_unit.display_name,
                 "geoTypeDisplayName": geo_unit.geo_level.display_name,
             }
-            for geo_unit in GeographyUnit.objects.filter(geo_level__name__in=geo_levels).filter(geo_id__in=geo_unit_ids)
+            for geo_unit in GeographyUnit.objects.filter(geo_level__name__in=geo_levels)
+            .filter(geo_id__in=geo_unit_ids)
             .prefetch_related("geo_level")
             .order_by("level")
         ]
@@ -592,8 +681,12 @@ def get_available_geos(request):
         )
         geographic_granularities = []
         for key, value in grouped_geographic_granularities.items():
-            geographic_granularities.append({
-                "text": key,
-                "children": value,
-            })
-        return JsonResponse({"geographic_granularities": geographic_granularities}, safe=False)
+            geographic_granularities.append(
+                {
+                    "text": key,
+                    "children": value,
+                }
+            )
+        return JsonResponse(
+            {"geographic_granularities": geographic_granularities}, safe=False
+        )
