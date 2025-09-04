@@ -277,8 +277,8 @@
                         </td>
                         <td>{{ indicator_set.geographic_scope }}</td>
                         <td>
-                            {% for geo_level in indicator_set.get_geographic_levels %}
-                                <span class="badge badge-pill-outline">{{ geo_level }}</span>
+                            {% for geo_level in indicator_set.geographic_levels.all %}
+                                <span class="badge badge-pill-outline">{{ geo_level.display_name }}</span>
                             {% endfor %}
                         </td>
                         <td>{{ indicator_set.temporal_scope_start }}</td>
