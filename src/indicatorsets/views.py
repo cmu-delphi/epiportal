@@ -307,6 +307,9 @@ def epivis(request):
                         geo_value=geo["id"],
                         api_key=api_key,
                     )  # noqa: E501
+
+            elif indicator["_endpoint"] == "nidss_flu":
+                pass
         if datasets:
             datasets_json = json.dumps({"datasets": datasets})
             datasets_b64 = base64.b64encode(datasets_json.encode("ascii")).decode(

@@ -10,6 +10,7 @@ function dataLayerPush(payload) {
 class IndicatorHandler {
     constructor() {
         this.indicators = {};
+        this.nonCovidcastIndicatorSets = [];
     }
 
     fluviewIndicatorsMapping = {
@@ -125,6 +126,16 @@ class IndicatorHandler {
         { id: "jfk", text: "New York City" },
     ];
 
+    nidssFluLocations = [
+        { id: 'nationwide', text: 'Taiwan National' },
+        { id: 'central', text: 'Central' },
+        { id: 'eastern', text: 'Eastern' },
+        { id: 'kaoping', text: 'Kaoping' },
+        { id: 'northern', text: 'Northern' },
+        { id: 'southern', text: 'Southern' },
+        { id: 'taipei', text: 'Taipei' },
+    ];
+
     checkForCovidcastIndicators() {
         return this.indicators.some((indicator) => {
             return indicator["_endpoint"] === "covidcast";
@@ -149,6 +160,16 @@ class IndicatorHandler {
             }
         });
         return fluviewIndicators;
+    }
+
+    getNIDSSFluIndicators() {
+        var nidssFluIndicators = [];
+        this.indicators.forEach((indicator) => {
+            if (indicator["_endpoint"] === "nidss_flu") {
+                nidssFluIndicators.push(indicator);
+            }
+        });
+        return nidssFluIndicators;
     }
 
     getFromToDate(startDate, endDate, timeType) {
@@ -182,7 +203,7 @@ class IndicatorHandler {
 
     showFluviewRegions() {
         var fluviewRegionSelect = `
-        <div class="row margin-top-1rem">
+        <div class="row margin-top-1rem" id="fluviewDiv">
             <div class="col-2">
                 <label for="fluviewRegions" class="col-form-label">ILINet Location(s):</label>
             </div>
@@ -195,6 +216,27 @@ class IndicatorHandler {
             $("#fluviewRegions").select2({
                 placeholder: "Select ILINet Location(s)",
                 data: this.fluviewRegions,
+                allowClear: true,
+                width: "100%",
+            });
+        }
+    }
+
+    showNIDSSFluLocations() {
+        var nidssFluRegionSelect = `
+        <div class="row margin-top-1rem" id="nidssFluDiv">
+            <div class="col-2">
+                <label for="nidssFluRegions" class="col-form-label">Taiwanese ILI Location(s):</label>
+            </div>
+            <div class="col-10">
+                <select id="nidssFluRegions" name="nidssFluRegions" class="form-select" multiple="multiple"></select>
+            </div>
+        </div>`;
+        if ($("#otherEndpointLocations").length) {
+            $("#otherEndpointLocations").append(nidssFluRegionSelect);
+            $("#nidssFluRegions").select2({
+                placeholder: "Select Taiwanese ILI Location(s)",
+                data: this.nidssFluLocations,
                 allowClear: true,
                 width: "100%",
             });
@@ -227,6 +269,7 @@ class IndicatorHandler {
                 indicators: JSON.stringify(submitData["indicators"]),
                 covidcastGeoValues: JSON.stringify(submitData["covidCastGeographicValues"]),
                 fluviewGeoValues: JSON.stringify(submitData["fluviewRegions"]),
+                
                 epivisUrl: data["epivis_url"],
                 apiKey: submitData["apiKey"] ? submitData["apiKey"] : "Not provided",
             }
