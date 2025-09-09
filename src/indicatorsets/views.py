@@ -234,7 +234,7 @@ def epivis(request):
         data = json.loads(request.body)
         indicators = data.get("indicators", [])
         covidcast_geos = data.get("covidCastGeographicValues", [])
-        fluview_geos = data.get("fluviewRegions", [])
+        fluview_geos = data.get("fluviewLocations", [])
         api_key = data.get("apiKey", "")
         form_activity_logger.info(
             mode="epivis",
@@ -329,7 +329,7 @@ def generate_export_data_url(request):
         end_date = data.get("end_date", "")
         indicators = data.get("indicators", [])
         covidcast_geos = data.get("covidCastGeographicValues", {})
-        fluview_geos = data.get("fluviewRegions", [])
+        fluview_geos = data.get("fluviewLocations", [])
         api_key = data.get("apiKey", None)
         form_activity_logger.info(
             mode="data_export",
@@ -398,7 +398,7 @@ def preview_data(request):
         end_date = data.get("end_date", "")
         indicators = data.get("indicators", [])
         covidcast_geos = data.get("covidCastGeographicValues", {})
-        fluview_geos = data.get("fluviewRegions", [])
+        fluview_geos = data.get("fluviewLocations", [])
         api_key = data.get("apiKey", None)
 
         preview_data = []
@@ -507,7 +507,7 @@ def create_query_code(request):
         end_date = data.get("end_date", "")
         indicators = data.get("indicators", [])
         covidcast_geos = data.get("covidCastGeographicValues", {})
-        fluview_geos = data.get("fluviewRegions", [])
+        fluview_geos = data.get("fluviewLocations", [])
         api_key = data.get("apiKey", None)
         python_code_blocks = [
             dedent(

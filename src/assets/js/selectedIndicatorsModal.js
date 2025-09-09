@@ -226,15 +226,15 @@ $("#geographic_value").on("select2:select", function (e) {
 
 function showFluviewLocationSelect() {
     if (indicatorHandler.getFluviewIndicators().length > 0) {
-        if (document.getElementsByName("fluviewRegions").length === 0) {
-            indicatorHandler.showFluviewRegions();
+        if (document.getElementsByName("fluviewLocations").length === 0) {
+            indicatorHandler.showfluviewLocations();
         } else {
             // IF code goes here, we assume that otherEndpointLocationWarning & fluviewRegion selector is already on the page, but is just hidden, so we should just show it.
             $("#fluviewDiv").show();
         }
     } else {
         // If there are no non-covidcast indicators selected (only fluview is supported for now) then hide otherEndpointLocationWarning & fliviewRegions selector.
-        $("#fluviewRegions").val(null).trigger("change");
+        $("#fluviewLocations").val(null).trigger("change");
         $("#fluviewDiv").hide();
     }
 }
