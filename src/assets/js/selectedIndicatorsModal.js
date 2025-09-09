@@ -233,7 +233,7 @@ function showFluviewLocationSelect() {
             $("#fluviewDiv").show();
         }
     } else {
-        // If there are no non-covidcast indicators selected (only fluview is supported for now) then hide otherEndpointLocationWarning & fliviewRegions selector.
+        // If there are no non-covidcast indicators selected then hide otherEndpointLocationWarning & fluviewLocations selector.
         $("#fluviewLocations").val(null).trigger("change");
         $("#fluviewDiv").hide();
     }
@@ -241,15 +241,15 @@ function showFluviewLocationSelect() {
 
 function showNIDSSFluLocationSelect() {
     if (indicatorHandler.getNIDSSFluIndicators().length > 0) {
-        if (document.getElementsByName("nidssFluRegions").length === 0) {
+        if (document.getElementsByName("nidssFluLocations").length === 0) {
             indicatorHandler.showNIDSSFluLocations();
         } else {
             // IF code goes here, we assume that otherEndpointLocationWarning & nidssRegion selector is already on the page, but is just hidden, so we should just show it.
             $("#nidssFluDiv").show();
         }
     } else {
-        // If there are no non-covidcast indicators selected (only fluview is supported for now) then hide otherEndpointLocationWarning & fliviewRegions selector.
-        $("#nidssFluRegions").val(null).trigger("change");
+        // If there are no non-covidcast indicators selected then hide otherEndpointLocationWarning & nidssFluLocations selector.
+        $("#nidssFluLocations").val(null).trigger("change");
         $("#nidssFluDiv").hide();
     }
 }

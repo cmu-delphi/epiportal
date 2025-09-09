@@ -235,6 +235,7 @@ def epivis(request):
         indicators = data.get("indicators", [])
         covidcast_geos = data.get("covidCastGeographicValues", [])
         fluview_geos = data.get("fluviewLocations", [])
+        nidss_flu_locations = data.get("nidssFluLocations", [])
         api_key = data.get("apiKey", "")
         form_activity_logger.info(
             mode="epivis",
@@ -309,7 +310,28 @@ def epivis(request):
                     )  # noqa: E501
 
             elif indicator["_endpoint"] == "nidss_flu":
-                pass
+                for geo in nidss_flu_locations:
+                    datasets.append(
+                        {
+                            "color": generate_random_color(),
+                            "title": indicator["indicator"],
+                            "params": {
+                                "_endpoint": indicator["_endpoint"],
+                                "regions": geo["id"],
+                                "custom_title": generate_epivis_custom_title(
+                                    indicator, geo["text"]
+                                ),
+                            },
+                        }
+                    )
+                    form_activity_logger.info(
+                        mode="epivis",
+                        endpoint=indicator["_endpoint"],
+                        data_source=indicator["data_source"],
+                        indicator=indicator["indicator"],
+                        geo_value=geo["id"],
+                        api_key=api_key,
+                    )
         if datasets:
             datasets_json = json.dumps({"datasets": datasets})
             datasets_b64 = base64.b64encode(datasets_json.encode("ascii")).decode(
@@ -330,6 +352,7 @@ def generate_export_data_url(request):
         indicators = data.get("indicators", [])
         covidcast_geos = data.get("covidCastGeographicValues", {})
         fluview_geos = data.get("fluviewLocations", [])
+        nidss_flu_locations = data.get("nidssFluLocations", [])
         api_key = data.get("apiKey", None)
         form_activity_logger.info(
             mode="data_export",
@@ -383,6 +406,22 @@ def generate_export_data_url(request):
             data_export_commands.append(
                 f'wget --content-disposition <a href="{data_export_url}">{data_export_url}</a>'
             )
+        if nidss_flu_locations:
+            regions = ",".join([region["id"] for region in nidss_flu_locations])
+            date_from, date_to = get_epiweek(start_date, end_date)
+            form_activity_logger.info(
+                mode="data_export",
+                endpoint="nidss_flu",
+                regions=regions,
+                epiweeks=f"{date_from}-{date_to}",
+                api_key=api_key,
+            )  # noqa: E501
+            data_export_url = f"{settings.EPIDATA_URL}nidss_flu/?regions={regions}&epiweeks={date_from}-{date_to}&format=csv"
+            if api_key:
+                data_export_url += f"&api_key={api_key}"
+            data_export_commands.append(
+                f'wget --content-disposition <a href="{data_export_url}">{data_export_url}</a>'
+            )
         data_export_block = data_export_block.format("<br>".join(data_export_commands))
         response = {
             "data_export_block": data_export_block,
@@ -399,6 +438,7 @@ def preview_data(request):
         indicators = data.get("indicators", [])
         covidcast_geos = data.get("covidCastGeographicValues", {})
         fluview_geos = data.get("fluviewLocations", [])
+        nidss_flu_locations = data.get("nidssFluLocations", [])
         api_key = data.get("apiKey", None)
 
         preview_data = []
@@ -497,6 +537,39 @@ def preview_data(request):
                     "message": "API key does not exist. Register a new key at https://api.delphi.cmu.edu/epidata/admin/registration_form or contact delphi-support+privacy@andrew.cmu.edu to troubleshoot",
                 }
                 return JsonResponse(preview_data, safe=False)
+        if nidss_flu_locations:
+            regions = ",".join([region["id"] for region in nidss_flu_locations])
+            date_from, date_to = get_epiweek(start_date, end_date)
+            params = {
+                "regions": regions,
+                "epiweeks": f"{date_from}-{date_to}",
+                "api_key": api_key if api_key else settings.EPIDATA_API_KEY,
+            }
+            form_activity_logger.info(
+                mode="data_export",
+                endpoint="nidss_flu",
+                regions=regions,
+                epiweeks=f"{date_from}-{date_to}",
+                api_key=api_key,
+            )  # noqa: E501
+            response = requests.get(f"{settings.EPIDATA_URL}nidss_flu", params=params)
+            if response.status_code == 200:
+                data = response.json()
+                if len(data["epidata"]):
+                    preview_data.append(
+                        {
+                            "epidata": data["epidata"][0],
+                            "result": data["result"],
+                            "message": data["message"],
+                        }
+                    )
+            elif response.status_code == 401:
+                preview_data = {
+                    "epidata": [],
+                    "result": -2,
+                    "message": "API key does not exist. Register a new key at https://api.delphi.cmu.edu/epidata/admin/registration_form or contact delphi-support+privacy@andrew.cmu.edu to troubleshoot",
+                }
+                return JsonResponse(preview_data, safe=False)
         return JsonResponse(preview_data, safe=False)
 
 
@@ -508,6 +581,8 @@ def create_query_code(request):
         indicators = data.get("indicators", [])
         covidcast_geos = data.get("covidCastGeographicValues", {})
         fluview_geos = data.get("fluviewLocations", [])
+        nidss_flu_locations = data.get("nidssFluLocations", [])
+        print(nidss_flu_locations)
         api_key = data.get("apiKey", None)
         python_code_blocks = [
             dedent(
@@ -631,6 +706,35 @@ def create_query_code(request):
             r_code_block = dedent(
                 f"""\
                 epidata_{data_source.replace("-", "_")} <- pub_fluview(
+                    regions = "{regions}",
+                    epiweeks = epirange({start_week}, {end_week})
+                )
+            """
+            )
+            r_code_blocks.append(r_code_block)
+        if nidss_flu_locations:
+            print(nidss_flu_locations)
+            regions = ",".join([region["id"] for region in nidss_flu_locations])
+            start_week, end_week = get_epiweek(start_date, end_date)
+            python_code_block = dedent(
+                f"""\
+                nidss_flu_df = epidata.pub_nidss_flu(
+                    regions="{regions}",
+                    epiweeks="{start_week}-{end_week}",
+                ).df()
+            """
+            )
+            form_activity_logger.info(
+                mode="data_export",
+                endpoint="nidss_flu",
+                regions=regions,
+                epiweeks=f"{start_week}-{end_week}",
+                api_key=api_key,
+            )  # noqa: E501
+            python_code_blocks.append(python_code_block)
+            r_code_block = dedent(
+                f"""\
+                epidata_{data_source.replace("-", "_")} <- pub_nidss_flu(
                     regions = "{regions}",
                     epiweeks = epirange({start_week}, {end_week})
                 )
