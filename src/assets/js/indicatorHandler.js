@@ -10,6 +10,7 @@ function dataLayerPush(payload) {
 class IndicatorHandler {
     constructor() {
         this.indicators = {};
+        this.nonCovidcastIndicatorSets = [];
     }
 
     fluviewIndicatorsMapping = {
@@ -42,7 +43,7 @@ class IndicatorHandler {
         { value: "UT", label: "UT" },
     ];
 
-    fluviewRegions = [
+    fluviewLocations = [
         { id: "nat", text: "U.S. National" },
         { id: "hhs1", text: "HHS Region 1" },
         { id: "hhs2", text: "HHS Region 2" },
@@ -125,6 +126,16 @@ class IndicatorHandler {
         { id: "jfk", text: "New York City" },
     ];
 
+    nidssFluLocations = [
+        { id: 'nationwide', text: 'Taiwan National' },
+        { id: 'central', text: 'Central' },
+        { id: 'eastern', text: 'Eastern' },
+        { id: 'kaoping', text: 'Kaoping' },
+        { id: 'northern', text: 'Northern' },
+        { id: 'southern', text: 'Southern' },
+        { id: 'taipei', text: 'Taipei' },
+    ];
+
     checkForCovidcastIndicators() {
         return this.indicators.some((indicator) => {
             return indicator["_endpoint"] === "covidcast";
@@ -149,6 +160,16 @@ class IndicatorHandler {
             }
         });
         return fluviewIndicators;
+    }
+
+    getNIDSSFluIndicators() {
+        var nidssFluIndicators = [];
+        this.indicators.forEach((indicator) => {
+            if (indicator["_endpoint"] === "nidss_flu") {
+                nidssFluIndicators.push(indicator);
+            }
+        });
+        return nidssFluIndicators;
     }
 
     getFromToDate(startDate, endDate, timeType) {
@@ -180,21 +201,42 @@ class IndicatorHandler {
         return request;
     }
 
-    showFluviewRegions() {
-        var fluviewRegionSelect = `
-        <div class="row margin-top-1rem">
+    showfluviewLocations() {
+        var fluviewLocationselect = `
+        <div class="row margin-top-1rem" id="fluviewDiv">
             <div class="col-2">
-                <label for="fluviewRegions" class="col-form-label">ILINet Location(s):</label>
+                <label for="fluviewLocations" class="col-form-label">ILINet Location(s):</label>
             </div>
             <div class="col-10">
-                <select id="fluviewRegions" name="fluviewRegions" class="form-select" multiple="multiple"></select>
+                <select id="fluviewLocations" name="fluviewLocations" class="form-select" multiple="multiple"></select>
             </div>
         </div>`;
         if ($("#otherEndpointLocations").length) {
-            $("#otherEndpointLocations").append(fluviewRegionSelect);
-            $("#fluviewRegions").select2({
+            $("#otherEndpointLocations").append(fluviewLocationselect);
+            $("#fluviewLocations").select2({
                 placeholder: "Select ILINet Location(s)",
-                data: this.fluviewRegions,
+                data: this.fluviewLocations,
+                allowClear: true,
+                width: "100%",
+            });
+        }
+    }
+
+    showNIDSSFluLocations() {
+        var nidssFluLocationselect = `
+        <div class="row margin-top-1rem" id="nidssFluDiv">
+            <div class="col-2">
+                <label for="nidssFluLocations" class="col-form-label">Taiwanese ILI Location(s):</label>
+            </div>
+            <div class="col-10">
+                <select id="nidssFluLocations" name="nidssFluLocations" class="form-select" multiple="multiple"></select>
+            </div>
+        </div>`;
+        if ($("#otherEndpointLocations").length) {
+            $("#otherEndpointLocations").append(nidssFluLocationselect);
+            $("#nidssFluLocations").select2({
+                placeholder: "Select Taiwanese ILI Location(s)",
+                data: this.nidssFluLocations,
                 allowClear: true,
                 width: "100%",
             });
@@ -204,11 +246,13 @@ class IndicatorHandler {
     plotData() {
         const covidCastGeographicValues =
             $("#geographic_value").select2("data");
-        const fluviewRegions = $("#fluviewRegions").select2("data");
+        const fluviewLocations = $("#fluviewLocations").select2("data");
+        const nidssFluLocations = $("#nidssFluLocations").select2("data");
         const submitData = {
             indicators: this.indicators,
             covidCastGeographicValues: covidCastGeographicValues,
-            fluviewRegions: fluviewRegions,
+            fluviewLocations: fluviewLocations,
+            nidssFluLocations: nidssFluLocations,
             apiKey: document.getElementById("apiKey").value,
         };
         const csrftoken = Cookies.get("csrftoken");
@@ -226,7 +270,8 @@ class IndicatorHandler {
                 formMode: "epivis",
                 indicators: JSON.stringify(submitData["indicators"]),
                 covidcastGeoValues: JSON.stringify(submitData["covidCastGeographicValues"]),
-                fluviewGeoValues: JSON.stringify(submitData["fluviewRegions"]),
+                fluviewGeoValues: JSON.stringify(submitData["fluviewLocations"]),
+                nidssFluLocations: JSON.stringify(submitData["nidssFluLocations"]),
                 epivisUrl: data["epivis_url"],
                 apiKey: submitData["apiKey"] ? submitData["apiKey"] : "Not provided",
             }
@@ -236,7 +281,8 @@ class IndicatorHandler {
     }
 
     exportData() {
-        var fluviewRegions = $("#fluviewRegions").select2("data");
+        var fluviewLocations = $("#fluviewLocations").select2("data");
+        var nidssFluLocations = $("#nidssFluLocations").select2("data");
 
         var covidCastGeographicValues = Object.groupBy(
             $("#geographic_value").select2("data"),
@@ -247,7 +293,8 @@ class IndicatorHandler {
             end_date: document.getElementById("end_date").value,
             indicators: this.indicators,
             covidCastGeographicValues: covidCastGeographicValues,
-            fluviewRegions: fluviewRegions,
+            fluviewLocations: fluviewLocations,
+            nidssFluLocations: nidssFluLocations,
             apiKey: document.getElementById("apiKey").value,
         }
         const csrftoken = Cookies.get("csrftoken");
@@ -267,7 +314,8 @@ class IndicatorHandler {
                 formEndDate: submitData["end_date"],
                 indicators: JSON.stringify(submitData["indicators"]),
                 covidcastGeoValues: JSON.stringify(submitData["covidCastGeographicValues"]),
-                fluviewGeoValues: JSON.stringify(submitData["fluviewRegions"]),
+                fluviewGeoValues: JSON.stringify(submitData["fluviewLocations"]),
+                nidssFluLocations: JSON.stringify(submitData["nidssFluLocations"]),
                 apiKey: submitData["apiKey"] ? submitData["apiKey"] : "Not provided",
             }
             dataLayerPush(payload);
@@ -277,7 +325,8 @@ class IndicatorHandler {
 
     previewData() {
         $('#loader').show();
-        var fluviewRegions = $("#fluviewRegions").select2("data");
+        var fluviewLocations = $("#fluviewLocations").select2("data");
+        var nidssFluLocations = $("#nidssFluLocations").select2("data");
 
         var covidCastGeographicValues = Object.groupBy(
             $("#geographic_value").select2("data"),
@@ -288,7 +337,8 @@ class IndicatorHandler {
             end_date: document.getElementById("end_date").value,
             indicators: this.indicators,
             covidCastGeographicValues: covidCastGeographicValues,
-            fluviewRegions: fluviewRegions,
+            fluviewLocations: fluviewLocations,
+            nidssFluLocations: nidssFluLocations,
             apiKey: document.getElementById("apiKey").value,
         }
         const csrftoken = Cookies.get("csrftoken");
@@ -307,7 +357,8 @@ class IndicatorHandler {
                 formEndDate: submitData["end_date"],
                 indicators: JSON.stringify(submitData["indicators"]),
                 covidcastGeoValues: JSON.stringify(submitData["covidCastGeographicValues"]),
-                fluviewGeoValues: JSON.stringify(submitData["fluviewRegions"]),
+                fluviewGeoValues: JSON.stringify(submitData["fluviewLocations"]),
+                nidssFluLocations: JSON.stringify(submitData["nidssFluLocations"]),
                 apiKey: submitData["apiKey"] ? submitData["apiKey"] : "Not provided",
             }
             dataLayerPush(payload);
@@ -318,7 +369,8 @@ class IndicatorHandler {
 
     createQueryCode() {
 
-        var fluviewRegions = $("#fluviewRegions").select2("data");
+        var fluviewLocations = $("#fluviewLocations").select2("data");
+        var nidssFluLocations = $("#nidssFluLocations").select2("data");
 
         var covidCastGeographicValues = Object.groupBy(
             $("#geographic_value").select2("data"),
@@ -330,7 +382,8 @@ class IndicatorHandler {
             end_date: document.getElementById("end_date").value,
             indicators: this.indicators,
             covidCastGeographicValues: covidCastGeographicValues,
-            fluviewRegions: fluviewRegions,
+            fluviewLocations: fluviewLocations,
+            nidssFluLocations: nidssFluLocations,
             apiKey: document.getElementById("apiKey").value,
         }
         const csrftoken = Cookies.get("csrftoken");
@@ -357,7 +410,8 @@ class IndicatorHandler {
                 formEndDate: submitData["end_date"],
                 indicators: JSON.stringify(submitData["indicators"]),
                 covidcastGeoValues: JSON.stringify(submitData["covidCastGeographicValues"]),
-                fluviewGeoValues: JSON.stringify(submitData["fluviewRegions"]),
+                fluviewGeoValues: JSON.stringify(submitData["fluviewLocations"]),
+                nidssFluLocations: JSON.stringify(submitData["nidssFluLocations"]),
                 apiKey: submitData["apiKey"] ? submitData["apiKey"] : "Not provided",
             }
             dataLayerPush(payload);
