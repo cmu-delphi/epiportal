@@ -582,7 +582,6 @@ def create_query_code(request):
         covidcast_geos = data.get("covidCastGeographicValues", {})
         fluview_geos = data.get("fluviewLocations", [])
         nidss_flu_locations = data.get("nidssFluLocations", [])
-        print(nidss_flu_locations)
         api_key = data.get("apiKey", None)
         python_code_blocks = [
             dedent(
@@ -713,7 +712,6 @@ def create_query_code(request):
             )
             r_code_blocks.append(r_code_block)
         if nidss_flu_locations:
-            print(nidss_flu_locations)
             regions = ",".join([region["id"] for region in nidss_flu_locations])
             start_week, end_week = get_epiweek(start_date, end_date)
             python_code_block = dedent(
