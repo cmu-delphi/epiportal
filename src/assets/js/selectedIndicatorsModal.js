@@ -40,6 +40,11 @@ function addSelectedIndicator(element) {
             element.dataset.indicatorSet,
             element.dataset.indicator
         );
+        if (element.dataset.endpoint !== "covidcast" && !indicatorHandler.nonCovidcastIndicatorSets.includes(element.dataset.indicatorSet)) {
+            indicatorHandler.nonCovidcastIndicatorSets.push(
+                element.dataset.indicatorSet
+            );
+        }
     } else {
         checkedIndicatorMembers = checkedIndicatorMembers.filter(
             (indicator) => indicator.indicator !== element.dataset.indicator
@@ -49,6 +54,15 @@ function addSelectedIndicator(element) {
                 `${element.dataset.datasource}_${element.dataset.indicator}`
             )
             .remove();
+        const indicatorSet = element.dataset.indicatorSet;
+        const stillExist = checkedIndicatorMembers.some(
+            (indicator) => indicator.indicator_set === indicatorSet
+        );
+        if (!stillExist && indicatorHandler.nonCovidcastIndicatorSets.includes(indicatorSet)) {
+            indicatorHandler.nonCovidcastIndicatorSets = indicatorHandler.nonCovidcastIndicatorSets.filter(
+                (set) => set !== indicatorSet
+            );
+        }
     }
 
     indicatorHandler.indicators = checkedIndicatorMembers;
@@ -210,8 +224,54 @@ $("#geographic_value").on("select2:select", function (e) {
     });
 });
 
+function showFluviewLocationSelect() {
+    if (indicatorHandler.getFluviewIndicators().length > 0) {
+        if (document.getElementsByName("fluviewLocations").length === 0) {
+            indicatorHandler.showfluviewLocations();
+        } else {
+            // IF code goes here, we assume that otherEndpointLocationWarning & fluviewRegion selector is already on the page, but is just hidden, so we should just show it.
+            $("#fluviewDiv").show();
+        }
+    } else {
+        // If there are no non-covidcast indicators selected then hide otherEndpointLocationWarning & fluviewLocations selector.
+        $("#fluviewLocations").val(null).trigger("change");
+        $("#fluviewDiv").hide();
+    }
+}
+
+function showNIDSSFluLocationSelect() {
+    if (indicatorHandler.getNIDSSFluIndicators().length > 0) {
+        if (document.getElementsByName("nidssFluLocations").length === 0) {
+            indicatorHandler.showNIDSSFluLocations();
+        } else {
+            // IF code goes here, we assume that otherEndpointLocationWarning & nidssRegion selector is already on the page, but is just hidden, so we should just show it.
+            $("#nidssFluDiv").show();
+        }
+    } else {
+        // If there are no non-covidcast indicators selected then hide otherEndpointLocationWarning & nidssFluLocations selector.
+        $("#nidssFluLocations").val(null).trigger("change");
+        $("#nidssFluDiv").hide();
+    }
+}
+
+function showNonDelphiIndicatorSetsLocations() {
+    if (indicatorHandler.nonCovidcastIndicatorSets.length > 0) {
+
+        var otherEndpointIndicatorSetsLocationMessage = `<div class="alert alert-info" data-mdb-alert-init role="alert">For indicator set(s) ${indicatorHandler.nonCovidcastIndicatorSets.join(", ")}, please use the Location menu(s) below:</div>`
+        $("#differentLocationNote").html(otherEndpointIndicatorSetsLocationMessage);
+        showFluviewLocationSelect();
+        showNIDSSFluLocationSelect();
+        $("#otherEndpointLocationsWrapper").show();
+    } else {
+        $("#differentLocationNote").html("");
+        $("#otherEndpointLocationsWrapper").hide();
+    }
+}
+
+
 
 $("#showSelectedIndicatorsButton").click(async function () {
+    showNonDelphiIndicatorSetsLocations();
     alertPlaceholder.innerHTML = "";
 
     const prevSelectedIds = $('#geographic_value').val() || [];
@@ -256,20 +316,6 @@ $("#showSelectedIndicatorsButton").click(async function () {
             }
         })
     });
-    if (indicatorHandler.getFluviewIndicators().length > 0) {
-        var ilinetEndpointLocationsWarning = '<div class="alert alert-info" data-mdb-alert-init role="alert">For indicator set ILINet, please use the Location menu below:</div>';
-        $("#differentLocationNote").html(ilinetEndpointLocationsWarning)
-        if (document.getElementsByName("fluviewRegions").length === 0) {
-            indicatorHandler.showFluviewRegions();
-        } else {
-            // IF code goes here, we assume that otherEndpointLocationWarning & fluviewRegion selector is already on the page, but is just hidden, so we should just show it.
-            $("#otherEndpointLocationsWrapper").show();
-        }
-    } else {
-        // If there are no non-covidcast indicators selected (only fluview is supported for now) then hide otherEndpointLocationWarning & fliviewRegions selector.
-        $("#fluviewRegions").val(null).trigger("change");
-        $("#otherEndpointLocationsWrapper").hide();
-    }
 });
 
 
