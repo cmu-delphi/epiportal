@@ -269,6 +269,21 @@ function showNIDSSDengueLocationSelect() {
     }
 }
 
+function showFlusurvLocationSelect() {
+    if (indicatorHandler.getFlusurvIndicators().length > 0) {
+        if (document.getElementsByName("flusurvLocations").length === 0) {
+            indicatorHandler.showFlusurvLocations();
+        } else {
+            // IF code goes here, we assume that otherEndpointLocationWarning & flusurvRegion selector is already on the page, but is just hidden, so we should just show it.
+            $("#flusurvDiv").show();
+        }
+    } else {
+        // If there are no non-covidcast indicators selected then hide otherEndpointLocationWarning & flusurvLocations selector.
+        $("#flusurvLocations").val(null).trigger("change");
+        $("#flusurvDiv").hide();
+    }
+}
+
 function showNonDelphiIndicatorSetsLocations() {
     if (indicatorHandler.nonCovidcastIndicatorSets.length > 0) {
 
@@ -277,6 +292,7 @@ function showNonDelphiIndicatorSetsLocations() {
         showFluviewLocationSelect();
         showNIDSSFluLocationSelect();
         showNIDSSDengueLocationSelect();
+        showFlusurvLocationSelect();
         $("#otherEndpointLocationsWrapper").show();
     } else {
         $("#differentLocationNote").html("");
