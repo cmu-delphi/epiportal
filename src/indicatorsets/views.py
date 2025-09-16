@@ -19,18 +19,22 @@ from indicatorsets.utils import (
     generate_fluview_dataset_epivis,
     generate_nidss_flu_dataset_epivis,
     generate_nidss_dengue_dataset_epivis,
+    generate_flusurv_dataset_epivis,
     generate_covidcast_indicators_export_url,
     generate_fluview_indicators_export_url,
     generate_nidss_flu_export_url,
     generate_nidss_dengue_export_url,
+    generate_flusurv_export_url,
     preview_covidcast_data,
     preview_fluview_data,
     preview_nidss_flu_data,
     preview_nidss_dengue_data,
+    preview_flusurv_data,
     generate_query_code_covidcast,
     generate_query_code_fluview,
     generate_query_code_nidss_flu,
     generate_query_code_nidss_dengue,
+    generate_query_code_flusurv,
 )
 
 from delphi_utils import get_structured_logger
@@ -248,6 +252,7 @@ def epivis(request):
         fluview_geos = data.get("fluviewLocations", [])
         nidss_flu_locations = data.get("nidssFluLocations", [])
         nidss_dengue_locations = data.get("nidssDengueLocations", [])
+        flusurv_locations = data.get("flusurvLocations", [])
         api_key = data.get("apiKey", "")
         form_activity_logger.info(
             mode="epivis",
@@ -279,6 +284,12 @@ def epivis(request):
                         indicator, nidss_dengue_locations, api_key
                     )
                 )
+            elif indicator["_endpoint"] == "flusurv":
+                datasets.extend(
+                    generate_flusurv_dataset_epivis(
+                        indicator, flusurv_locations, api_key
+                    )
+                )
         if datasets:
             datasets_json = json.dumps({"datasets": datasets})
             datasets_b64 = base64.b64encode(datasets_json.encode("ascii")).decode(
@@ -301,6 +312,7 @@ def generate_export_data_url(request):
         fluview_geos = data.get("fluviewLocations", [])
         nidss_flu_locations = data.get("nidssFluLocations", [])
         nidss_dengue_locations = data.get("nidssDengueLocations", [])
+        flusurv_locations = data.get("flusurvLocations", [])
         api_key = data.get("apiKey", None)
         form_activity_logger.info(
             mode="data_export",
@@ -317,19 +329,25 @@ def generate_export_data_url(request):
         if fluview_geos:
             data_export_commands.extend(
                 generate_fluview_indicators_export_url(
-                    indicators, start_date, end_date, fluview_geos, api_key
+                    fluview_geos, start_date, end_date, api_key
                 )
             )
         if nidss_flu_locations:
             data_export_commands.extend(
                 generate_nidss_flu_export_url(
-                    indicators, start_date, end_date, nidss_flu_locations, api_key
+                    nidss_flu_locations, start_date, end_date, api_key
                 )
             )
         if nidss_dengue_locations:
             data_export_commands.extend(
                 generate_nidss_dengue_export_url(
-                    indicators, start_date, end_date, nidss_dengue_locations, api_key
+                    nidss_dengue_locations, start_date, end_date, api_key
+                )
+            )
+        if flusurv_locations:
+            data_export_commands.extend(
+                generate_flusurv_export_url(
+                    flusurv_locations, start_date, end_date, api_key
                 )
             )
         data_export_block = data_export_block.format("<br>".join(data_export_commands))
@@ -350,6 +368,7 @@ def preview_data(request):
         fluview_geos = data.get("fluviewLocations", [])
         nidss_flu_locations = data.get("nidssFluLocations", [])
         nidss_dengue_locations = data.get("nidssDengueLocations", [])
+        flusurv_locations = data.get("flusurvLocations", [])
         api_key = data.get("apiKey", None)
 
         preview_data = []
@@ -381,6 +400,10 @@ def preview_data(request):
                     nidss_dengue_locations, start_date, end_date, api_key
                 )
             )
+        if flusurv_locations:
+            preview_data.extend(
+                preview_flusurv_data(flusurv_locations, start_date, end_date, api_key)
+            )
         return JsonResponse(preview_data, safe=False)
 
 
@@ -394,6 +417,7 @@ def create_query_code(request):
         fluview_geos = data.get("fluviewLocations", [])
         nidss_flu_locations = data.get("nidssFluLocations", [])
         nidss_dengue_locations = data.get("nidssDengueLocations", [])
+        flusurv_locations = data.get("flusurvLocations", [])
         api_key = data.get("apiKey", None)
         python_code_blocks = [
             dedent(
@@ -433,19 +457,25 @@ def create_query_code(request):
                 r_code_blocks.extend(r_code_block)
         if fluview_geos:
             python_code_block, r_code_block = generate_query_code_fluview(
-                fluview_geos, start_date, end_date, data_source, api_key
+                fluview_geos, start_date, end_date, api_key
             )
             python_code_blocks.extend(python_code_block)
             r_code_blocks.extend(r_code_block)
         if nidss_flu_locations:
             python_code_block, r_code_block = generate_query_code_nidss_flu(
-                nidss_flu_locations, start_date, end_date, data_source, api_key
+                nidss_flu_locations, start_date, end_date, api_key
             )
             python_code_blocks.extend(python_code_block)
             r_code_blocks.extend(r_code_block)
         if nidss_dengue_locations:
             python_code_block, r_code_block = generate_query_code_nidss_dengue(
-                nidss_dengue_locations, start_date, end_date, data_source, api_key
+                nidss_dengue_locations, start_date, end_date, api_key
+            )
+            python_code_blocks.extend(python_code_block)
+            r_code_blocks.extend(r_code_block)
+        if flusurv_locations:
+            python_code_block, r_code_block = generate_query_code_flusurv(
+                flusurv_locations, start_date, end_date, api_key
             )
             python_code_blocks.extend(python_code_block)
             r_code_blocks.extend(r_code_block)

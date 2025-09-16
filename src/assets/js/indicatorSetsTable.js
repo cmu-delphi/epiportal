@@ -83,7 +83,8 @@ function format(indicatorSetId, relatedIndicators, indicatorSetDescription) {
             ).length;
             var checkboxTitle = "";
             checked = checked ? "checked" : "";
-            disabled = indicator.endpoint !== "covidcast" && indicator.endpoint !== "fluview" && indicator.endpoint !== "nidss_flu" && indicator.endpoint !== "nidss_dengue" ? "disabled" : "";
+            const enabledEndpoints = ["covidcast", "fluview", "nidss_flu", "nidss_dengue", "flusurv"];
+            disabled = enabledEndpoints.includes(indicator.endpoint) ? "" : "disabled";
             sourceType = indicator.source_type;
             var restricted = indicator.restricted != "No";
             if (disabled === "disabled") {
