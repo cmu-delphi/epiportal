@@ -1,18 +1,17 @@
 import ast
+import json
 import random
 from collections import defaultdict
 from datetime import datetime as dtime
 from textwrap import dedent
-import json
 
 import requests
+from delphi_utils import get_structured_logger
 from django.conf import settings
 from django.http import JsonResponse
 from epiweeks import Week
-from delphi_utils import get_structured_logger
 
 from indicatorsets.models import IndicatorSet
-
 
 FLUVIEW_INDICATORS_MAPPING = {"wili": "%wILI", "ili": "%ILI"}
 
@@ -643,8 +642,7 @@ def get_client_ip(request):
     )
 
 
-def log_form_stats(request, form_mode):
-    data = json.loads(request.body)
+def log_form_stats(data, form_mode):
     log_data = {
         "form_mode": form_mode,
         "num_of_indicators": len(data.get("indicators", [])),
@@ -662,17 +660,16 @@ def log_form_stats(request, form_mode):
         ),
         "api_key_used": bool(data.get("api_key")),
         "api_key": data.get("api_key", "")[:4] + "..." if data.get("api_key") else "",
-        "user_ip": get_client_ip(request),
     }
 
     get_structured_logger("form_stats").info(log_data)
 
 
 def log_form_data(request, form_mode):
-
-    log_form_stats(request, form_mode)
-
     data = json.loads(request.body)
+
+    log_form_stats(data, form_mode)
+
     indicators = data.get("indicators", [])
     indicators = [
         {
