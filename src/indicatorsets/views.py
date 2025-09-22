@@ -35,13 +35,12 @@ from indicatorsets.utils import (
     generate_query_code_nidss_flu,
     generate_query_code_nidss_dengue,
     generate_query_code_flusurv,
+    log_form_data,
 )
 
 from delphi_utils import get_structured_logger
 
 indicatorsets_logger = get_structured_logger("indicatorsets_logger")
-
-form_activity_logger = get_structured_logger("form_activity_logger")
 
 HEADER_DESCRIPTION = "Discover, display and download real-time infectious disease indicators (time series) that track a variety of pathogens, diseases and syndromes in a variety of locations (primarily within the USA). Browse the list, or filter it first by locations and pathogens of interest, by surveillance categories, and more. Expand any row to expose and select from a set of related indicators, then hit 'Show Selected Indicators' at bottom to plot or export your selected indicators, or to generate code snippets to retrieve them from the Delphi Epidata API. Most indicators are served from the Delphi Epidata real-time repository, but some may be available only from third parties or may require prior approval."
 
@@ -253,42 +252,29 @@ def epivis(request):
         nidss_flu_locations = data.get("nidssFluLocations", [])
         nidss_dengue_locations = data.get("nidssDengueLocations", [])
         flusurv_locations = data.get("flusurvLocations", [])
-        api_key = data.get("apiKey", "")
-        form_activity_logger.info(
-            mode="epivis",
-            indicator_count=len(indicators),
-            covidcast_geos_count=len(covidcast_geos),
-            fluview_geos_count=len(fluview_geos),
-            api_key=api_key,
-        )  # noqa: E501
+        log_form_data(request, "epivis")
         for indicator in indicators:
             if indicator["_endpoint"] == "covidcast":
                 datasets.extend(
-                    generate_covidcast_dataset_epivis(
-                        indicator, covidcast_geos, api_key
-                    )
+                    generate_covidcast_dataset_epivis(indicator, covidcast_geos)
                 )
             elif indicator["_endpoint"] == "fluview":
                 datasets.extend(
-                    generate_fluview_dataset_epivis(indicator, fluview_geos, api_key)
+                    generate_fluview_dataset_epivis(indicator, fluview_geos)
                 )
             elif indicator["_endpoint"] == "nidss_flu":
                 datasets.extend(
-                    generate_nidss_flu_dataset_epivis(
-                        indicator, nidss_flu_locations, api_key
-                    )
+                    generate_nidss_flu_dataset_epivis(indicator, nidss_flu_locations)
                 )
             elif indicator["_endpoint"] == "nidss_dengue":
                 datasets.extend(
                     generate_nidss_dengue_dataset_epivis(
-                        indicator, nidss_dengue_locations, api_key
+                        indicator, nidss_dengue_locations
                     )
                 )
             elif indicator["_endpoint"] == "flusurv":
                 datasets.extend(
-                    generate_flusurv_dataset_epivis(
-                        indicator, flusurv_locations, api_key
-                    )
+                    generate_flusurv_dataset_epivis(indicator, flusurv_locations)
                 )
         if datasets:
             datasets_json = json.dumps({"datasets": datasets})
@@ -314,13 +300,6 @@ def generate_export_data_url(request):
         nidss_dengue_locations = data.get("nidssDengueLocations", [])
         flusurv_locations = data.get("flusurvLocations", [])
         api_key = data.get("apiKey", None)
-        form_activity_logger.info(
-            mode="data_export",
-            indicator_count=len(indicators),
-            covidcast_geos_count=len(covidcast_geos),
-            fluview_geos_count=len(fluview_geos),
-            api_key=api_key,
-        )  # noqa: E501
         data_export_commands.extend(
             generate_covidcast_indicators_export_url(
                 indicators, start_date, end_date, covidcast_geos, api_key
@@ -372,13 +351,6 @@ def preview_data(request):
         api_key = data.get("apiKey", None)
 
         preview_data = []
-        form_activity_logger.info(
-            mode="preview_data",
-            indicator_count=len(indicators),
-            covidcast_geos_count=len(covidcast_geos),
-            fluview_geos_count=len(fluview_geos),
-            api_key=api_key,
-        )  # noqa: E501
         preview_data.extend(
             preview_covidcast_data(
                 indicators, start_date, end_date, covidcast_geos, api_key
@@ -418,7 +390,6 @@ def create_query_code(request):
         nidss_flu_locations = data.get("nidssFluLocations", [])
         nidss_dengue_locations = data.get("nidssDengueLocations", [])
         flusurv_locations = data.get("flusurvLocations", [])
-        api_key = data.get("apiKey", None)
         python_code_blocks = [
             dedent(
                 """\
@@ -451,31 +422,30 @@ def create_query_code(request):
                     end_date,
                     data_source,
                     indicators_str,
-                    api_key,
                 )
                 python_code_blocks.extend(python_code_block)
                 r_code_blocks.extend(r_code_block)
         if fluview_geos:
             python_code_block, r_code_block = generate_query_code_fluview(
-                fluview_geos, start_date, end_date, api_key
+                fluview_geos, start_date, end_date
             )
             python_code_blocks.extend(python_code_block)
             r_code_blocks.extend(r_code_block)
         if nidss_flu_locations:
             python_code_block, r_code_block = generate_query_code_nidss_flu(
-                nidss_flu_locations, start_date, end_date, api_key
+                nidss_flu_locations, start_date, end_date
             )
             python_code_blocks.extend(python_code_block)
             r_code_blocks.extend(r_code_block)
         if nidss_dengue_locations:
             python_code_block, r_code_block = generate_query_code_nidss_dengue(
-                nidss_dengue_locations, start_date, end_date, api_key
+                nidss_dengue_locations, start_date, end_date
             )
             python_code_blocks.extend(python_code_block)
             r_code_blocks.extend(r_code_block)
         if flusurv_locations:
             python_code_block, r_code_block = generate_query_code_flusurv(
-                flusurv_locations, start_date, end_date, api_key
+                flusurv_locations, start_date, end_date
             )
             python_code_blocks.extend(python_code_block)
             r_code_blocks.extend(r_code_block)
