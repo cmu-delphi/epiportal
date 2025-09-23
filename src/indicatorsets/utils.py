@@ -730,8 +730,8 @@ def log_form_data(request, form_mode):
         "start_date": data.get("start_date", ""),
         "end_date": data.get("end_date", ""),
         "epiweeks": get_epiweek(data.get("start_date", ""), data.get("end_date", "")) if data.get("start_date") and data.get("end_date") else [],  # fmt: skip
-        "api_key_used": bool(data.get("api_key")),
-        "api_key": data.get("api_key", "")[:4] + "..." if data.get("api_key") else "",
+        "api_key_used": bool(data.get("apiKey")),
+        "api_key": data.get("apiKey", "") if data.get("apiKey") else "",
         "user_ip": get_client_ip(request),
     }
     get_structured_logger("form_activity_logger").info(log_data)

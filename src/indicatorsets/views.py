@@ -252,6 +252,7 @@ def epivis(request):
         nidss_flu_locations = data.get("nidssFluLocations", [])
         nidss_dengue_locations = data.get("nidssDengueLocations", [])
         flusurv_locations = data.get("flusurvLocations", [])
+        api_key = data.get("apiKey", None)
         log_form_data(request, "epivis")
         for indicator in indicators:
             if indicator["_endpoint"] == "covidcast":
