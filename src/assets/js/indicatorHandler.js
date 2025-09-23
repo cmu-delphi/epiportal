@@ -7,6 +7,29 @@ function dataLayerPush(payload) {
     }
 }
 
+
+function getGACookie() {
+    // Get all cookies as a string
+    const cookies = document.cookie.split(';');
+    
+    // Find the _ga cookie
+    const gaCookie = cookies.find(cookie => cookie.trim().startsWith('_ga='));
+    
+    if (gaCookie) {
+        // Extract the full _ga cookie value
+        const gaValue = gaCookie.split('=')[1];
+        
+        // Extract the Client ID (remove the GA1.X prefix)
+        const clientId = gaValue.split('.').slice(2).join('.');
+        
+        return clientId;
+    }
+    
+    return null; // Return null if _ga cookie is not found
+}
+
+const clientId = getGACookie();
+
 class IndicatorHandler {
     constructor() {
         this.indicators = {};
@@ -366,7 +389,6 @@ class IndicatorHandler {
             const payload = {
                 event: "submitSelectedIndicators",
                 formMode: "epivis",
-                indicators: JSON.stringify(submitData["indicators"]),
                 covidcastGeoValues: JSON.stringify(submitData["covidCastGeographicValues"]),
                 fluviewGeoValues: JSON.stringify(submitData["fluviewLocations"]),
                 nidssFluLocations: JSON.stringify(submitData["nidssFluLocations"]),
@@ -374,6 +396,7 @@ class IndicatorHandler {
                 flusurvLocations: JSON.stringify(submitData["flusurvLocations"]),
                 epivisUrl: data["epivis_url"],
                 apiKey: submitData["apiKey"] ? submitData["apiKey"] : "Not provided",
+                clientId: clientId ? clientId : "Not available",
             }
             dataLayerPush(payload);
             window.open(data["epivis_url"], '_blank').focus();
@@ -416,13 +439,13 @@ class IndicatorHandler {
                 formMode: "export",
                 formStartDate: submitData["start_date"],
                 formEndDate: submitData["end_date"],
-                indicators: JSON.stringify(submitData["indicators"]),
                 covidcastGeoValues: JSON.stringify(submitData["covidCastGeographicValues"]),
                 fluviewGeoValues: JSON.stringify(submitData["fluviewLocations"]),
                 nidssFluLocations: JSON.stringify(submitData["nidssFluLocations"]),
                 nidssDengueLocations: JSON.stringify(submitData["nidssDengueLocations"]),
                 flusurvLocations: JSON.stringify(submitData["flusurvLocations"]),
                 apiKey: submitData["apiKey"] ? submitData["apiKey"] : "Not provided",
+                clientId: clientId ? clientId : "Not available",
             }
             dataLayerPush(payload);
             $('#modeSubmitResult').html(data["data_export_block"]);
@@ -465,13 +488,13 @@ class IndicatorHandler {
                 formMode: "preview",
                 formStartDate: submitData["start_date"],
                 formEndDate: submitData["end_date"],
-                indicators: JSON.stringify(submitData["indicators"]),
                 covidcastGeoValues: JSON.stringify(submitData["covidCastGeographicValues"]),
                 fluviewGeoValues: JSON.stringify(submitData["fluviewLocations"]),
                 nidssFluLocations: JSON.stringify(submitData["nidssFluLocations"]),
                 nidssDengueLocations: JSON.stringify(submitData["nidssDengueLocations"]),
                 flusurvLocations: JSON.stringify(submitData["flusurvLocations"]),
                 apiKey: submitData["apiKey"] ? submitData["apiKey"] : "Not provided",
+                clientId: clientId ? clientId : "Not available",
             }
             dataLayerPush(payload);
             $('#loader').hide();
@@ -523,13 +546,13 @@ class IndicatorHandler {
                 formMode: "queryCode",
                 formStartDate: submitData["start_date"],
                 formEndDate: submitData["end_date"],
-                indicators: JSON.stringify(submitData["indicators"]),
                 covidcastGeoValues: JSON.stringify(submitData["covidCastGeographicValues"]),
                 fluviewGeoValues: JSON.stringify(submitData["fluviewLocations"]),
                 nidssFluLocations: JSON.stringify(submitData["nidssFluLocations"]),
                 nidssDengueLocations: JSON.stringify(submitData["nidssDengueLocations"]),
                 flusurvLocations: JSON.stringify(submitData["flusurvLocations"]),
                 apiKey: submitData["apiKey"] ? submitData["apiKey"] : "Not provided",
+                clientId: clientId ? clientId : "Not available",
             }
             dataLayerPush(payload);
             createQueryCodePython += data["python_code_blocks"].join("<br>");
