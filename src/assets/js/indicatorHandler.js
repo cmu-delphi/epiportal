@@ -361,8 +361,11 @@ class IndicatorHandler {
     }
 
     plotData() {
-        const covidCastGeographicValues =
-            $("#geographic_value").select2("data");
+        const covidCastGeographicValues = Object.groupBy(
+            $("#geographic_value").select2("data"),
+            ({ geoType }) => [geoType]
+        );
+        console.log(covidCastGeographicValues);
         const fluviewLocations = $("#fluviewLocations").select2("data");
         const nidssFluLocations = $("#nidssFluLocations").select2("data");
         const nidssDengueLocations = $("#nidssDengueLocations").select2("data");

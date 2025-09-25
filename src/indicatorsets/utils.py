@@ -1,12 +1,10 @@
 import ast
-import json
 import random
 from collections import defaultdict
 from datetime import datetime as dtime
 from textwrap import dedent
 
 import requests
-from delphi_utils import get_structured_logger
 from django.conf import settings
 from django.http import JsonResponse
 from epiweeks import Week
@@ -91,30 +89,31 @@ def group_by_property(list_of_dicts, property):
 
 def generate_covidcast_dataset_epivis(indicator, covidcast_geos):
     datasets = []
-    for geo in covidcast_geos:
-        if geo["id"] not in indicator.get("notCoveredGeos", []):
-            geo_value = (
-                geo["id"].split(":")[1].lower()
-                if geo["geoType"] in ["nation", "state"]
-                else geo["id"].split(":")[1]
-            )
-            datasets.append(
-                {
-                    "color": generate_random_color(),
-                    "title": "value",
-                    "params": {
-                        "_endpoint": indicator["_endpoint"],
-                        "data_source": indicator["data_source"],
-                        "signal": indicator["indicator"],
-                        "time_type": indicator["time_type"],
-                        "geo_type": geo["geoType"],
-                        "geo_value": geo_value,
-                        "custom_title": generate_epivis_custom_title(
-                            indicator, geo["text"]
-                        ),
-                    },
-                }
-            )
+    for geo_type in covidcast_geos.keys():
+        for geo in covidcast_geos[geo_type]:
+            if geo["id"] not in indicator.get("notCoveredGeos", []):
+                geo_value = (
+                    geo["id"].split(":")[1].lower()
+                    if geo["geoType"] in ["nation", "state"]
+                    else geo["id"].split(":")[1]
+                )
+                datasets.append(
+                    {
+                        "color": generate_random_color(),
+                        "title": "value",
+                        "params": {
+                            "_endpoint": indicator["_endpoint"],
+                            "data_source": indicator["data_source"],
+                            "signal": indicator["indicator"],
+                            "time_type": indicator["time_type"],
+                            "geo_type": geo_type,
+                            "geo_value": geo_value,
+                            "custom_title": generate_epivis_custom_title(
+                                indicator, geo["text"]
+                            ),
+                        },
+                    }
+                )
     return datasets
 
 
@@ -387,6 +386,7 @@ def preview_nidss_flu_data(nidss_flu_geos, start_date, end_date, api_key):
             "message": "API key does not exist. Register a new key at https://api.delphi.cmu.edu/epidata/admin/registration_form or contact delphi-support+privacy@andrew.cmu.edu to troubleshoot",
         }
         return JsonResponse(preview_data, safe=False)
+    return preview_data
 
 
 def preview_nidss_dengue_data(nidss_dengue_geos, start_date, end_date, api_key):
@@ -642,7 +642,7 @@ def get_client_ip(request):
     )
 
 
-def log_form_stats(data, form_mode):
+def log_form_stats(request, data, form_mode, logger):
     log_data = {
         "form_mode": form_mode,
         "num_of_indicators": len(data.get("indicators", [])),
@@ -660,16 +660,14 @@ def log_form_stats(data, form_mode):
         ),
         "api_key_used": bool(data.get("api_key")),
         "api_key": data.get("api_key", "")[:4] + "..." if data.get("api_key") else "",
+        "user_ip": get_client_ip(request),
+        "user_ga_id": data.get("clientId", "") if data.get("clientId") else "",
     }
 
-    get_structured_logger("form_stats").info(log_data)
+    logger.info(log_data)
 
 
-def log_form_data(request, form_mode):
-    data = json.loads(request.body)
-
-    log_form_stats(data, form_mode)
-
+def log_form_data(request, data, form_mode, logger):
     indicators = data.get("indicators", [])
     indicators = [
         {
@@ -681,13 +679,18 @@ def log_form_data(request, form_mode):
         } for ind in indicators
     ]  # fmt: skip
     indicators = group_by_property(indicators, "endpoint")
-    covidcast_geos = [
-        {
-            "geo_type": geo.get("geoType"),
-            "geo_value": geo.get("id").split(":")[1],
-            "geo_text": geo.get("text"),
-        } for geo in data.get("covidCastGeographicValues", [])
-    ] # fmt: skip
+    covidcast_geographic_values = data.get("covidCastGeographicValues", [])
+
+    covidcast_geos = []
+    for geo_type in covidcast_geographic_values.keys():
+        for geo_value in covidcast_geographic_values.get(geo_type, []):
+            covidcast_geos.append(
+                {
+                    "geo_type": geo_type,
+                    "geo_value": geo_value.get("id").split(":")[1],
+                    "geo_text": geo_value.get("text"),
+                }
+            )
     fluview_geos = [
         {
             "geo_value": geo.get("id"),
@@ -733,5 +736,6 @@ def log_form_data(request, form_mode):
         "api_key_used": bool(data.get("apiKey")),
         "api_key": data.get("apiKey", "") if data.get("apiKey") else "",
         "user_ip": get_client_ip(request),
+        "user_ga_id": data.get("clientId", "") if data.get("clientId") else "",
     }
-    get_structured_logger("form_activity_logger").info(log_data)
+    logger.info(log_data)
