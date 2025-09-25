@@ -36,11 +36,15 @@ from indicatorsets.utils import (
     generate_query_code_nidss_dengue,
     generate_query_code_flusurv,
     log_form_data,
+    log_form_stats
 )
 
 from delphi_utils import get_structured_logger
 
 indicatorsets_logger = get_structured_logger("indicatorsets_logger")
+
+form_data_logger = get_structured_logger("form_data_logger")
+form_stats_logger = get_structured_logger("form_stats_logger")
 
 HEADER_DESCRIPTION = "Discover, display and download real-time infectious disease indicators (time series) that track a variety of pathogens, diseases and syndromes in a variety of locations (primarily within the USA). Browse the list, or filter it first by locations and pathogens of interest, by surveillance categories, and more. Expand any row to expose and select from a set of related indicators, then hit 'Show Selected Indicators' at bottom to plot or export your selected indicators, or to generate code snippets to retrieve them from the Delphi Epidata API. Most indicators are served from the Delphi Epidata real-time repository, but some may be available only from third parties or may require prior approval."
 
@@ -252,8 +256,8 @@ def epivis(request):
         nidss_flu_locations = data.get("nidssFluLocations", [])
         nidss_dengue_locations = data.get("nidssDengueLocations", [])
         flusurv_locations = data.get("flusurvLocations", [])
-        api_key = data.get("apiKey", None)
-        log_form_data(request, "epivis")
+        log_form_stats(request, data, "epivis", form_stats_logger)
+        log_form_data(request, data, "epivis", form_data_logger)
         for indicator in indicators:
             if indicator["_endpoint"] == "covidcast":
                 datasets.extend(
@@ -295,12 +299,15 @@ def generate_export_data_url(request):
         start_date = data.get("start_date", "")
         end_date = data.get("end_date", "")
         indicators = data.get("indicators", [])
-        covidcast_geos = data.get("covidCastGeographicValues", {})
+        covidcast_geos = data.get("covidCastGeographicValues", [])
         fluview_geos = data.get("fluviewLocations", [])
         nidss_flu_locations = data.get("nidssFluLocations", [])
         nidss_dengue_locations = data.get("nidssDengueLocations", [])
         flusurv_locations = data.get("flusurvLocations", [])
         api_key = data.get("apiKey", None)
+
+        log_form_stats(request, data, "export", form_stats_logger)
+        log_form_data(request, data, "export", form_data_logger)
         data_export_commands.extend(
             generate_covidcast_indicators_export_url(
                 indicators, start_date, end_date, covidcast_geos, api_key
@@ -341,6 +348,8 @@ def generate_export_data_url(request):
 def preview_data(request):
     if request.method == "POST":
         data = json.loads(request.body)
+        log_form_stats(request, data, "preview", form_stats_logger)
+        log_form_data(request, data, "preview", form_data_logger)
         start_date = data.get("start_date", "")
         end_date = data.get("end_date", "")
         indicators = data.get("indicators", [])
@@ -383,6 +392,8 @@ def preview_data(request):
 def create_query_code(request):
     if request.method == "POST":
         data = json.loads(request.body)
+        log_form_stats(request, data, "code", form_stats_logger)
+        log_form_data(request, data, "code", form_data_logger)
         start_date = data.get("start_date", "")
         end_date = data.get("end_date", "")
         indicators = data.get("indicators", [])
