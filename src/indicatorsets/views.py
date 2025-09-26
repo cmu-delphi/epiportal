@@ -35,8 +35,8 @@ from indicatorsets.utils import (
     generate_query_code_nidss_flu,
     generate_query_code_nidss_dengue,
     generate_query_code_flusurv,
-    log_form_data,
-    log_form_stats
+    get_epiweek,
+    get_client_ip,
 )
 
 from delphi_utils import get_structured_logger
@@ -47,6 +47,105 @@ form_data_logger = get_structured_logger("form_data_logger")
 form_stats_logger = get_structured_logger("form_stats_logger")
 
 HEADER_DESCRIPTION = "Discover, display and download real-time infectious disease indicators (time series) that track a variety of pathogens, diseases and syndromes in a variety of locations (primarily within the USA). Browse the list, or filter it first by locations and pathogens of interest, by surveillance categories, and more. Expand any row to expose and select from a set of related indicators, then hit 'Show Selected Indicators' at bottom to plot or export your selected indicators, or to generate code snippets to retrieve them from the Delphi Epidata API. Most indicators are served from the Delphi Epidata real-time repository, but some may be available only from third parties or may require prior approval."
+
+
+def log_form_stats(request, data, form_mode):
+    log_data = {
+        "form_mode": form_mode,
+        "num_of_indicators": len(data.get("indicators", [])),
+        "num_of_covidcast_geos": len(data.get("covidCastGeographicValues", [])),
+        "num_of_fluview_geos": len(data.get("fluviewLocations", [])),
+        "num_of_nidss_flu_geos": len(data.get("nidssFluLocations", [])),
+        "num_of_nidss_dengue_geos": len(data.get("nidssDengueLocations", [])),
+        "num_of_flusurv_geos": len(data.get("flusurvLocations", [])),
+        "start_date": data.get("start_date"),
+        "end_date": data.get("end_date"),
+        "epiweeks": (
+            get_epiweek(data.get("start_date"), data.get("end_date"))
+            if data.get("start_date") and data.get("end_date")
+            else []
+        ),
+        "api_key_used": bool(data.get("api_key")),
+        "api_key": data.get("api_key", "")[:4] + "..." if data.get("api_key") else "",
+        "user_ip": get_client_ip(request),
+        "user_ga_id": data.get("clientId", "") if data.get("clientId") else "",
+    }
+
+    form_stats_logger.info(log_data)
+
+
+def log_form_data(request, data, form_mode):
+    indicators = data.get("indicators", [])
+    indicators = [
+        {
+            "endpoint": ind.get("_endpoint"),
+            "indicator": ind.get("indicator"),
+            "data_source": ind.get("data_source"),
+            "time_type": ind.get("time_type"),
+
+        } for ind in indicators
+    ]  # fmt: skip
+    indicators = group_by_property(indicators, "endpoint")
+    covidcast_geographic_values = data.get("covidCastGeographicValues", [])
+
+    covidcast_geos = []
+    for geo_type in covidcast_geographic_values.keys():
+        for geo_value in covidcast_geographic_values.get(geo_type, []):
+            covidcast_geos.append(
+                {
+                    "geo_type": geo_type,
+                    "geo_value": geo_value.get("id").split(":")[1],
+                    "geo_text": geo_value.get("text"),
+                }
+            )
+    fluview_geos = [
+        {
+            "geo_value": geo.get("id"),
+            "geo_text": geo.get("text"),
+        }
+        for geo in data.get("fluviewLocations", [])
+    ]
+    nidss_flu_geos = [
+        {
+            "geo_value": geo.get("id"),
+            "geo_text": geo.get("text"),
+        }
+        for geo in data.get("nidssFluLocations", [])
+    ]
+    nidss_dengue_geos = [
+        {
+            "geo_value": geo.get("id"),
+            "geo_text": geo.get("text"),
+        }
+        for geo in data.get("nidssDengueLocations", [])
+    ]
+    flusurv_geos = [
+        {
+            "geo_value": geo.get("id"),
+            "geo_text": geo.get("text"),
+        }
+        for geo in data.get("flusurvLocations", [])
+    ]
+    log_data = {
+        "mode": form_mode,
+        "indicators": [
+            {"endpoint": endpoint, "indicators": group}
+            for endpoint, group in indicators.items()
+        ],
+        "covidcast_geos": covidcast_geos,
+        "fluview_geos": fluview_geos,
+        "nidss_flu_geos": nidss_flu_geos,
+        "nidss_dengue_geos": nidss_dengue_geos,
+        "flusurv_geos": flusurv_geos,
+        "start_date": data.get("start_date", ""),
+        "end_date": data.get("end_date", ""),
+        "epiweeks": get_epiweek(data.get("start_date", ""), data.get("end_date", "")) if data.get("start_date") and data.get("end_date") else [],  # fmt: skip
+        "api_key_used": bool(data.get("apiKey")),
+        "api_key": data.get("apiKey", "") if data.get("apiKey") else "",
+        "user_ip": get_client_ip(request),
+        "user_ga_id": data.get("clientId", "") if data.get("clientId") else "",
+    }
+    form_data_logger.info(log_data)
 
 
 class IndicatorSetListView(ListView):
@@ -256,8 +355,8 @@ def epivis(request):
         nidss_flu_locations = data.get("nidssFluLocations", [])
         nidss_dengue_locations = data.get("nidssDengueLocations", [])
         flusurv_locations = data.get("flusurvLocations", [])
-        log_form_stats(request, data, "epivis", form_stats_logger)
-        log_form_data(request, data, "epivis", form_data_logger)
+        log_form_stats(request, data, "epivis")
+        log_form_data(request, data, "epivis")
         for indicator in indicators:
             if indicator["_endpoint"] == "covidcast":
                 datasets.extend(
@@ -306,8 +405,8 @@ def generate_export_data_url(request):
         flusurv_locations = data.get("flusurvLocations", [])
         api_key = data.get("apiKey", None)
 
-        log_form_stats(request, data, "export", form_stats_logger)
-        log_form_data(request, data, "export", form_data_logger)
+        log_form_stats(request, data, "export")
+        log_form_data(request, data, "export")
         data_export_commands.extend(
             generate_covidcast_indicators_export_url(
                 indicators, start_date, end_date, covidcast_geos, api_key
@@ -348,8 +447,8 @@ def generate_export_data_url(request):
 def preview_data(request):
     if request.method == "POST":
         data = json.loads(request.body)
-        log_form_stats(request, data, "preview", form_stats_logger)
-        log_form_data(request, data, "preview", form_data_logger)
+        log_form_stats(request, data, "preview")
+        log_form_data(request, data, "preview")
         start_date = data.get("start_date", "")
         end_date = data.get("end_date", "")
         indicators = data.get("indicators", [])
@@ -392,8 +491,8 @@ def preview_data(request):
 def create_query_code(request):
     if request.method == "POST":
         data = json.loads(request.body)
-        log_form_stats(request, data, "code", form_stats_logger)
-        log_form_data(request, data, "code", form_data_logger)
+        log_form_stats(request, data, "code")
+        log_form_data(request, data, "code")
         start_date = data.get("start_date", "")
         end_date = data.get("end_date", "")
         indicators = data.get("indicators", [])
