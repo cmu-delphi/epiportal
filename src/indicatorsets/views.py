@@ -426,7 +426,7 @@ def generate_export_data_url(request):
             "user_ga_id": data.get("clientId", "") if data.get("clientId") else "",
         }
 
-        form_stats_logger.info(log_data)
+        form_stats_logger.info("Epivis output", **log_data)
         # log_form_stats(request, data, "export")
         # log_form_data(request, data, "export")
         data_export_commands.extend(
