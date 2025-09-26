@@ -347,7 +347,6 @@ class IndicatorSetListView(ListView):
 
 def epivis(request):
     if request.method == "POST":
-        indicatorsets_logger.info("Generating EpiVis URL")
         datasets = []
         data = json.loads(request.body)
         indicators = data.get("indicators", [])
@@ -406,8 +405,30 @@ def generate_export_data_url(request):
         flusurv_locations = data.get("flusurvLocations", [])
         api_key = data.get("apiKey", None)
 
-        log_form_stats(request, data, "export")
-        log_form_data(request, data, "export")
+        log_data = {
+            "form_mode": "epivis",
+            "num_of_indicators": len(data.get("indicators", [])),
+            "num_of_covidcast_geos": len(data.get("covidCastGeographicValues", [])),
+            "num_of_fluview_geos": len(data.get("fluviewLocations", [])),
+            "num_of_nidss_flu_geos": len(data.get("nidssFluLocations", [])),
+            "num_of_nidss_dengue_geos": len(data.get("nidssDengueLocations", [])),
+            "num_of_flusurv_geos": len(data.get("flusurvLocations", [])),
+            "start_date": data.get("start_date"),
+            "end_date": data.get("end_date"),
+            "epiweeks": (
+                get_epiweek(data.get("start_date"), data.get("end_date"))
+                if data.get("start_date") and data.get("end_date")
+                else []
+            ),
+            "api_key_used": bool(data.get("api_key")),
+            "api_key": data.get("api_key", "")[:4] + "..." if data.get("api_key") else "",
+            "user_ip": get_client_ip(request),
+            "user_ga_id": data.get("clientId", "") if data.get("clientId") else "",
+        }
+
+        form_stats_logger.info(log_data)
+        # log_form_stats(request, data, "export")
+        # log_form_data(request, data, "export")
         data_export_commands.extend(
             generate_covidcast_indicators_export_url(
                 indicators, start_date, end_date, covidcast_geos, api_key
