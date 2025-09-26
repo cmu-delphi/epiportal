@@ -347,6 +347,7 @@ class IndicatorSetListView(ListView):
 
 def epivis(request):
     if request.method == "POST":
+        indicatorsets_logger.info("Generating EpiVis URL")
         datasets = []
         data = json.loads(request.body)
         indicators = data.get("indicators", [])
