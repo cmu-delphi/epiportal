@@ -365,7 +365,6 @@ class IndicatorHandler {
             $("#geographic_value").select2("data"),
             ({ geoType }) => [geoType]
         );
-        console.log(covidCastGeographicValues);
         const fluviewLocations = $("#fluviewLocations").select2("data");
         const nidssFluLocations = $("#nidssFluLocations").select2("data");
         const nidssDengueLocations = $("#nidssDengueLocations").select2("data");
@@ -378,6 +377,7 @@ class IndicatorHandler {
             nidssDengueLocations: nidssDengueLocations,
             flusurvLocations: flusurvLocations,
             apiKey: document.getElementById("apiKey").value,
+            clientId: clientId,
         };
         const csrftoken = Cookies.get("csrftoken");
         $.ajax({
@@ -426,6 +426,7 @@ class IndicatorHandler {
             nidssDengueLocations: nidssDengueLocations,
             flusurvLocations: flusurvLocations,
             apiKey: document.getElementById("apiKey").value,
+            clientId: clientId,
         }
         const csrftoken = Cookies.get("csrftoken");
         $.ajax({
@@ -476,6 +477,7 @@ class IndicatorHandler {
             nidssDengueLocations: nidssDengueLocations,
             flusurvLocations: flusurvLocations,
             apiKey: document.getElementById("apiKey").value,
+            clientId: clientId,
         }
         const csrftoken = Cookies.get("csrftoken");
         $.ajax({
@@ -526,6 +528,7 @@ class IndicatorHandler {
             nidssDengueLocations: nidssDengueLocations,
             flusurvLocations: flusurvLocations,
             apiKey: document.getElementById("apiKey").value,
+            clientId: clientId,
         }
         const csrftoken = Cookies.get("csrftoken");
         var createQueryCodePython = `<h4>PYTHON PACKAGE</h4>`

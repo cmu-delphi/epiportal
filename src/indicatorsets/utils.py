@@ -8,10 +8,14 @@ import requests
 from django.conf import settings
 from django.http import JsonResponse
 from epiweeks import Week
+from delphi_utils import get_structured_logger
 
 from indicatorsets.models import IndicatorSet
 
 FLUVIEW_INDICATORS_MAPPING = {"wili": "%wILI", "ili": "%ILI"}
+
+form_data_logger = get_structured_logger("form_data_logger")
+form_stats_logger = get_structured_logger("form_stats_logger")
 
 
 def list_to_dict(lst):
@@ -633,16 +637,37 @@ def generate_query_code_flusurv(flusurv_geos, start_date, end_date):
     return python_code_blocks, r_code_blocks
 
 
-def get_client_ip(request):
-    x_forwarded_for = request.META.get("HTTP_X_FORWARDED_FOR")
-    return (
-        x_forwarded_for.split(",")[0]
-        if x_forwarded_for
-        else request.META.get("REMOTE_ADDR")
-    )
+def get_real_ip_addr(req):  # `req` should be a Flask.request object
+    if settings.REVERSE_PROXY_DEPTH:
+        # we only expect/trust (up to) "REVERSE_PROXY_DEPTH" number of proxies between this server and the outside world.
+        # a REVERSE_PROXY_DEPTH of 0 means not proxied, i.e. server is globally directly reachable.
+        # a negative proxy depth is a special case to trust the whole chain -- not generally recommended unless the
+        # most-external proxy is configured to disregard "X-Forwarded-For" from outside.
+        # really, ONLY trust the following headers if reverse proxied!!!
+        x_forwarded_for = req.META.get('HTTP_X_FORWARDED_FOR')
+
+        if x_forwarded_for:
+            full_proxy_chain = x_forwarded_for.split(",")
+            # eliminate any extra addresses at the front of this list, as they could be spoofed.
+            if settings.REVERSE_PROXY_DEPTH > 0:
+                depth = settings.REVERSE_PROXY_DEPTH
+            else:
+                # special case for -1/negative: setting `depth` to 0 will not strip any items from the chain
+                depth = 0
+            trusted_proxy_chain = full_proxy_chain[-depth:]
+            # accept the first (or only) address in the remaining trusted part of the chain as the actual remote address
+            return trusted_proxy_chain[0].strip()
+
+        # fall back to "X-Real-Ip" if "X-Forwarded-For" isnt present
+        x_real_ip = req.META.get('HTTP_X_REAL_IP')
+        if x_real_ip:
+            return x_real_ip
+
+    # if we are not proxied (or we are proxied but the headers werent present and we fell through to here), just use the remote ip addr as the true client address
+    return req.META.get('REMOTE_ADDR')
 
 
-def log_form_stats(request, data, form_mode, logger):
+def log_form_stats(request, data, form_mode):
     log_data = {
         "form_mode": form_mode,
         "num_of_indicators": len(data.get("indicators", [])),
@@ -660,14 +685,15 @@ def log_form_stats(request, data, form_mode, logger):
         ),
         "api_key_used": bool(data.get("api_key")),
         "api_key": data.get("api_key", "")[:4] + "..." if data.get("api_key") else "",
-        "user_ip": get_client_ip(request),
+        "user_ip": get_real_ip_addr(request),
         "user_ga_id": data.get("clientId", "") if data.get("clientId") else "",
     }
+    form_stats_logger.info("form_stats", clientId=data.get("clientId", ""))
 
-    logger.info(log_data)
+    form_stats_logger.info("form_stats", **log_data)
 
 
-def log_form_data(request, data, form_mode, logger):
+def log_form_data(request, data, form_mode):
     indicators = data.get("indicators", [])
     indicators = [
         {
@@ -735,7 +761,7 @@ def log_form_data(request, data, form_mode, logger):
         "epiweeks": get_epiweek(data.get("start_date", ""), data.get("end_date", "")) if data.get("start_date") and data.get("end_date") else [],  # fmt: skip
         "api_key_used": bool(data.get("apiKey")),
         "api_key": data.get("apiKey", "") if data.get("apiKey") else "",
-        "user_ip": get_client_ip(request),
+        "user_ip": get_real_ip_addr(request),
         "user_ga_id": data.get("clientId", "") if data.get("clientId") else "",
     }
-    logger.info(log_data)
+    form_data_logger.info("form_data", **log_data)

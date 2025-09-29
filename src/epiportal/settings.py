@@ -342,3 +342,38 @@ GRAPH_MODELS: dict[str, Any] = {
 # django docs
 # https://django-docs.readthedocs.io/en/latest/
 DOCS_ROOT = os.path.join(BASE_DIR, 'docs', 'build', 'html')
+
+
+"""
+REVERSE_PROXY_DEPTH is an integer value that indicates how many "chained" and trusted reverse proxies (like nginx) this
+ server instance is running behind.  "chained" refers to proxies forwarding to other proxies, and then ultimately
+ forwarding to the app server itself.  each of these proxies appends the remote address of the request to the
+ "X-Forwarded-For" header.  in many situations, the most externally facing proxy (the first in the chain, the one that
+ faces the "open internet") can and should be set to write its own "X-Forwarded-For" header, ignoring and replacing
+ (or creating anew, if it didnt exist) such a header from the client request -- thus preserving the chain of trusted
+ proxies under our control.
+
+however, in our typical production environment, the most externally facing "proxy" is the AWS application load balancer,
+ which seemingly cannot be configured to provide this trust boundary without losing the referring client address
+ (see: https://docs.aws.amazon.com/elasticloadbalancing/latest/application/x-forwarded-headers.html ).  accordingly, in
+ our current typical production environment, REVERSE_PROXY_DEPTH should be set to "2": one for the AWS application load
+ balancer, and one for our own nginx/haproxy instance.  thus "2" is our default value.
+
+it is important that REVERSE_PROXY_DEPTH is set accurately for two reasons...
+
+setting it too high (or to -1) will respect more of the entries in the "X-Forwarded-For" header than are appropriate.
+ this can allow remote addresses to be "spoofed" when a client fakes this header, carrying security/identity
+ implications.  in dev and testing, it is not particularly dangerous for this variable to be set to -1 (special case
+ for an "infinite" depth, where any and all proxy hops will be trusted).
+
+setting it too low can hinder logging accuracy -- that can cause an intermediate proxy IP address to be used as the
+ "real" client IP address, which could cause requests to be rate-limited inappropriately.
+
+setting REVERSE_PROXY_DEPTH to "0" essentially indicates there are no proxies between this server and the outside
+ world.  in this case, the "X-Forwarded-For" header is ignored.
+"""
+REVERSE_PROXY_DEPTH = int(os.environ.get("PROXY_DEPTH", 4))
+# TODO: ^ this value should be "4" for the prod CC API server processes, and is currently unclear
+#       for prod AWS API server processes (but should be the same or lower)...  when thats properly
+#       determined, set the default to the minimum of the two environments and special case the
+#       other in conf file(s).
