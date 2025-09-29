@@ -33,7 +33,12 @@ var table = new DataTable("#indicatorSetsTable", {
         smart: true,
         highlight: true,
     },
-    sDom: 'ltipr'
+    sDom: 'ltipr',
+    rowCallback: function(row, data, index) {
+        if (index % 2 === 0) {
+            $(row).addClass('odd-row');
+        }
+    }
 });
 
 // new DataTable.Buttons(table, {
@@ -78,7 +83,8 @@ function format(indicatorSetId, relatedIndicators, indicatorSetDescription) {
             ).length;
             var checkboxTitle = "";
             checked = checked ? "checked" : "";
-            disabled = indicator.endpoint !== "covidcast" && indicator.endpoint !== "fluview" ? "disabled" : "";
+            const enabledEndpoints = ["covidcast", "fluview", "nidss_flu", "nidss_dengue", "flusurv"];
+            disabled = enabledEndpoints.includes(indicator.endpoint) ? "" : "disabled";
             sourceType = indicator.source_type;
             var restricted = indicator.restricted != "No";
             if (disabled === "disabled") {

@@ -190,7 +190,7 @@ class IndicatorSet(models.Model):
         max_length=255,
         choices=SOURCE_TYPES,
         default="covidcast",
-        help_text="Type of source for the indicator",
+        help_text="Type of source for the indicator set",
         blank=True,
         null=True,
     )
@@ -211,10 +211,6 @@ class IndicatorSet(models.Model):
 
     def __str__(self):
         return self.name
-
-    @property
-    def get_geographic_levels(self):
-        return [geo.display_name for geo in self.geographic_levels.all()]
 
 
 class NonDelphiIndicatorSet(IndicatorSet):
