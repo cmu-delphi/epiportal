@@ -41,6 +41,8 @@ sqlalchemy = "*"
 types-requests = "*"
 tzdata = "*"
 epiweeks = "*"
+delphi-utils = "*"
+numpy = "1.26.4"
 
 [dev-packages]
 flake8 = "*"

@@ -1,0 +1,29 @@
+{% extends "admin/change_list.html" %}
+
+{% block object-tools-items %}
+    {{ block.super }}
+    <li>
+        {% if opts.model_name == "indicator" %}
+            <a class="button" href="{% url 'admin:import_indicators' %}">
+                Import data from spreadsheet
+            </a>
+            <a class="button" href="{% url 'admin:download_indicator' %}">
+                Download source file
+            </a>
+        {% elif opts.model_name == "otherendpointindicator" %}
+            <a class="button" href="{% url 'admin:import_otherendpoint_indicators' %}">
+                Import data from spreadsheet
+            </a>
+            <a class="button" href="{% url 'admin:download_other_endpoint_indicator' %}">
+                Download source file
+            </a>
+        {% elif opts.model_name == "nondelphiindicator" %}
+            <a class="button" href="{% url 'admin:import_nondelphi_indicators' %}">
+                Import data from spreadsheet
+            </a>
+            <a class="button" href="{% url 'admin:download_nondelphi_indicator' %}">
+                Download source file
+            </a>
+        {% endif %}
+    </li>
+{% endblock object-tools-items %}

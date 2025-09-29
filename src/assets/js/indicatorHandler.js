@@ -7,9 +7,33 @@ function dataLayerPush(payload) {
     }
 }
 
+
+function getGACookie() {
+    // Get all cookies as a string
+    const cookies = document.cookie.split(';');
+    
+    // Find the _ga cookie
+    const gaCookie = cookies.find(cookie => cookie.trim().startsWith('_ga='));
+    
+    if (gaCookie) {
+        // Extract the full _ga cookie value
+        const gaValue = gaCookie.split('=')[1];
+        
+        // Extract the Client ID (remove the GA1.X prefix)
+        const clientId = gaValue.split('.').slice(2).join('.');
+        
+        return clientId;
+    }
+    
+    return null; // Return null if _ga cookie is not found
+}
+
+const clientId = getGACookie();
+
 class IndicatorHandler {
     constructor() {
         this.indicators = {};
+        this.nonCovidcastIndicatorSets = [];
     }
 
     fluviewIndicatorsMapping = {
@@ -17,32 +41,32 @@ class IndicatorHandler {
         ili: "%ILI",
     };
 
-    fluSurvRegions = [
-        { value: "network_all", label: "Entire Network" },
-        { value: "network_eip", label: "EIP Netowrk" },
-        { value: "network_ihsp", label: "IHSP Network" },
-        { value: "CA", label: "CA" },
-        { value: "CO", label: "CO" },
-        { value: "CT", label: "CT" },
-        { value: "GA", label: "GA" },
-        { value: "IA", label: "IA" },
-        { value: "ID", label: "ID" },
-        { value: "MD", label: "MD" },
-        { value: "MI", label: "MI" },
-        { value: "MN", label: "MN" },
-        { value: "NM", label: "NM" },
-        { value: "NY_albany", label: "NY (Albany)" },
-        { value: "NY_rochester", label: "NY (Rochester)" },
-        { value: "OH", label: "OH" },
-        { value: "OK", label: "OK" },
-        { value: "OR", label: "OR" },
-        { value: "RI", label: "RI" },
-        { value: "SD", label: "SD" },
-        { value: "TN", label: "TN" },
-        { value: "UT", label: "UT" },
+    flusurvLocations = [
+        { id: "network_all", text: "Entire Network" },
+        { id: "network_eip", text: "EIP Netowrk" },
+        { id: "network_ihsp", text: "IHSP Network" },
+        { id: "CA", text: "CA" },
+        { id: "CO", text: "CO" },
+        { id: "CT", text: "CT" },
+        { id: "GA", text: "GA" },
+        { id: "IA", text: "IA" },
+        { id: "ID", text: "ID" },
+        { id: "MD", text: "MD" },
+        { id: "MI", text: "MI" },
+        { id: "MN", text: "MN" },
+        { id: "NM", text: "NM" },
+        { id: "NY_albany", text: "NY (Albany)" },
+        { id: "NY_rochester", text: "NY (Rochester)" },
+        { id: "OH", text: "OH" },
+        { id: "OK", text: "OK" },
+        { id: "OR", text: "OR" },
+        { id: "RI", text: "RI" },
+        { id: "SD", text: "SD" },
+        { id: "TN", text: "TN" },
+        { id: "UT", text: "UT" },
     ];
 
-    fluviewRegions = [
+    fluviewLocations = [
         { id: "nat", text: "U.S. National" },
         { id: "hhs1", text: "HHS Region 1" },
         { id: "hhs2", text: "HHS Region 2" },
@@ -125,6 +149,48 @@ class IndicatorHandler {
         { id: "jfk", text: "New York City" },
     ];
 
+    nidssFluLocations = [
+        { id: 'nationwide', text: 'Taiwan National' },
+        { id: 'central', text: 'Central' },
+        { id: 'eastern', text: 'Eastern' },
+        { id: 'kaoping', text: 'Kaoping' },
+        { id: 'northern', text: 'Northern' },
+        { id: 'southern', text: 'Southern' },
+        { id: 'taipei', text: 'Taipei' },
+    ];
+
+    nidssDengueLocations = [
+        { id: 'nationwide', text: 'Taiwan National' },
+        { id: 'central', text: 'Central' },
+        { id: 'eastern', text: 'Eastern' },
+        { id: 'kaoping', text: 'Kaoping' },
+        { id: 'northern', text: 'Northern' },
+        { id: 'southern', text: 'Southern' },
+        { id: 'taipei', text: 'Taipei' },
+        { id: 'changhua_county', text: 'Changhua County' },
+        { id: 'chiayi_city', text: 'Chiayi City' },
+        { id: 'chiayi_county', text: 'Chiayi County' },
+        { id: 'hsinchu_city', text: 'Hsinchu City' },
+        { id: 'hsinchu_county', text: 'Hsinchu County' },
+        { id: 'hualien_county', text: 'Hualien County' },
+        { id: 'kaohsiung_city', text: 'Kaohsiung City' },
+        { id: 'keelung_city', text: 'Keelung City' },
+        { id: 'kinmen_county', text: 'Kinmen County' },
+        { id: 'lienchiang_county', text: 'Lienchiang County' },
+        { id: 'miaoli_county', text: 'Miaoli County' },
+        { id: 'nantou_county', text: 'Nantou County' },
+        { id: 'new_taipei_city', text: 'New taipei City' },
+        { id: 'penghu_county', text: 'Penghu County' },
+        { id: 'pingtung_county', text: 'Pingtung County' },
+        { id: 'taichung_city', text: 'Taichung City' },
+        { id: 'tainan_city', text: 'Tainan City' },
+        { id: 'taipei_city', text: 'Taipei City' },
+        { id: 'taitung_county', text: 'Taitung County' },
+        { id: 'taoyuan_city', text: 'Taoyuan City' },
+        { id: 'yilan_county', text: 'Yilan County' },
+        { id: 'yunlin_county', text: 'Yunlin County' },
+    ];
+
     checkForCovidcastIndicators() {
         return this.indicators.some((indicator) => {
             return indicator["_endpoint"] === "covidcast";
@@ -149,6 +215,36 @@ class IndicatorHandler {
             }
         });
         return fluviewIndicators;
+    }
+
+    getNIDSSFluIndicators() {
+        var nidssFluIndicators = [];
+        this.indicators.forEach((indicator) => {
+            if (indicator["_endpoint"] === "nidss_flu") {
+                nidssFluIndicators.push(indicator);
+            }
+        });
+        return nidssFluIndicators;
+    }
+
+    getNIDSSDengueIndicators() {
+        var nidssDengueIndicators = [];
+        this.indicators.forEach((indicator) => {
+            if (indicator["_endpoint"] === "nidss_dengue") {
+                nidssDengueIndicators.push(indicator);
+            }
+        });
+        return nidssDengueIndicators;
+    }
+
+    getFlusurvIndicators() {
+        var flusurvIndicators = [];
+        this.indicators.forEach((indicator) => {
+            if (indicator["_endpoint"] === "flusurv") {
+                flusurvIndicators.push(indicator);
+            }
+        });
+        return flusurvIndicators;
     }
 
     getFromToDate(startDate, endDate, timeType) {
@@ -180,21 +276,84 @@ class IndicatorHandler {
         return request;
     }
 
-    showFluviewRegions() {
-        var fluviewRegionSelect = `
-        <div class="row margin-top-1rem">
+    showfluviewLocations() {
+        var fluviewLocationselect = `
+        <div class="row margin-top-1rem" id="fluviewDiv">
             <div class="col-2">
-                <label for="fluviewRegions" class="col-form-label">ILINet Location(s):</label>
+                <label for="fluviewLocations" class="col-form-label">ILINet Location(s):</label>
             </div>
             <div class="col-10">
-                <select id="fluviewRegions" name="fluviewRegions" class="form-select" multiple="multiple"></select>
+                <select id="fluviewLocations" name="fluviewLocations" class="form-select" multiple="multiple"></select>
             </div>
         </div>`;
         if ($("#otherEndpointLocations").length) {
-            $("#otherEndpointLocations").append(fluviewRegionSelect);
-            $("#fluviewRegions").select2({
+            $("#otherEndpointLocations").append(fluviewLocationselect);
+            $("#fluviewLocations").select2({
                 placeholder: "Select ILINet Location(s)",
-                data: this.fluviewRegions,
+                data: this.fluviewLocations,
+                allowClear: true,
+                width: "100%",
+            });
+        }
+    }
+
+    showNIDSSFluLocations() {
+        var nidssFluLocationselect = `
+        <div class="row margin-top-1rem" id="nidssFluDiv">
+            <div class="col-2">
+                <label for="nidssFluLocations" class="col-form-label">Taiwanese ILI Location(s):</label>
+            </div>
+            <div class="col-10">
+                <select id="nidssFluLocations" name="nidssFluLocations" class="form-select" multiple="multiple"></select>
+            </div>
+        </div>`;
+        if ($("#otherEndpointLocations").length) {
+            $("#otherEndpointLocations").append(nidssFluLocationselect);
+            $("#nidssFluLocations").select2({
+                placeholder: "Select Taiwanese ILI Location(s)",
+                data: this.nidssFluLocations,
+                allowClear: true,
+                width: "100%",
+            });
+        }
+    }
+
+    showNIDSSDengueLocations() {
+        var nidssDengueLocationselect = `
+        <div class="row margin-top-1rem" id="nidssDengueDiv">
+            <div class="col-2">
+                <label for="nidssDengueLocations" class="col-form-label">Taiwanese Dengue Cases Location(s):</label>
+            </div>
+            <div class="col-10">
+                <select id="nidssDengueLocations" name="nidssDengueLocations" class="form-select" multiple="multiple"></select>
+            </div>
+        </div>`;
+        if ($("#otherEndpointLocations").length) {
+            $("#otherEndpointLocations").append(nidssDengueLocationselect);
+            $("#nidssDengueLocations").select2({
+                placeholder: "Select Taiwanese Dengue Cases Location(s)",
+                data: this.nidssDengueLocations,
+                allowClear: true,
+                width: "100%",
+            });
+        }
+    }
+
+    showFlusurvLocations() {
+        var flusurvLocationselect = `
+        <div class="row margin-top-1rem" id="flusurvDiv">
+            <div class="col-2">
+                <label for="flusurvLocations" class="col-form-label">FluSurv Location(s):</label>
+            </div>
+            <div class="col-10">
+                <select id="flusurvLocations" name="flusurvLocations" class="form-select" multiple="multiple"></select>
+            </div>
+        </div>`;
+        if ($("#otherEndpointLocations").length) {
+            $("#otherEndpointLocations").append(flusurvLocationselect);
+            $("#flusurvLocations").select2({
+                placeholder: "Select FluSurv Location(s)",
+                data: this.flusurvLocations,
                 allowClear: true,
                 width: "100%",
             });
@@ -202,14 +361,23 @@ class IndicatorHandler {
     }
 
     plotData() {
-        const covidCastGeographicValues =
-            $("#geographic_value").select2("data");
-        const fluviewRegions = $("#fluviewRegions").select2("data");
+        const covidCastGeographicValues = Object.groupBy(
+            $("#geographic_value").select2("data"),
+            ({ geoType }) => [geoType]
+        );
+        const fluviewLocations = $("#fluviewLocations").select2("data");
+        const nidssFluLocations = $("#nidssFluLocations").select2("data");
+        const nidssDengueLocations = $("#nidssDengueLocations").select2("data");
+        const flusurvLocations = $("#flusurvLocations").select2("data");
         const submitData = {
             indicators: this.indicators,
             covidCastGeographicValues: covidCastGeographicValues,
-            fluviewRegions: fluviewRegions,
+            fluviewLocations: fluviewLocations,
+            nidssFluLocations: nidssFluLocations,
+            nidssDengueLocations: nidssDengueLocations,
+            flusurvLocations: flusurvLocations,
             apiKey: document.getElementById("apiKey").value,
+            clientId: clientId,
         };
         const csrftoken = Cookies.get("csrftoken");
         $.ajax({
@@ -224,11 +392,14 @@ class IndicatorHandler {
             const payload = {
                 event: "submitSelectedIndicators",
                 formMode: "epivis",
-                indicators: JSON.stringify(submitData["indicators"]),
                 covidcastGeoValues: JSON.stringify(submitData["covidCastGeographicValues"]),
-                fluviewGeoValues: JSON.stringify(submitData["fluviewRegions"]),
+                fluviewGeoValues: JSON.stringify(submitData["fluviewLocations"]),
+                nidssFluLocations: JSON.stringify(submitData["nidssFluLocations"]),
+                nidssDengueLocations: JSON.stringify(submitData["nidssDengueLocations"]),
+                flusurvLocations: JSON.stringify(submitData["flusurvLocations"]),
                 epivisUrl: data["epivis_url"],
                 apiKey: submitData["apiKey"] ? submitData["apiKey"] : "Not provided",
+                clientId: clientId ? clientId : "Not available",
             }
             dataLayerPush(payload);
             window.open(data["epivis_url"], '_blank').focus();
@@ -236,7 +407,10 @@ class IndicatorHandler {
     }
 
     exportData() {
-        var fluviewRegions = $("#fluviewRegions").select2("data");
+        const fluviewLocations = $("#fluviewLocations").select2("data");
+        const nidssFluLocations = $("#nidssFluLocations").select2("data");
+        const nidssDengueLocations = $("#nidssDengueLocations").select2("data");
+        const flusurvLocations = $("#flusurvLocations").select2("data");
 
         var covidCastGeographicValues = Object.groupBy(
             $("#geographic_value").select2("data"),
@@ -247,8 +421,12 @@ class IndicatorHandler {
             end_date: document.getElementById("end_date").value,
             indicators: this.indicators,
             covidCastGeographicValues: covidCastGeographicValues,
-            fluviewRegions: fluviewRegions,
+            fluviewLocations: fluviewLocations,
+            nidssFluLocations: nidssFluLocations,
+            nidssDengueLocations: nidssDengueLocations,
+            flusurvLocations: flusurvLocations,
             apiKey: document.getElementById("apiKey").value,
+            clientId: clientId,
         }
         const csrftoken = Cookies.get("csrftoken");
         $.ajax({
@@ -265,10 +443,13 @@ class IndicatorHandler {
                 formMode: "export",
                 formStartDate: submitData["start_date"],
                 formEndDate: submitData["end_date"],
-                indicators: JSON.stringify(submitData["indicators"]),
                 covidcastGeoValues: JSON.stringify(submitData["covidCastGeographicValues"]),
-                fluviewGeoValues: JSON.stringify(submitData["fluviewRegions"]),
+                fluviewGeoValues: JSON.stringify(submitData["fluviewLocations"]),
+                nidssFluLocations: JSON.stringify(submitData["nidssFluLocations"]),
+                nidssDengueLocations: JSON.stringify(submitData["nidssDengueLocations"]),
+                flusurvLocations: JSON.stringify(submitData["flusurvLocations"]),
                 apiKey: submitData["apiKey"] ? submitData["apiKey"] : "Not provided",
+                clientId: clientId ? clientId : "Not available",
             }
             dataLayerPush(payload);
             $('#modeSubmitResult').html(data["data_export_block"]);
@@ -277,9 +458,12 @@ class IndicatorHandler {
 
     previewData() {
         $('#loader').show();
-        var fluviewRegions = $("#fluviewRegions").select2("data");
+        const fluviewLocations = $("#fluviewLocations").select2("data");
+        const nidssFluLocations = $("#nidssFluLocations").select2("data");
+        const nidssDengueLocations = $("#nidssDengueLocations").select2("data");
+        const flusurvLocations = $("#flusurvLocations").select2("data");
 
-        var covidCastGeographicValues = Object.groupBy(
+        const covidCastGeographicValues = Object.groupBy(
             $("#geographic_value").select2("data"),
             ({ geoType }) => [geoType]
         );
@@ -288,8 +472,12 @@ class IndicatorHandler {
             end_date: document.getElementById("end_date").value,
             indicators: this.indicators,
             covidCastGeographicValues: covidCastGeographicValues,
-            fluviewRegions: fluviewRegions,
+            fluviewLocations: fluviewLocations,
+            nidssFluLocations: nidssFluLocations,
+            nidssDengueLocations: nidssDengueLocations,
+            flusurvLocations: flusurvLocations,
             apiKey: document.getElementById("apiKey").value,
+            clientId: clientId,
         }
         const csrftoken = Cookies.get("csrftoken");
         $.ajax({
@@ -305,10 +493,13 @@ class IndicatorHandler {
                 formMode: "preview",
                 formStartDate: submitData["start_date"],
                 formEndDate: submitData["end_date"],
-                indicators: JSON.stringify(submitData["indicators"]),
                 covidcastGeoValues: JSON.stringify(submitData["covidCastGeographicValues"]),
-                fluviewGeoValues: JSON.stringify(submitData["fluviewRegions"]),
+                fluviewGeoValues: JSON.stringify(submitData["fluviewLocations"]),
+                nidssFluLocations: JSON.stringify(submitData["nidssFluLocations"]),
+                nidssDengueLocations: JSON.stringify(submitData["nidssDengueLocations"]),
+                flusurvLocations: JSON.stringify(submitData["flusurvLocations"]),
                 apiKey: submitData["apiKey"] ? submitData["apiKey"] : "Not provided",
+                clientId: clientId ? clientId : "Not available",
             }
             dataLayerPush(payload);
             $('#loader').hide();
@@ -317,10 +508,12 @@ class IndicatorHandler {
     }
 
     createQueryCode() {
+        const fluviewLocations = $("#fluviewLocations").select2("data");
+        const nidssFluLocations = $("#nidssFluLocations").select2("data");
+        const nidssDengueLocations = $("#nidssDengueLocations").select2("data");
+        const flusurvLocations = $("#flusurvLocations").select2("data");
 
-        var fluviewRegions = $("#fluviewRegions").select2("data");
-
-        var covidCastGeographicValues = Object.groupBy(
+        const covidCastGeographicValues = Object.groupBy(
             $("#geographic_value").select2("data"),
             ({ geoType }) => [geoType]
         );
@@ -330,8 +523,12 @@ class IndicatorHandler {
             end_date: document.getElementById("end_date").value,
             indicators: this.indicators,
             covidCastGeographicValues: covidCastGeographicValues,
-            fluviewRegions: fluviewRegions,
+            fluviewLocations: fluviewLocations,
+            nidssFluLocations: nidssFluLocations,
+            nidssDengueLocations: nidssDengueLocations,
+            flusurvLocations: flusurvLocations,
             apiKey: document.getElementById("apiKey").value,
+            clientId: clientId,
         }
         const csrftoken = Cookies.get("csrftoken");
         var createQueryCodePython = `<h4>PYTHON PACKAGE</h4>`
@@ -355,15 +552,18 @@ class IndicatorHandler {
                 formMode: "queryCode",
                 formStartDate: submitData["start_date"],
                 formEndDate: submitData["end_date"],
-                indicators: JSON.stringify(submitData["indicators"]),
                 covidcastGeoValues: JSON.stringify(submitData["covidCastGeographicValues"]),
-                fluviewGeoValues: JSON.stringify(submitData["fluviewRegions"]),
+                fluviewGeoValues: JSON.stringify(submitData["fluviewLocations"]),
+                nidssFluLocations: JSON.stringify(submitData["nidssFluLocations"]),
+                nidssDengueLocations: JSON.stringify(submitData["nidssDengueLocations"]),
+                flusurvLocations: JSON.stringify(submitData["flusurvLocations"]),
                 apiKey: submitData["apiKey"] ? submitData["apiKey"] : "Not provided",
+                clientId: clientId ? clientId : "Not available",
             }
             dataLayerPush(payload);
             createQueryCodePython += data["python_code_blocks"].join("<br>");
             createQueryCodeR += data["r_code_blocks"].join("<br>");
-            $('#modeSubmitResult').html(createQueryCodePython+"<br>"+createQueryCodeR);
+            $('#modeSubmitResult').html(createQueryCodePython + "<br>" + createQueryCodeR);
         });
 
     }

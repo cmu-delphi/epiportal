@@ -1,21 +1,15 @@
+from django.conf import settings
 from django.contrib import admin
+from django.urls import path
 from import_export.admin import ImportExportModelAdmin
 
-from indicators.models import (
-    Category,
-    FormatType,
-    Indicator,
-    IndicatorGeography,
-    IndicatorType,
-    OtherEndpointIndicator,
-    NonDelphiIndicator
-)
-from indicators.resources import (
-    IndicatorResource,
-    IndicatorBaseResource,
-    OtherEndpointIndicatorResource,
-    NonDelphiIndicatorResource,
-)
+from base.utils import download_source_file, import_data
+from indicators.models import (Category, FormatType, Indicator,
+                               IndicatorGeography, IndicatorType,
+                               NonDelphiIndicator, OtherEndpointIndicator)
+from indicators.resources import (IndicatorBaseResource, IndicatorResource,
+                                  NonDelphiIndicatorResource,
+                                  OtherEndpointIndicatorResource)
 
 
 @admin.register(IndicatorType)
@@ -72,6 +66,39 @@ class IndicatorAdmin(ImportExportModelAdmin):
 
     resource_classes = [IndicatorResource, IndicatorBaseResource]
 
+    change_list_template = "admin/indicators/indicator_changelist.html"
+
+    def get_queryset(self, request):
+        # Exclude proxy model objects
+        qs = super().get_queryset(request)
+        return qs.filter(source_type="covidcast")
+
+    def get_urls(self):
+        urls = super().get_urls()
+        custom_urls = [
+            path(
+                "import-from-spreadsheet",
+                self.admin_site.admin_view(self.import_from_spreadsheet),
+                name="import_indicators",
+            ),
+            path(
+                "download-source-file",
+                self.admin_site.admin_view(self.download_indicator),
+                name="download_indicator",
+            ),
+        ]
+        return custom_urls + urls
+
+    def import_from_spreadsheet(self, request):
+        return import_data(
+            self, request, IndicatorResource, settings.SPREADSHEET_URLS["indicators"]
+        )
+
+    def download_indicator(self, request):
+        return download_source_file(
+            settings.SPREADSHEET_URLS["indicators"], "Indicators.csv"
+        )
+
 
 @admin.register(OtherEndpointIndicator)
 class OtherEndpointIndicatorAdmin(ImportExportModelAdmin):
@@ -93,6 +120,45 @@ class OtherEndpointIndicatorAdmin(ImportExportModelAdmin):
 
     resource_classes = [OtherEndpointIndicatorResource]
 
+    change_list_template = "admin/indicators/indicator_changelist.html"
+
+    def get_queryset(self, request):
+        # Exclude proxy model objects
+        qs = super().get_queryset(request)
+        return qs.filter(source_type="other_endpoint")
+
+    def get_urls(self):
+        urls = super().get_urls()
+        custom_urls = [
+            path(
+                "import-from-spreadsheet",
+                self.admin_site.admin_view(self.import_from_spreadsheet),
+                name="import_otherendpoint_indicators",
+            ),
+            path(
+                "download-source-file",
+                self.admin_site.admin_view(
+                    self.download_other_endpoint_indicator
+                ),
+                name="download_other_endpoint_indicator",
+            ),
+        ]
+        return custom_urls + urls
+
+    def import_from_spreadsheet(self, request):
+        return import_data(
+            self,
+            request,
+            OtherEndpointIndicatorResource,
+            settings.SPREADSHEET_URLS["other_endpoint_indicators"],
+        )
+
+    def download_other_endpoint_indicator(self, request):
+        return download_source_file(
+            settings.SPREADSHEET_URLS["other_endpoint_indicators"],
+            "Other_Endpoint_Indicators.csv",
+        )
+
 
 @admin.register(NonDelphiIndicator)
 class NonDelphiIndicatorAdmin(ImportExportModelAdmin):
@@ -110,3 +176,37 @@ class NonDelphiIndicatorAdmin(ImportExportModelAdmin):
     list_display_links = ("name",)
 
     resource_classes = [NonDelphiIndicatorResource]
+
+    change_list_template = "admin/indicators/indicator_changelist.html"
+
+    def get_queryset(self, request):
+        # Exclude proxy model objects
+        qs = super().get_queryset(request)
+        return qs.filter(source_type="non_delphi")
+
+    def get_urls(self):
+        urls = super().get_urls()
+        custom_urls = [
+            path(
+                "import-from-spreadsheet",
+                self.admin_site.admin_view(self.import_from_spreadsheet),
+                name="import_nondelphi_indicators",
+            ),
+            path(
+                "download-source-file",
+                self.admin_site.admin_view(self.download_nondelphi_indicator),
+                name="download_nondelphi_indicator",
+            ),
+        ]
+        return custom_urls + urls
+
+    def import_from_spreadsheet(self, request):
+        spreadsheet_url = "https://docs.google.com/spreadsheets/d/1zb7ItJzY5oq1n-2xtvnPBiJu2L3AqmCKubrLkKJZVHs/export?format=csv&gid=493612863"
+
+        return import_data(self, request, NonDelphiIndicatorResource, spreadsheet_url)
+
+    def download_nondelphi_indicator(self, request):
+        return download_source_file(
+            settings.SPREADSHEET_URLS["non_delphi_indicators"],
+            "Non_Delphi_Indicators.csv",
+        )
