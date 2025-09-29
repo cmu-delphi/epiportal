@@ -688,7 +688,6 @@ def log_form_stats(request, data, form_mode):
         "user_ip": get_real_ip_addr(request),
         "user_ga_id": data.get("clientId", "") if data.get("clientId") else "",
     }
-    form_stats_logger.info("form_stats", clientId=data.get("clientId", ""))
 
     form_stats_logger.info("form_stats", **log_data)
 
