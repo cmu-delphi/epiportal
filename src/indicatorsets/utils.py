@@ -745,7 +745,7 @@ def log_form_data(request, data, form_mode):
         for geo in data.get("flusurvLocations", [])
     ]
     log_data = {
-        "mode": form_mode,
+        "form_mode": form_mode,
         "indicators": [
             {"endpoint": endpoint, "indicators": group}
             for endpoint, group in indicators.items()
