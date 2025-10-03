@@ -700,6 +700,7 @@ def log_form_data(request, data, form_mode):
             "indicator": ind.get("indicator"),
             "data_source": ind.get("data_source"),
             "time_type": ind.get("time_type"),
+            "indicator_set": ind.get("indicator_set")
 
         } for ind in indicators
     ]  # fmt: skip
