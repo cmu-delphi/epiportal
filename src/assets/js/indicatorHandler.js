@@ -276,6 +276,71 @@ class IndicatorHandler {
         return request;
     }
 
+    prepareDataLayerPayload(form_mode) {
+        var payload = {
+            event: "submitSelectedIndicators",
+            formMode: form_mode,
+            numIndicators: this.indicators.length,
+            numCovidcastIndicators: this.getCovidcastIndicators().length,
+            numFluviewIndicators: this.getFluviewIndicators().length,
+            numNIDSSFluIndicators: this.getNIDSSFluIndicators().length,
+            numNIDSSDengueIndicators: this.getNIDSSDengueIndicators().length,
+            numFlusurvIndicators: this.getFlusurvIndicators().length,
+            formStartDate: document.getElementById("start_date").value,
+            formEndDate: document.getElementById("end_date").value,
+            apiKey: document.getElementById("apiKey").value ? document.getElementById("apiKey").value : "Not provided",
+            clientId: clientId ? clientId : "Not available",
+        };
+        var covidcastGeoValues = $("#geographic_value").select2("data")
+        if (covidcastGeoValues !== undefined && covidcastGeoValues !== null) {
+            covidcastGeoValues = Object.values(
+                covidcastGeoValues
+                    .flat()
+                    .map(({ id }) => id
+            ));
+            payload.covidcastGeoValues = covidcastGeoValues;
+        }
+        var fluviewGeoValues = $("#fluviewLocations").select2("data")
+        if (fluviewGeoValues !== undefined && fluviewGeoValues !== null) {
+            fluviewGeoValues = Object.values(
+                fluviewGeoValues
+                    .flat()
+                    .map(({ id }) => id
+            ));
+            payload.fluviewGeoValues = fluviewGeoValues;
+        }
+        var nidssFluGeoValues = $("#nidssFluLocations").select2("data")
+        if (nidssFluGeoValues !== undefined && nidssFluGeoValues !== null) {
+            nidssFluGeoValues = Object.values(
+                nidssFluGeoValues
+                    .flat()
+                    .map(({ id }) => id
+            ));
+            payload.nidssFluGeoValues = nidssFluGeoValues;
+        }
+        var nidssDengueGeoValues = $("#nidssDengueLocations").select2("data")
+        if (nidssDengueGeoValues !== undefined && nidssDengueGeoValues !== null) {
+            nidssDengueGeoValues = Object.values(
+                nidssDengueGeoValues
+                    .flat()
+                    .map(({ id }) => id
+            ));
+            payload.nidssDengueGeoValues = nidssDengueGeoValues;
+        }
+        var flusurvGeoValues = $("#flusurvLocations").select2("data")
+        if (flusurvGeoValues !== undefined && flusurvGeoValues !== null) {
+            flusurvGeoValues = Object.values(
+                flusurvGeoValues
+                    .flat()
+                    .map(({ id }) => id
+            ));
+            payload.flusurvGeoValues = flusurvGeoValues;
+        }
+
+        return payload;
+
+    }
+
     showfluviewLocations() {
         var fluviewLocationselect = `
         <div class="row margin-top-1rem" id="fluviewDiv">
@@ -376,8 +441,8 @@ class IndicatorHandler {
             nidssFluLocations: nidssFluLocations,
             nidssDengueLocations: nidssDengueLocations,
             flusurvLocations: flusurvLocations,
-            apiKey: document.getElementById("apiKey").value,
-            clientId: clientId,
+            apiKey: document.getElementById("apiKey").value ? document.getElementById("apiKey").value : "Not provided",
+            clientId: clientId ? clientId : "Not available",
         };
         const csrftoken = Cookies.get("csrftoken");
         $.ajax({
@@ -388,19 +453,9 @@ class IndicatorHandler {
             contentType: "application/json",
             headers: { "X-CSRFToken": csrftoken },
             data: JSON.stringify(submitData),
-        }).done(function (data) {
-            const payload = {
-                event: "submitSelectedIndicators",
-                formMode: "epivis",
-                covidcastGeoValues: JSON.stringify(submitData["covidCastGeographicValues"]),
-                fluviewGeoValues: JSON.stringify(submitData["fluviewLocations"]),
-                nidssFluLocations: JSON.stringify(submitData["nidssFluLocations"]),
-                nidssDengueLocations: JSON.stringify(submitData["nidssDengueLocations"]),
-                flusurvLocations: JSON.stringify(submitData["flusurvLocations"]),
-                epivisUrl: data["epivis_url"],
-                apiKey: submitData["apiKey"] ? submitData["apiKey"] : "Not provided",
-                clientId: clientId ? clientId : "Not available",
-            }
+        }).done((data) => {
+            const payload = this.prepareDataLayerPayload("epivis");
+            console.log(payload);
             dataLayerPush(payload);
             window.open(data["epivis_url"], '_blank').focus();
         });
@@ -425,8 +480,8 @@ class IndicatorHandler {
             nidssFluLocations: nidssFluLocations,
             nidssDengueLocations: nidssDengueLocations,
             flusurvLocations: flusurvLocations,
-            apiKey: document.getElementById("apiKey").value,
-            clientId: clientId,
+            apiKey: document.getElementById("apiKey").value ? document.getElementById("apiKey").value : "Not provided",
+            clientId: clientId ? clientId : "Not available",
         }
         const csrftoken = Cookies.get("csrftoken");
         $.ajax({
@@ -437,20 +492,8 @@ class IndicatorHandler {
             contentType: "application/json",
             headers: { "X-CSRFToken": csrftoken },
             data: JSON.stringify(submitData),
-        }).done(function (data) {
-            const payload = {
-                event: "submitSelectedIndicators",
-                formMode: "export",
-                formStartDate: submitData["start_date"],
-                formEndDate: submitData["end_date"],
-                covidcastGeoValues: JSON.stringify(submitData["covidCastGeographicValues"]),
-                fluviewGeoValues: JSON.stringify(submitData["fluviewLocations"]),
-                nidssFluLocations: JSON.stringify(submitData["nidssFluLocations"]),
-                nidssDengueLocations: JSON.stringify(submitData["nidssDengueLocations"]),
-                flusurvLocations: JSON.stringify(submitData["flusurvLocations"]),
-                apiKey: submitData["apiKey"] ? submitData["apiKey"] : "Not provided",
-                clientId: clientId ? clientId : "Not available",
-            }
+        }).done((data) => {
+            const payload = this.prepareDataLayerPayload("export");
             dataLayerPush(payload);
             $('#modeSubmitResult').html(data["data_export_block"]);
         });
@@ -476,8 +519,8 @@ class IndicatorHandler {
             nidssFluLocations: nidssFluLocations,
             nidssDengueLocations: nidssDengueLocations,
             flusurvLocations: flusurvLocations,
-            apiKey: document.getElementById("apiKey").value,
-            clientId: clientId,
+            apiKey: document.getElementById("apiKey").value ? document.getElementById("apiKey").value : "Not provided",
+            clientId: clientId ? clientId : "Not available",
         }
         const csrftoken = Cookies.get("csrftoken");
         $.ajax({
@@ -487,20 +530,8 @@ class IndicatorHandler {
             contentType: "application/json",
             headers: { "X-CSRFToken": csrftoken },
             data: JSON.stringify(submitData),
-        }).done(function (data) {
-            const payload = {
-                event: "submitSelectedIndicators",
-                formMode: "preview",
-                formStartDate: submitData["start_date"],
-                formEndDate: submitData["end_date"],
-                covidcastGeoValues: JSON.stringify(submitData["covidCastGeographicValues"]),
-                fluviewGeoValues: JSON.stringify(submitData["fluviewLocations"]),
-                nidssFluLocations: JSON.stringify(submitData["nidssFluLocations"]),
-                nidssDengueLocations: JSON.stringify(submitData["nidssDengueLocations"]),
-                flusurvLocations: JSON.stringify(submitData["flusurvLocations"]),
-                apiKey: submitData["apiKey"] ? submitData["apiKey"] : "Not provided",
-                clientId: clientId ? clientId : "Not available",
-            }
+        }).done((data) => {
+            const payload = this.prepareDataLayerPayload("previewData");
             dataLayerPush(payload);
             $('#loader').hide();
             $('#modeSubmitResult').html(JSON.stringify(data, null, 2));
@@ -527,8 +558,8 @@ class IndicatorHandler {
             nidssFluLocations: nidssFluLocations,
             nidssDengueLocations: nidssDengueLocations,
             flusurvLocations: flusurvLocations,
-            apiKey: document.getElementById("apiKey").value,
-            clientId: clientId,
+            apiKey: document.getElementById("apiKey").value ? document.getElementById("apiKey").value : "Not provided",
+            clientId: clientId ? clientId : "Not available",
         }
         const csrftoken = Cookies.get("csrftoken");
         var createQueryCodePython = `<h4>PYTHON PACKAGE</h4>`
@@ -546,20 +577,8 @@ class IndicatorHandler {
             contentType: "application/json",
             headers: { "X-CSRFToken": csrftoken },
             data: JSON.stringify(submitData),
-        }).done(function (data) {
-            const payload = {
-                event: "submitSelectedIndicators",
-                formMode: "queryCode",
-                formStartDate: submitData["start_date"],
-                formEndDate: submitData["end_date"],
-                covidcastGeoValues: JSON.stringify(submitData["covidCastGeographicValues"]),
-                fluviewGeoValues: JSON.stringify(submitData["fluviewLocations"]),
-                nidssFluLocations: JSON.stringify(submitData["nidssFluLocations"]),
-                nidssDengueLocations: JSON.stringify(submitData["nidssDengueLocations"]),
-                flusurvLocations: JSON.stringify(submitData["flusurvLocations"]),
-                apiKey: submitData["apiKey"] ? submitData["apiKey"] : "Not provided",
-                clientId: clientId ? clientId : "Not available",
-            }
+        }).done((data) => {
+            const payload = this.prepareDataLayerPayload("createQueryCode");
             dataLayerPush(payload);
             createQueryCodePython += data["python_code_blocks"].join("<br>");
             createQueryCodeR += data["r_code_blocks"].join("<br>");
