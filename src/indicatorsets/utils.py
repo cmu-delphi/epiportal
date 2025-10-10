@@ -684,9 +684,9 @@ def log_form_stats(request, data, form_mode):
             else []
         ),
         "api_key_used": bool(data.get("api_key")),
-        "api_key": data.get("api_key", "")[:4] + "..." if data.get("api_key") else "",
+        "api_key": data.get("api_key", "Not provided"),
         "user_ip": get_real_ip_addr(request),
-        "user_ga_id": data.get("clientId", "") if data.get("clientId") else "",
+        "user_ga_id": data.get("clientId", "Not available"),
     }
 
     form_stats_logger.info("form_stats", **log_data)
@@ -760,8 +760,8 @@ def log_form_data(request, data, form_mode):
         "end_date": data.get("end_date", ""),
         "epiweeks": get_epiweek(data.get("start_date", ""), data.get("end_date", "")) if data.get("start_date") and data.get("end_date") else [],  # fmt: skip
         "api_key_used": bool(data.get("apiKey")),
-        "api_key": data.get("apiKey", "") if data.get("apiKey") else "",
+        "api_key": data.get("apiKey", "Not provided"),
         "user_ip": get_real_ip_addr(request),
-        "user_ga_id": data.get("clientId", "") if data.get("clientId") else "",
+        "user_ga_id": data.get("clientId", "Not available"),
     }
     form_data_logger.info("form_data", **log_data)
