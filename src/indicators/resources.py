@@ -410,8 +410,29 @@ class IndicatorResource(ModelResource):
             "restrictions",
             "indicator_set",
         ]
-        import_id_fields: list[str] = ["name", "source"]
+        import_id_fields: list[str] = ["name", "indicator_set", "source"]
         skip_unchanged = True
+
+    def get_instance(self, instance_loader, row):
+        name = row.get("Signal")
+        source = row.get("Source Subdivision")
+        indicator_set = row.get("Indicator Set")
+
+        # Try to match by (name, source)
+        if name and source:
+            try:
+                return self._meta.model.objects.get(name=name, source__name=source)
+            except self._meta.model.DoesNotExist:
+                pass
+
+        # Try to match by (name, indicator_set)
+        if name and indicator_set:
+            try:
+                return self._meta.model.objects.get(name=name, indicator_set__name=indicator_set)
+            except self._meta.model.DoesNotExist:
+                pass
+
+        return None
 
     def before_import_row(self, row, **kwargs) -> None:
         """Post-processes each row after importing."""
