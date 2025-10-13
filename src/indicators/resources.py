@@ -44,7 +44,8 @@ def fix_boolean_fields(row) -> None:
     return row
 
 
-def process_pathogen(row) -> None:
+def process_pathogens(row) -> None:
+    pathogen_ids = []
     if row["Pathogen/\nDisease Area"]:
         pathogens = row["Pathogen/\nDisease Area"].split(",")
         for pathogen in pathogens:
@@ -57,6 +58,21 @@ def process_pathogen(row) -> None:
                     "used_in": "indicators",
                 },
             )
+            pathogen_ids.append(pathogen_obj.id)
+    row["Pathogen/\nDisease Area"] = ",".join(str(el) for el in pathogen_ids)
+
+
+def process_indicator_set(row, source_type="covidcast") -> None:
+    if row["Indicator Set"]:
+        indicator_set_name = row["Indicator Set"].strip()
+        indicator_set_obj, _ = IndicatorSet.objects.get_or_create(
+            name=indicator_set_name,
+            defaults={
+                "display_name": indicator_set_name,
+                "source_type": source_type,
+            },
+        )
+        row["Indicator Set"] = indicator_set_obj.id
 
 
 def process_indicator_type(row) -> None:
@@ -246,7 +262,7 @@ class IndicatorBaseResource(ModelResource):
     base = Field(
         attribute="base",
         column_name="base",
-        widget=PermissiveForeignKeyWidget(Indicator, field="id"),
+        widget=PermissiveForeignKeyWidget(Indicator),
     )
     source = Field(
         attribute="source",
@@ -281,7 +297,7 @@ class IndicatorResource(ModelResource):
     pathogens = Field(
         attribute="pathogens",
         column_name="Pathogen/\nDisease Area",
-        widget=ManyToManyWidget(Pathogen, field="name", separator=","),
+        widget=ManyToManyWidget(Pathogen),
     )
     indicator_type = Field(
         attribute="indicator_type",
@@ -364,7 +380,7 @@ class IndicatorResource(ModelResource):
     indicator_set = Field(
         attribute="indicator_set",
         column_name="Indicator Set",
-        widget=PermissiveForeignKeyWidget(IndicatorSet, field="name"),
+        widget=PermissiveForeignKeyWidget(IndicatorSet),
     )
 
     class Meta:
@@ -421,14 +437,16 @@ class IndicatorResource(ModelResource):
         # Try to match by (name, source)
         if name and source:
             try:
-                return self._meta.model.objects.get(name=name, source__name=source)
+                return self._meta.model.objects.get(name=name, source__id=source)
             except self._meta.model.DoesNotExist:
                 pass
 
         # Try to match by (name, indicator_set)
         if name and indicator_set:
             try:
-                return self._meta.model.objects.get(name=name, indicator_set__name=indicator_set)
+                return self._meta.model.objects.get(
+                    name=name, indicator_set__id=indicator_set
+                )
             except self._meta.model.DoesNotExist:
                 pass
 
@@ -437,7 +455,7 @@ class IndicatorResource(ModelResource):
     def before_import_row(self, row, **kwargs) -> None:
         """Post-processes each row after importing."""
         fix_boolean_fields(row)
-        process_pathogen(row)
+        process_pathogens(row)
         process_indicator_type(row)
         process_format_type(row)
         process_category(row)
@@ -445,6 +463,7 @@ class IndicatorResource(ModelResource):
         process_source(row)
         process_severity_pyramid_rungs(row)
         process_available_geographies(row)
+        process_indicator_set(row)
 
     def after_import_row(self, row, row_result, **kwargs):
         process_indicator_geography(row)
@@ -558,7 +577,7 @@ class OtherEndpointIndicatorResource(ModelResource):
     indicator_set = Field(
         attribute="indicator_set",
         column_name="Indicator Set",
-        widget=PermissiveForeignKeyWidget(IndicatorSet, field="name"),
+        widget=PermissiveForeignKeyWidget(IndicatorSet),
     )
 
     class Meta:
@@ -611,13 +630,14 @@ class OtherEndpointIndicatorResource(ModelResource):
         """Post-processes each row after importing."""
         fix_boolean_fields(row)
         process_source(row)
-        process_pathogen(row)
+        process_pathogens(row)
         process_indicator_type(row)
         process_format_type(row)
         process_category(row)
         process_geographic_scope(row)
         process_severity_pyramid_rungs(row)
         process_available_geographies(row)
+        process_indicator_set(row, source_type="other_endpoint")
 
     def skip_row(self, instance, original, row, import_validation_errors=None):
         if not row["Include in indicator app"]:
@@ -640,7 +660,7 @@ class NonDelphiIndicatorResource(resources.ModelResource):
     indicator_set = Field(
         attribute="indicator_set",
         column_name="Indicator Set",
-        widget=PermissiveForeignKeyWidget(NonDelphiIndicatorSet, field="name"),
+        widget=PermissiveForeignKeyWidget(NonDelphiIndicatorSet),
     )
 
     class Meta:
@@ -658,6 +678,7 @@ class NonDelphiIndicatorResource(resources.ModelResource):
     def before_import_row(self, row, **kwargs) -> None:
         """Post-processes each row after importing."""
         fix_boolean_fields(row)
+        process_indicator_set(row, source_type="non_delphi")
 
     def skip_row(self, instance, original, row, import_validation_errors=None):
         if not row["Include in indicator app"]:
