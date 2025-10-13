@@ -22,6 +22,7 @@ def process_geographic_scope(row) -> None:
 
 
 def process_severity_pyramid_rungs(row) -> None:
+    severity_pyramid_rung_ids = []
     if row["Surveillance Categories"]:
         severity_pyramid_rungs = row["Surveillance Categories"].split(",")
         for spr in severity_pyramid_rungs:
@@ -31,9 +32,12 @@ def process_severity_pyramid_rungs(row) -> None:
                 used_in="indicatorsets",
                 defaults={"display_name": spr_name.capitalize()},
             )
+            severity_pyramid_rung_ids.append(severity_pyramid_rung_obj.id)
+    row["Surveillance Categories"] = ",".join(map(str, severity_pyramid_rung_ids))
 
 
 def process_pathogens(row) -> None:
+    pathogen_ids = []
     if row["Pathogen(s)/Syndrome(s)"]:
         pathogens = row["Pathogen(s)/Syndrome(s)"].split(",")
         for pathogen in pathogens:
@@ -46,10 +50,13 @@ def process_pathogens(row) -> None:
                     "used_in": "indicatorsets",
                 },
             )
+            pathogen_ids.append(pathogen_obj.id)
+    row["Pathogen(s)/Syndrome(s)"] = ",".join(map(str, pathogen_ids))
 
 
 def process_available_geographies(row) -> None:
     available_geographies = []
+    available_geographies_ids = []
     try:
         if row["Geographic Granularity - Delphi"]:
             available_geographies = row["Geographic Granularity - Delphi"].split(",")
@@ -71,6 +78,9 @@ def process_available_geographies(row) -> None:
             used_in="indicatorsets",
             defaults=default_params,
         )
+        available_geographies_ids.append(geography_obj.id)
+    row["Geographic Levels"] = ",".join(map(str, available_geographies_ids))
+    row["Geographic Granularity - Delphi"] = row["Geographic Levels"]
 
 
 def fix_boolean_fields(row) -> None:
@@ -120,7 +130,7 @@ class IndicatorSetResource(resources.ModelResource):
     pathogens = Field(
         attribute="pathogens",
         column_name="Pathogen(s)/Syndrome(s)",
-        widget=ManyToManyWidget(Pathogen, field="name", separator=","),
+        widget=ManyToManyWidget(Pathogen),
     )
     data_type = Field(attribute="data_type", column_name="Type(s) of Data*")
     geographic_scope = Field(
@@ -131,7 +141,7 @@ class IndicatorSetResource(resources.ModelResource):
     geographic_levels = Field(
         attribute="geographic_levels",
         column_name="Geographic Granularity - Delphi",
-        widget=ManyToManyWidget(Geography, field="name", separator=","),
+        widget=ManyToManyWidget(Geography),
     )
     preprocessing_description = Field(
         attribute="preprocessing_description",
@@ -172,7 +182,7 @@ class IndicatorSetResource(resources.ModelResource):
     severity_pyramid_rungs = Field(
         attribute="severity_pyramid_rungs",
         column_name="Surveillance Categories",
-        widget=ManyToManyWidget(SeverityPyramidRung, field="name", separator=","),
+        widget=ManyToManyWidget(SeverityPyramidRung),
     )
 
     class Meta:
@@ -260,7 +270,7 @@ class NonDelphiIndicatorSetResource(resources.ModelResource):
     pathogens = Field(
         attribute="pathogens",
         column_name="Pathogen(s)/Syndrome(s)",
-        widget=ManyToManyWidget(Pathogen, field="name", separator=","),
+        widget=ManyToManyWidget(Pathogen),
     )
     data_type = Field(attribute="data_type", column_name="Type(s) of Data*")
     geographic_scope = Field(
@@ -271,7 +281,7 @@ class NonDelphiIndicatorSetResource(resources.ModelResource):
     geographic_levels = Field(
         attribute="geographic_levels",
         column_name="Geographic Levels",
-        widget=ManyToManyWidget(Geography, field="name", separator=","),
+        widget=ManyToManyWidget(Geography),
     )
     preprocessing_description = Field(
         attribute="preprocessing_description",
@@ -312,7 +322,7 @@ class NonDelphiIndicatorSetResource(resources.ModelResource):
     severity_pyramid_rungs = Field(
         attribute="severity_pyramid_rungs",
         column_name="Surveillance Categories",
-        widget=ManyToManyWidget(SeverityPyramidRung, field="name", separator=","),
+        widget=ManyToManyWidget(SeverityPyramidRung),
     )
 
     class Meta:
