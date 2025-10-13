@@ -68,7 +68,7 @@ def process_indicator_set(row, source_type="covidcast") -> None:
         indicator_set_obj, _ = IndicatorSet.objects.get_or_create(
             name=indicator_set_name,
             defaults={
-                "display_name": indicator_set_name,
+                "name": indicator_set_name,
                 "source_type": source_type,
             },
         )
