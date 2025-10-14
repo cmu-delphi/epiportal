@@ -1,3 +1,4 @@
+import sys
 import base64
 import json
 import requests
@@ -222,7 +223,12 @@ class IndicatorSetListView(ListView):
                 default=Value(0),
                 output_field=IntegerField(),
             ),
-        ).order_by("-is_ongoing", "-is_dua_required", "name")
+            beta_last=Case(
+                When(name__istartswith="beta", then=Value(sys.maxsize)),
+                default=Value(0),
+                output_field=IntegerField(),
+            ),
+        ).order_by("beta_last", "-is_ongoing", "-is_dua_required", "name")
         context["related_indicators"] = json.dumps(
             self.get_related_indicators(
                 filter.indicators_qs, filter.qs.values_list("id", flat=True)
