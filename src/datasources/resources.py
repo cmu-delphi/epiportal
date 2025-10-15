@@ -4,6 +4,13 @@ from import_export.fields import Field
 from datasources.models import SourceSubdivision, OtherEndpointSourceSubdivision
 
 
+def strip_all_string_values(row) -> None:
+    for key, value in row.items():
+        # Check if the value is a string and not None
+        if isinstance(value, str):
+            row[key] = value.strip()
+
+
 class SourceSubdivisionResource(resources.ModelResource):
     name = Field(
         attribute="name",
@@ -67,6 +74,9 @@ class OtherEndpointSourceSubdivisionResource(SourceSubdivisionResource):
             "datasource_name",
         )
         exclude = ("id", )
+
+    def before_import_row(self, row, **kwargs):
+        strip_all_string_values(row)
 
     def after_save_instance(self, instance, row, **kwargs):
         instance.source_type = "other_endpoint"
