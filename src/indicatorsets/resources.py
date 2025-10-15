@@ -224,6 +224,18 @@ class IndicatorSetResource(resources.ModelResource):
             "epidata_endpoint",
         )
 
+    def get_instance(self, instance_loader, row):
+        name = row.get("Indicator Set name* ")
+
+        # Try to match by (name, source)
+        if name:
+            try:
+                return self._meta.model.objects.get(name=name)
+            except self._meta.model.DoesNotExist:
+                pass
+
+        return None
+
     def skip_row(self, instance, original, row, import_validation_errors=None):
         if not row["Include in indicator app"]:
             return True
