@@ -63,15 +63,18 @@ def process_pathogens(row) -> None:
 
 
 def process_indicator_set(row) -> None:
+    indicator_set_id = None
     if row["Indicator Set"]:
         indicator_set_name = row["Indicator Set"].strip()
-        indicator_set_obj = IndicatorSet.objects.get(
-            name=indicator_set_name
-        )
-        if indicator_set_obj:
-            row["Indicator Set"] = indicator_set_obj.id
-        else:
-            row["Indicator Set"] = None
+        try:
+            indicator_set_obj = IndicatorSet.objects.get(
+                name=indicator_set_name
+            )
+            indicator_set_id = indicator_set_obj.id
+        except IndicatorSet.DoesNotExist:
+            logger.warning(f"Indicator Set '{indicator_set_name}' not found.")
+    row["Indicator Set"] = indicator_set_id
+
 
 
 def process_indicator_type(row) -> None:
