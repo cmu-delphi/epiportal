@@ -98,6 +98,13 @@ def fix_boolean_fields(row) -> None:
     return row
 
 
+def strip_all_string_values(row) -> None:
+    for key, value in row.items():
+        # Check if the value is a string and not None
+        if isinstance(value, str):
+            row[key] = value.strip()
+
+
 class IndicatorSetResource(resources.ModelResource):
     name = Field(attribute="name", column_name="Indicator Set name* ")
     short_name = Field(attribute="short_name", column_name="Indicator Set Short Name")
@@ -241,6 +248,7 @@ class IndicatorSetResource(resources.ModelResource):
             return True
 
     def before_import_row(self, row, **kwargs):
+        strip_all_string_values(row)
         fix_boolean_fields(row)
         process_geographic_scope(row)
         process_severity_pyramid_rungs(row)
@@ -248,7 +256,11 @@ class IndicatorSetResource(resources.ModelResource):
         process_available_geographies(row)
 
     def after_save_instance(self, instance, row, **kwargs):
-        instance.source_type = "covidcast" if instance.epidata_endpoint == "covidcast" else "other_endpoint"
+        instance.source_type = (
+            "covidcast"
+            if instance.epidata_endpoint == "covidcast"
+            else "other_endpoint"
+        )
         instance.save()
 
 
@@ -381,6 +393,7 @@ class NonDelphiIndicatorSetResource(resources.ModelResource):
             return True
 
     def before_import_row(self, row, **kwargs):
+        strip_all_string_values(row)
         fix_boolean_fields(row)
         process_geographic_scope(row)
         process_severity_pyramid_rungs(row)

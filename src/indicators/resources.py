@@ -62,17 +62,16 @@ def process_pathogens(row) -> None:
     row["Pathogen/\nDisease Area"] = ",".join(str(el) for el in pathogen_ids)
 
 
-def process_indicator_set(row, source_type="covidcast") -> None:
+def process_indicator_set(row) -> None:
     if row["Indicator Set"]:
         indicator_set_name = row["Indicator Set"].strip()
-        indicator_set_obj, _ = IndicatorSet.objects.get_or_create(
-            name=indicator_set_name,
-            defaults={
-                "name": indicator_set_name,
-                "source_type": source_type,
-            },
+        indicator_set_obj = IndicatorSet.objects.get(
+            name=indicator_set_name
         )
-        row["Indicator Set"] = indicator_set_obj.id
+        if indicator_set_obj:
+            row["Indicator Set"] = indicator_set_obj.id
+        else:
+            row["Indicator Set"] = None
 
 
 def process_indicator_type(row) -> None:
@@ -247,6 +246,13 @@ class ModelResource(resources.ModelResource):
         return import_result
 
 
+def strip_all_string_values(row) -> None:
+    for key, value in row.items():
+        # Check if the value is a string and not None
+        if isinstance(value, str):
+            row[key] = value.strip()
+
+
 class PermissiveForeignKeyWidget(ForeignKeyWidget):
 
     def clean(self, value, row=None, **kwargs):
@@ -277,6 +283,7 @@ class IndicatorBaseResource(ModelResource):
 
     def before_import_row(self, row, **kwargs) -> None:
         """Post-processes each row after importing."""
+        strip_all_string_values(row)
         process_base(row)
 
 
@@ -454,6 +461,7 @@ class IndicatorResource(ModelResource):
 
     def before_import_row(self, row, **kwargs) -> None:
         """Post-processes each row after importing."""
+        strip_all_string_values(row)
         fix_boolean_fields(row)
         process_pathogens(row)
         process_indicator_type(row)
@@ -474,6 +482,8 @@ class IndicatorResource(ModelResource):
 
     def skip_row(self, instance, original, row, import_validation_errors=None):
         if not row["Include in indicator app"]:
+            return True
+        if row["Indicator Set"] is None:
             return True
 
 
@@ -628,6 +638,7 @@ class OtherEndpointIndicatorResource(ModelResource):
 
     def before_import_row(self, row, **kwargs) -> None:
         """Post-processes each row after importing."""
+        strip_all_string_values(row)
         fix_boolean_fields(row)
         process_source(row)
         process_pathogens(row)
@@ -637,10 +648,12 @@ class OtherEndpointIndicatorResource(ModelResource):
         process_geographic_scope(row)
         process_severity_pyramid_rungs(row)
         process_available_geographies(row)
-        process_indicator_set(row, source_type="other_endpoint")
+        process_indicator_set(row)
 
     def skip_row(self, instance, original, row, import_validation_errors=None):
         if not row["Include in indicator app"]:
+            return True
+        if row["Indicator Set"] is None:
             return True
 
     def after_import_row(self, row, row_result, **kwargs):
@@ -677,8 +690,9 @@ class NonDelphiIndicatorResource(resources.ModelResource):
 
     def before_import_row(self, row, **kwargs) -> None:
         """Post-processes each row after importing."""
+        strip_all_string_values(row)
         fix_boolean_fields(row)
-        process_indicator_set(row, source_type="non_delphi")
+        process_indicator_set(row)
 
     def skip_row(self, instance, original, row, import_validation_errors=None):
         if not row["Include in indicator app"]:
