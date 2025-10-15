@@ -67,14 +67,11 @@ def process_indicator_set(row) -> None:
     if row["Indicator Set"]:
         indicator_set_name = row["Indicator Set"].strip()
         try:
-            indicator_set_obj = IndicatorSet.objects.get(
-                name=indicator_set_name
-            )
+            indicator_set_obj = IndicatorSet.objects.get(name=indicator_set_name)
             indicator_set_id = indicator_set_obj.id
         except IndicatorSet.DoesNotExist:
             logger.warning(f"Indicator Set '{indicator_set_name}' not found.")
     row["Indicator Set"] = indicator_set_id
-
 
 
 def process_indicator_type(row) -> None:
@@ -507,7 +504,7 @@ class OtherEndpointIndicatorResource(ModelResource):
     pathogens = Field(
         attribute="pathogens",
         column_name="Pathogen/\nDisease Area",
-        widget=ManyToManyWidget(Pathogen, field="name", separator=","),
+        widget=ManyToManyWidget(Pathogen),
     )
     indicator_type = Field(
         attribute="indicator_type",
