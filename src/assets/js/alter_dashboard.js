@@ -49,6 +49,7 @@ class AlterDashboard {
                 <td><strong>${this.escapeHtml(indicator.name)}</strong></td>
                 <td>${this.renderPathogens(indicator.pathogens)}</td>
                 <td>${this.escapeHtml(indicator.description || '')}</td>
+                <td>${this.escapeHtml(indicator.temporal_scope_end || '')}</td>
                 <td>
                     <button class="btn btn-sm btn-outline-primary" onclick="dashboard.viewIndicator(${indicator.id})">
                         View Details
@@ -114,7 +115,7 @@ class AlterDashboard {
                                             <div class="mt-1">${this.renderPathogens(indicator.pathogens)}</div>
                                         </div>
                                         <div class="mb-0">
-                                            <strong class="d-block text-muted small">Last Updated</strong>
+                                            <strong class="d-block text-muted small">Temportal Scope End</strong>
                                             <span class="badge bg-success">${this.escapeHtml(indicator.temporal_scope_end || 'Active')}</span>
                                         </div>
                                     </div>

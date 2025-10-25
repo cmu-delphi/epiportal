@@ -93,24 +93,12 @@
                             <th>Name</th>
                             <th>Pathogens</th>
                             <th>Description</th>
+                            <th>Temporal Scope End</th>
                             <th>Actions</th>
                         </tr>
                     </thead>
                     <tbody id="indicatorsTableBody">
-                        {% for indicator in indicators %}
-                            <tr class="fade-in">
-                                <td><strong>{{ indicator.name }}</strong></td>
-                                <td>
-                                    {% for pathogen in indicator.pathogens.all %}
-                                        <span class="badge bg-secondary me-1">{{ pathogen.name }}</span>
-                                    {% endfor %}
-                                </td>
-                                <td>{{ indicator.description }}</td>
-                                <td>
-                                    <button class="btn btn-sm btn-outline-primary" onclick="dashboard.viewIndicator({{ indicator.id }})">View Details</button>
-                                </td>
-                            </tr>
-                        {% endfor %}
+                        
                     </tbody>
                 </table>
             </div>
