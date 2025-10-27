@@ -42,73 +42,56 @@
         <div class="container">
             <div class="hero-content">
                 <div class="row align-items-center">
-                    <div class="col-lg-8">
+                    <div class="col-lg-12">
                         <h1 class="hero-title">Respiratory Diseases Dashboard</h1>
                         <p class="hero-subtitle">
                             Track COVID-19, influenza, and RSV activity across the United States with real-time data from multiple sources.
                         </p>
-                    </div>
-                    <div class="col-lg-4">
-                        <div class="hero-controls">
-                            <form method="get" id="pathogenFilterForm">
-                                <div class="mb-3">
-                                    <label for="heroPathogenSelect" class="form-label text-white-50 mb-2">Select Pathogen</label>
-                                    <select class="form-select form-select-lg" id="heroPathogenSelect" name="pathogen" onchange="this.form.submit()">
-                                        <option value="">All Pathogens</option>
-                                        {% for pathogen in pathogens %}
-                                            <option value="{{ pathogen.id }}" {% if pathogen.id|stringformat:"s" == selected_pathogen %}selected{% endif %}>
-                                                {{ pathogen.name }}
-                                            </option>
-                                        {% endfor %}
-                                    </select>
-                                </div>
-                            </form>
-                        </div>
                     </div>
                 </div>
             </div>
         </div>
     </div>
 
-    <div class="container">
-        <!-- Stats Grid -->
-        <div class="stats-grid">
-            <div class="stat-card">
-                <div class="stat-number" id="totalIndicators">{{ indicators|length }}</div>
-                <div class="stat-label">Total Indicators</div>
+    <!-- Filter Hero Section -->
+    <div class="filter-hero-section">
+        <div class="container">
+            <div class="filter-hero-content">
+                <form method="get" id="filterForm" class="filter-form-inline">
+                    <span class="filter-label">Show</span>
+                    <select class="form-select filter-select" id="pathogenSelect" name="pathogen" onchange="this.form.submit()">
+                        <option value="">All Pathogens</option>
+                        {% for pathogen in pathogens %}
+                            <option value="{{ pathogen.id }}" {% if pathogen.id|stringformat:"s" == selected_pathogen %}selected{% endif %}>
+                                {{ pathogen.display_name }}
+                            </option>
+                        {% endfor %}
+                    </select>
+                    <span class="filter-label">in</span>
+                    <select class="form-select filter-select" id="geographySelect" name="geography" onchange="this.form.submit()">
+                        <option value="">All Geographies</option>
+                        {% for geography in geographies %}
+                            <option value="{{ geography.id }}" {% if geography.id|stringformat:"s" == selected_geography %}selected{% endif %}>
+                                {{ geography.display_name }}
+                            </option>
+                        {% endfor %}
+                    </select>
+                </form>
             </div>
         </div>
+    </div>
 
-
-        <!-- Indicators Table -->
-        <div class="table-container">
+    <div class="container">
+        <!-- Chart Section -->
+        <div class="chart-section">
             <div class="card-header">
-                <h5 class="card-title">Available Indicators</h5>
-                <p class="text-muted mb-0">Explore detailed information about each indicator</p>
+                <h5 class="card-title">Indicator Visualization</h5>
+                <p class="text-muted mb-0">Visualize trends and patterns</p>
             </div>
-            <div class="table-responsive">
-                <table class="table table-hover" id="indicatorsTable">
-                    <thead>
-                        <tr>
-                            <th>Name</th>
-                            <th>Pathogens</th>
-                            <th>Description</th>
-                            <th>Temporal Scope End</th>
-                            <th>Actions</th>
-                        </tr>
-                    </thead>
-                    <tbody id="indicatorsTableBody">
-                        
-                    </tbody>
-                </table>
-            </div>
-            
-            <!-- Loading indicator -->
-            <div id="loadingIndicator" class="text-center py-4" style="display: none;">
-                <div class="spinner-border text-primary" role="status">
-                    <span class="visually-hidden">Loading...</span>
+            <div class="chart-container-wrapper">
+                <div class="chart-container">
+                    <canvas id="indicatorChart"></canvas>
                 </div>
-                <p class="mt-2">Loading indicators...</p>
             </div>
         </div>
 

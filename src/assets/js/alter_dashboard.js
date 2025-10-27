@@ -9,144 +9,177 @@ class AlterDashboard {
     }
 
     init() {
-        this.setupEventListeners();
-        this.loadInitialData();
+        this.initChart();
     }
 
-    loadInitialData() {
-        // All data is already loaded in the template
-        this.renderTable(window.djangoIndicators || []);
-    }
+    initChart() {
+        const ctx = document.getElementById('indicatorChart');
+        if (!ctx) return;
 
+        // Sample data for the chart - similar to Delphi EpiVis
+        const labels = this.generateDateLabels(30);
+        const datasets = [
+            {
+                label: 'Claims hosp (COVID:down-adjusted)',
+                data: this.generateSampleData(30, 100),
+                borderColor: '#0076aa',
+                backgroundColor: 'rgba(0, 118, 170, 0.1)',
+                borderWidth: 2,
+                fill: true,
+                tension: 0.4,
+                pointRadius: 0,
+                pointHoverRadius: 4
+            },
+            {
+                label: 'Claims hosp (COVID:)',
+                data: this.generateSampleData(30, 120),
+                borderColor: '#5489a2',
+                backgroundColor: 'rgba(84, 137, 162, 0.1)',
+                borderWidth: 2,
+                fill: true,
+                tension: 0.4,
+                pointRadius: 0,
+                pointHoverRadius: 4
+            },
+            {
+                label: 'Claims OV (COVID-related:down-adjusted)',
+                data: this.generateSampleData(30, 90),
+                borderColor: '#de1dbb',
+                backgroundColor: 'rgba(222, 29, 187, 0.1)',
+                borderWidth: 2,
+                fill: true,
+                tension: 0.4,
+                pointRadius: 0,
+                pointHoverRadius: 4
+            },
+            {
+                label: 'Claims OV (COVID-related:)',
+                data: this.generateSampleData(30, 110),
+                borderColor: '#a67c83',
+                backgroundColor: 'rgba(166, 124, 131, 0.1)',
+                borderWidth: 2,
+                fill: true,
+                tension: 0.4,
+                pointRadius: 0,
+                pointHoverRadius: 4
+            }
+        ];
 
-    setupEventListeners() {
-        // No event listeners needed for filtering - handled by Django
-    }
-
-
-    renderTable(indicators) {
-        const tbody = document.getElementById('indicatorsTableBody');
-        if (!tbody) return;
-
-        if (indicators.length === 0) {
-            tbody.innerHTML = `
-                <tr>
-                    <td colspan="4" class="text-center text-muted py-4">
-                        No indicators found matching your criteria.
-                    </td>
-                </tr>
-            `;
-            return;
-        }
-
-        // Use DocumentFragment for better performance
-        const fragment = document.createDocumentFragment();
-        
-        indicators.forEach(indicator => {
-            const row = document.createElement('tr');
-            row.className = 'fade-in';
-            row.innerHTML = `
-                <td><strong>${this.escapeHtml(indicator.name)}</strong></td>
-                <td>${this.renderPathogens(indicator.pathogens)}</td>
-                <td>${this.escapeHtml(indicator.description || '')}</td>
-                <td>${this.escapeHtml(indicator.temporal_scope_end || '')}</td>
-                <td>
-                    <button class="btn btn-sm btn-outline-primary" onclick="dashboard.viewIndicator(${indicator.id})">
-                        View Details
-                    </button>
-                </td>
-            `;
-            fragment.appendChild(row);
+        this.chart = new Chart(ctx, {
+            type: 'line',
+            data: {
+                labels: labels,
+                datasets: datasets
+            },
+            options: {
+                responsive: true,
+                maintainAspectRatio: false,
+                plugins: {
+                    legend: {
+                        display: true,
+                        position: 'top',
+                        labels: {
+                            usePointStyle: true,
+                            padding: 15,
+                            font: {
+                                size: 12,
+                                weight: '500'
+                            }
+                        }
+                    },
+                    tooltip: {
+                        mode: 'index',
+                        intersect: false,
+                        backgroundColor: 'rgba(0, 0, 0, 0.8)',
+                        padding: 12,
+                        titleFont: {
+                            size: 14,
+                            weight: '600'
+                        },
+                        bodyFont: {
+                            size: 12
+                        },
+                        displayColors: true,
+                        callbacks: {
+                            title: function(context) {
+                                return context[0].label;
+                            },
+                            label: function(context) {
+                                return context.dataset.label + ': ' + context.parsed.y.toFixed(2);
+                            }
+                        }
+                    }
+                },
+                scales: {
+                    x: {
+                        display: true,
+                        grid: {
+                            display: false,
+                            drawBorder: false
+                        },
+                        ticks: {
+                            font: {
+                                size: 11
+                            },
+                            color: '#64748b',
+                            maxTicksLimit: 8
+                        }
+                    },
+                    y: {
+                        display: true,
+                        beginAtZero: false,
+                        grid: {
+                            color: 'rgba(226, 232, 240, 0.8)',
+                            drawBorder: false
+                        },
+                        ticks: {
+                            font: {
+                                size: 11
+                            },
+                            color: '#64748b',
+                            callback: function(value) {
+                                return value.toFixed(1);
+                            }
+                        }
+                    }
+                },
+                interaction: {
+                    mode: 'nearest',
+                    axis: 'x',
+                    intersect: false
+                },
+                animation: {
+                    duration: 1000,
+                    easing: 'easeInOutQuart'
+                }
+            }
         });
-        
-        tbody.innerHTML = '';
-        tbody.appendChild(fragment);
     }
 
-    renderPathogens(pathogens) {
-        if (!pathogens || pathogens.length === 0) {
-            return '<span class="text-muted">None</span>';
+    generateDateLabels(days) {
+        const labels = [];
+        const today = new Date();
+        for (let i = days - 1; i >= 0; i--) {
+            const date = new Date(today);
+            date.setDate(date.getDate() - i);
+            const month = (date.getMonth() + 1).toString().padStart(2, '0');
+            const day = date.getDate().toString().padStart(2, '0');
+            labels.push(`${month}/${day}`);
         }
-        
-        return pathogens.map(pathogen => 
-            `<span class="badge bg-secondary me-2 mb-1">${this.escapeHtml(pathogen)}</span>`
-        ).join('');
+        return labels;
     }
 
-
-    viewIndicator(indicatorId) {
-        // Find indicator in the original data
-        const allIndicators = window.djangoIndicators || [];
-        const indicator = allIndicators.find(i => i.id === indicatorId);
-        
-        if (!indicator) {
-            console.error('Indicator not found:', indicatorId);
-            return;
+    generateSampleData(count, startValue = 100) {
+        const data = [];
+        let baseValue = startValue;
+        for (let i = 0; i < count; i++) {
+            // Generate realistic-looking data with trend and noise
+            const trend = Math.sin(i / count * Math.PI * 2) * 10;
+            const noise = (Math.random() - 0.5) * 15;
+            baseValue += trend / count + noise;
+            data.push(Math.max(50, Math.round(baseValue)));
         }
-
-        // Create detailed view modal
-        const modal = document.createElement('div');
-        modal.className = 'modal fade';
-        modal.innerHTML = `
-            <div class="modal-dialog modal-dialog-centered modal-lg modal-fullscreen-sm-down">
-                <div class="modal-content">
-                    <div class="modal-header">
-                        <h5 class="modal-title text-truncate pe-3">${this.escapeHtml(indicator.name)}</h5>
-                        <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
-                    </div>
-                    <div class="modal-body">
-                        <div class="row g-3">
-                            <div class="col-12 col-lg-6">
-                                <div class="card h-100">
-                                    <div class="card-header">
-                                        <h6 class="card-title mb-0">Basic Information</h6>
-                                    </div>
-                                    <div class="card-body">
-                                        <div class="mb-3">
-                                            <strong class="d-block text-muted small">Data Source</strong>
-                                            <span class="badge bg-primary">${this.escapeHtml(indicator.source ? indicator.source.name : 'Unknown')}</span>
-                                        </div>
-                                        <div class="mb-3">
-                                            <strong class="d-block text-muted small">Geographic Scope</strong>
-                                            <span>${this.escapeHtml(indicator.geographic_scope ? indicator.geographic_scope.name : 'Unknown')}</span>
-                                        </div>
-                                        <div class="mb-3">
-                                            <strong class="d-block text-muted small">Pathogens</strong>
-                                            <div class="mt-1">${this.renderPathogens(indicator.pathogens)}</div>
-                                        </div>
-                                        <div class="mb-0">
-                                            <strong class="d-block text-muted small">Temportal Scope End</strong>
-                                            <span class="badge bg-success">${this.escapeHtml(indicator.temporal_scope_end || 'Active')}</span>
-                                        </div>
-                                    </div>
-                                </div>
-                            </div>
-                            <div class="col-12 col-lg-6">
-                                <div class="card h-100">
-                                    <div class="card-header">
-                                        <h6 class="card-title mb-0">Description</h6>
-                                    </div>
-                                    <div class="card-body">
-                                        <p class="mb-0 text-break">${this.escapeHtml(indicator.description || 'No description available')}</p>
-                                    </div>
-                                </div>
-                            </div>
-                        </div>
-                    </div>
-                    <div class="modal-footer">
-                        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Close</button>
-                    </div>
-                </div>
-            </div>
-        `;
-        
-        document.body.appendChild(modal);
-        const bsModal = new bootstrap.Modal(modal);
-        bsModal.show();
-        
-        modal.addEventListener('hidden.bs.modal', () => {
-            document.body.removeChild(modal);
-        });
+        return data;
     }
 
     escapeHtml(text) {
@@ -154,11 +187,6 @@ class AlterDashboard {
         div.textContent = text;
         return div.innerHTML;
     }
-}
-
-// Global functions for template compatibility
-function viewIndicator(indicatorId) {
-    dashboard.viewIndicator(indicatorId);
 }
 
 // Initialize dashboard when DOM is loaded
