@@ -76,7 +76,7 @@ def alternative_interface_view(request):
         ).all()
 
         if pathogen_filter:
-            indicators_qs = indicators_qs.filter(pathogens__id=pathogen_filter)
+            indicators_qs = indicators_qs.filter(pathogens__id=pathogen_filter, indicator_set__epidata_endpoint="covidcast")
 
         # Convert to list of dictionaries
         ctx["indicators"] = [
@@ -84,6 +84,7 @@ def alternative_interface_view(request):
                 "_endpoint": indicator.indicator_set.epidata_endpoint,
                 "name": indicator.name,
                 "data_source": indicator.source.name if indicator.source else "Unknown",
+                "time_type": indicator.time_type,
             }
             for indicator in indicators_qs
         ]
