@@ -66,7 +66,9 @@ def alternative_interface_view(request):
 
         # Get filters from URL parameters
         pathogen_filter = request.GET.get("pathogen", "")
+        geography_filter = request.GET.get("geography", "")
         ctx["selected_pathogen"] = pathogen_filter
+        ctx["selected_geography"] = geography_filter
 
         # Build queryset with optional filtering
         indicators_qs = Indicator.objects.prefetch_related(

@@ -195,12 +195,14 @@ document.addEventListener('DOMContentLoaded', function() {
     dashboard = new AlterDashboard();
 });
 
+// Handle pathogen change - reset geography select and submit form
+function handlePathogenChange() {
+    const geographySelect = document.getElementById('geographySelect');
+    if (geographySelect) {
+        geographySelect.value = '';
+    }
+    document.getElementById('filterForm').submit();
+}
+
 // Export for use in other scripts
 window.AlterDashboard = AlterDashboard;
-
-async function updateAvailableGeosList() {
-    const pathogenSelect = document.getElementById('pathogenSelect');
-    const pathogenId = pathogenSelect.value;
-    const availableGeos = await getAvailableGeos(pathogenId);
-    console.log(availableGeos);
-}
