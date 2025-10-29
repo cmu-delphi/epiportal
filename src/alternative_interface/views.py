@@ -81,7 +81,7 @@ def alternative_interface_view(request):
         # Convert to list of dictionaries
         ctx["indicators"] = [
             {
-                "_endpoint": indicator.indicator_set.epidata_endpoint,
+                "_endpoint": indicator.indicator_set.epidata_endpoint if indicator.indicator_set else "",
                 "name": indicator.name,
                 "data_source": indicator.source.name if indicator.source else "Unknown",
                 "time_type": indicator.time_type,
