@@ -68,12 +68,14 @@
                         {% endfor %}
                     </select>
                     <span class="filter-label">in</span>
-                    <select class="form-select filter-select" id="geographySelect" name="geography" onchange="this.form.submit()">
+                    <select class="form-select filter-select" id="geographySelect" name="geography" onchange="">
                         <option value="">All Geographies</option>
-                        {% for geography in geographies %}
-                            <option value="{{ geography.id }}" {% if geography.id|stringformat:"s" == selected_geography %}selected{% endif %}>
-                                {{ geography.display_name }}
-                            </option>
+                        {% for geography in available_geos %}
+                            <optgroup label="{{ geography.text }}">
+                                {% for child in geography.children %}
+                                    <option value="{{ child.id }}">{{ child.text }}</option>
+                                {% endfor %}
+                            </optgroup>
                         {% endfor %}
                     </select>
                 </form>

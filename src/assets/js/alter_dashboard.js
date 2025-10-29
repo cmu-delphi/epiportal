@@ -197,3 +197,10 @@ document.addEventListener('DOMContentLoaded', function() {
 
 // Export for use in other scripts
 window.AlterDashboard = AlterDashboard;
+
+async function updateAvailableGeosList() {
+    const pathogenSelect = document.getElementById('pathogenSelect');
+    const pathogenId = pathogenSelect.value;
+    const availableGeos = await getAvailableGeos(pathogenId);
+    console.log(availableGeos);
+}
