@@ -90,8 +90,6 @@ def alternative_interface_view(request):
 
         ctx["available_geos"] = get_available_geos(ctx["indicators"])
 
-        print(ctx["available_geos"])
-
         return render(
             request, "alternative_interface/alter_dashboard.html", context=ctx
         )

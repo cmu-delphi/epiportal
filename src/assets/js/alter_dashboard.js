@@ -201,6 +201,11 @@ function handlePathogenChange() {
     if (geographySelect) {
         geographySelect.value = '';
     }
+    // Show loader before submitting form
+    const loader = document.getElementById('pageLoader');
+    if (loader) {
+        loader.style.display = 'flex';
+    }
     document.getElementById('filterForm').submit();
 }
 
