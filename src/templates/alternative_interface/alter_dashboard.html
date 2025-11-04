@@ -128,12 +128,22 @@
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
     
     <!-- Django Context Data -->
+    {{ chart_data|json_script:"chart-data" }}
     <script>        
-        window.djangoIndicators = {{ indicators|safe }};
         window.csrfToken = '{{ csrf_token }}';
 
-        window.chartData = {{ chart_data|safe }};
-        console.log(window.chartData);
+        // Safely parse chart data to avoid Python None/NaN leaking into JS
+        (function(){
+            var el = document.getElementById('chart-data');
+            if (el && el.textContent) {
+                try {
+                    window.chartData = JSON.parse(el.textContent);
+                } catch (e) {
+                    console.error('Failed to parse chart-data JSON', e);
+                    window.chartData = null;
+                }
+            }
+        })();
     </script>
     
     <!-- Custom JavaScript -->
