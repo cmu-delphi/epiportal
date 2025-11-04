@@ -390,6 +390,12 @@ class Indicator(models.Model):
         null=True,
     )
 
+    use_in_express_interface: models.BooleanField = models.BooleanField(
+        verbose_name="Use in Express Interface",
+        default=False,
+        help_text="Indicates if the indicator is used in the Express Interface",
+    )
+
     class Meta:
         verbose_name = "Indicator"
         verbose_name_plural = "Indicators"

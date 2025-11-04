@@ -32,6 +32,7 @@ def fix_boolean_fields(row) -> None:
         "Has StdErr",
         "Has Sample Size",
         "Include in indicator app",
+        "Include in express",
     ]
 
     for field in fields:
@@ -389,6 +390,9 @@ class IndicatorResource(ModelResource):
         column_name="Indicator Set",
         widget=PermissiveForeignKeyWidget(IndicatorSet),
     )
+    use_in_express_interface = Field(
+        attribute="use_in_express_interface", column_name="Include in express"
+    )
 
     class Meta:
         model = Indicator
@@ -432,6 +436,7 @@ class IndicatorResource(ModelResource):
             "license",
             "restrictions",
             "indicator_set",
+            "use_in_express_interface",
         ]
         import_id_fields: list[str] = ["name", "indicator_set", "source"]
         skip_unchanged = True
@@ -589,6 +594,9 @@ class OtherEndpointIndicatorResource(ModelResource):
         column_name="Indicator Set",
         widget=PermissiveForeignKeyWidget(IndicatorSet),
     )
+    use_in_express_interface = Field(
+        attribute="use_in_express_interface", column_name="Include in express"
+    )
 
     class Meta:
         model = OtherEndpointIndicator
@@ -632,6 +640,7 @@ class OtherEndpointIndicatorResource(ModelResource):
             "license",
             "restrictions",
             "indicator_set",
+            "use_in_express_interface",
         ]
         import_id_fields: list[str] = ["name", "source"]
         skip_unchanged = True
@@ -675,6 +684,9 @@ class NonDelphiIndicatorResource(resources.ModelResource):
         column_name="Indicator Set",
         widget=PermissiveForeignKeyWidget(NonDelphiIndicatorSet),
     )
+    use_in_express_interface = Field(
+        attribute="use_in_express_interface", column_name="Include in express"
+    )
 
     class Meta:
         model = NonDelphiIndicator
@@ -684,6 +696,7 @@ class NonDelphiIndicatorResource(resources.ModelResource):
             "member_name",
             "description",
             "indicator_set",
+            "use_in_express_interface",
         ]
         import_id_fields: list[str] = ["name"]
         skip_unchanged = True
