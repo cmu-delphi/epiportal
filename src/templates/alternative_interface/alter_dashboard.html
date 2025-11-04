@@ -78,7 +78,7 @@
                         {% endfor %}
                     </select>
                     <span class="filter-label">in</span>
-                    <select class="form-select filter-select" id="geographySelect" name="geography" onchange="">
+                    <select class="form-select filter-select" id="geographySelect" name="geography" onchange="this.form.submit();">
                         <option value="">All Geographies</option>
                         {% for geography in available_geos %}
                             <optgroup label="{{ geography.text }}">
@@ -89,7 +89,7 @@
                         {% endfor %}
                     </select>
                 </form>
-            </div>
+            </div> 
         </div>
     </div>
 
@@ -131,6 +131,9 @@
     <script>        
         window.djangoIndicators = {{ indicators|safe }};
         window.csrfToken = '{{ csrf_token }}';
+
+        window.chartData = {{ chart_data|safe }};
+        console.log(window.chartData);
     </script>
     
     <!-- Custom JavaScript -->
