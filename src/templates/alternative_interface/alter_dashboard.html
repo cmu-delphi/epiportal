@@ -30,7 +30,7 @@
             <div class="spinner-border text-primary" role="status">
                 <span class="visually-hidden">Loading...</span>
             </div>
-            <p class="loader-text">Loading geography data...</p>
+            <p class="loader-text">Loading chart data...</p>
         </div>
     </div>
 
@@ -78,7 +78,7 @@
                         {% endfor %}
                     </select>
                     <span class="filter-label">in</span>
-                    <select class="form-select filter-select" id="geographySelect" name="geography" onchange="this.form.submit();">
+                    <select class="form-select filter-select" id="geographySelect" name="geography" onchange="handleGeographyChange()">
                         <option value="">All Geographies</option>
                         {% for geography in available_geos %}
                             <optgroup label="{{ geography.text }}">

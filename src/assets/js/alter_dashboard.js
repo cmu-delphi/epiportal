@@ -271,6 +271,12 @@ class AlterDashboard {
 			},
 			plugins: [htmlLegendPlugin]
 		});
+        
+        // Hide loader after chart is initialized
+        const loader = document.getElementById('pageLoader');
+        if (loader) {
+            loader.style.display = 'none';
+        }
     }
 
     
@@ -440,6 +446,16 @@ function handlePathogenChange() {
     if (geographySelect) {
         geographySelect.value = '';
     }
+    // Show loader before submitting form
+    const loader = document.getElementById('pageLoader');
+    if (loader) {
+        loader.style.display = 'flex';
+    }
+    document.getElementById('filterForm').submit();
+}
+
+// Handle geography change - show loader and submit form
+function handleGeographyChange() {
     // Show loader before submitting form
     const loader = document.getElementById('pageLoader');
     if (loader) {
