@@ -61,7 +61,7 @@ class AlterDashboard {
             backgroundColor: sanitizeColor(ds.backgroundColor, (palette[i % palette.length] + '33')),
             borderWidth: 2,
             fill: true,
-            tension: 0.2,
+            tension: 0,
             pointRadius: 0,
             pointHoverRadius: 4,
             spanGaps: false,
@@ -434,14 +434,264 @@ class AlterDashboard {
     }
 }
 
+// Typing animation for pathogen select
+function initPathogenTypingAnimation() {
+    const typingElement = document.getElementById('pathogenTypingAnimation');
+    const selectElement = document.getElementById('pathogenSelect');
+    
+    if (!typingElement || !selectElement) {
+        console.log('Typing animation: Missing elements');
+        return;
+    }
+    
+    if (!window.pathogenNames || window.pathogenNames.length === 0) {
+        console.log('Typing animation: No pathogen names available');
+        return;
+    }
+    
+    console.log('Typing animation: Initializing with', window.pathogenNames.length, 'pathogens');
+    
+    let currentPathogenIndex = 0;
+    let currentText = '';
+    let isDeleting = false;
+    let typingSpeed = 100; // milliseconds per character
+    let deleteSpeed = 50;
+    let pauseBeforeDelete = 2000; // pause before deleting
+    let pauseAfterDelete = 500; // pause before typing next
+    
+    let timeoutId = null;
+    
+    function typeCharacter() {
+        const currentPathogen = window.pathogenNames[currentPathogenIndex];
+        
+        // Hide animation if pathogen is selected
+        if (selectElement.value && selectElement.value !== '') {
+            typingElement.style.display = 'none';
+            if (timeoutId) clearTimeout(timeoutId);
+            return;
+        }
+        
+        // Show animation if no pathogen is selected
+        typingElement.style.display = 'block';
+        
+        if (!isDeleting && currentText.length < currentPathogen.length) {
+            // Typing forward
+            currentText = currentPathogen.substring(0, currentText.length + 1);
+            typingElement.textContent = currentText + '|';
+            timeoutId = setTimeout(typeCharacter, typingSpeed);
+        } else if (!isDeleting && currentText.length === currentPathogen.length) {
+            // Pause before deleting
+            typingElement.textContent = currentText;
+            timeoutId = setTimeout(() => {
+                isDeleting = true;
+                timeoutId = setTimeout(typeCharacter, deleteSpeed);
+            }, pauseBeforeDelete);
+        } else if (isDeleting && currentText.length > 0) {
+            // Deleting
+            currentText = currentText.substring(0, currentText.length - 1);
+            typingElement.textContent = currentText + '|';
+            timeoutId = setTimeout(typeCharacter, deleteSpeed);
+        } else if (isDeleting && currentText.length === 0) {
+            // Move to next pathogen
+            isDeleting = false;
+            currentPathogenIndex = (currentPathogenIndex + 1) % window.pathogenNames.length;
+            typingElement.textContent = '|';
+            timeoutId = setTimeout(typeCharacter, pauseAfterDelete);
+        }
+    }
+    
+    // Check if pathogen is selected and update visibility
+    function checkSelection() {
+        if (selectElement.value && selectElement.value !== '') {
+            typingElement.style.display = 'none';
+            if (timeoutId) {
+                clearTimeout(timeoutId);
+                timeoutId = null;
+            }
+        } else {
+            // Only show and start animation if not focused
+            if (document.activeElement !== selectElement) {
+                typingElement.style.display = 'block';
+                if (!timeoutId) {
+                    // Reset animation state when restarting
+                    currentText = '';
+                    isDeleting = false;
+                    typingElement.textContent = '|';
+                    typeCharacter();
+                }
+            }
+        }
+    }
+    
+    // Initial check
+    checkSelection();
+    
+    // Listen for changes
+    selectElement.addEventListener('change', checkSelection);
+    selectElement.addEventListener('focus', () => {
+        // Always hide when focused
+        typingElement.style.display = 'none';
+        if (timeoutId) {
+            clearTimeout(timeoutId);
+            timeoutId = null;
+        }
+    });
+    selectElement.addEventListener('blur', () => {
+        // Small delay to ensure focus is lost
+        setTimeout(() => {
+            checkSelection();
+        }, 100);
+    });
+    
+    // Start typing animation after a short delay
+    setTimeout(() => {
+        if (!selectElement.value || selectElement.value === '') {
+            if (document.activeElement !== selectElement) {
+                typingElement.style.display = 'block';
+                typingElement.textContent = '|';
+                typeCharacter();
+            }
+        }
+    }, 500);
+}
+
+// Typing animation for geography select
+function initGeographyTypingAnimation() {
+    const typingElement = document.getElementById('geographyTypingAnimation');
+    const selectElement = document.getElementById('geographySelect');
+    
+    if (!typingElement || !selectElement) {
+        console.log('Geography typing animation: Missing elements');
+        return;
+    }
+    
+    if (!window.geographyNames || window.geographyNames.length === 0) {
+        console.log('Geography typing animation: No geography names available');
+        return;
+    }
+    
+    console.log('Geography typing animation: Initializing with', window.geographyNames.length, 'geographies');
+    
+    let currentGeographyIndex = 0;
+    let currentText = '';
+    let isDeleting = false;
+    let typingSpeed = 100; // milliseconds per character
+    let deleteSpeed = 50;
+    let pauseBeforeDelete = 2000; // pause before deleting
+    let pauseAfterDelete = 500; // pause before typing next
+    
+    let timeoutId = null;
+    
+    function typeCharacter() {
+        const currentGeography = window.geographyNames[currentGeographyIndex];
+        
+        // Hide animation if geography is selected
+        if (selectElement.value && selectElement.value !== '') {
+            typingElement.style.display = 'none';
+            if (timeoutId) clearTimeout(timeoutId);
+            return;
+        }
+        
+        // Show animation if no geography is selected
+        typingElement.style.display = 'block';
+        
+        if (!isDeleting && currentText.length < currentGeography.length) {
+            // Typing forward
+            currentText = currentGeography.substring(0, currentText.length + 1);
+            typingElement.textContent = currentText + '|';
+            timeoutId = setTimeout(typeCharacter, typingSpeed);
+        } else if (!isDeleting && currentText.length === currentGeography.length) {
+            // Pause before deleting
+            typingElement.textContent = currentText;
+            timeoutId = setTimeout(() => {
+                isDeleting = true;
+                timeoutId = setTimeout(typeCharacter, deleteSpeed);
+            }, pauseBeforeDelete);
+        } else if (isDeleting && currentText.length > 0) {
+            // Deleting
+            currentText = currentText.substring(0, currentText.length - 1);
+            typingElement.textContent = currentText + '|';
+            timeoutId = setTimeout(typeCharacter, deleteSpeed);
+        } else if (isDeleting && currentText.length === 0) {
+            // Move to next geography
+            isDeleting = false;
+            currentGeographyIndex = (currentGeographyIndex + 1) % window.geographyNames.length;
+            typingElement.textContent = '|';
+            timeoutId = setTimeout(typeCharacter, pauseAfterDelete);
+        }
+    }
+    
+    // Check if geography is selected and update visibility
+    function checkSelection() {
+        if (selectElement.value && selectElement.value !== '') {
+            typingElement.style.display = 'none';
+            if (timeoutId) {
+                clearTimeout(timeoutId);
+                timeoutId = null;
+            }
+        } else {
+            // Only show and start animation if not focused
+            if (document.activeElement !== selectElement) {
+                typingElement.style.display = 'block';
+                if (!timeoutId) {
+                    // Reset animation state when restarting
+                    currentText = '';
+                    isDeleting = false;
+                    typingElement.textContent = '|';
+                    typeCharacter();
+                }
+            }
+        }
+    }
+    
+    // Initial check
+    checkSelection();
+    
+    // Listen for changes
+    selectElement.addEventListener('change', checkSelection);
+    selectElement.addEventListener('focus', () => {
+        // Always hide when focused
+        typingElement.style.display = 'none';
+        if (timeoutId) {
+            clearTimeout(timeoutId);
+            timeoutId = null;
+        }
+    });
+    selectElement.addEventListener('blur', () => {
+        // Small delay to ensure focus is lost
+        setTimeout(() => {
+            checkSelection();
+        }, 100);
+    });
+    
+    // Start typing animation after a short delay
+    setTimeout(() => {
+        if (!selectElement.value || selectElement.value === '') {
+            if (document.activeElement !== selectElement) {
+                typingElement.style.display = 'block';
+                typingElement.textContent = '|';
+                typeCharacter();
+            }
+        }
+    }, 500);
+}
+
 // Initialize dashboard when DOM is loaded
 let dashboard;
 document.addEventListener('DOMContentLoaded', function() {
     dashboard = new AlterDashboard();
+    initPathogenTypingAnimation();
+    initGeographyTypingAnimation();
 });
 
 // Handle pathogen change - reset geography select and submit form
 function handlePathogenChange() {
+    // Stop typing animation
+    const typingElement = document.getElementById('pathogenTypingAnimation');
+    if (typingElement) {
+        typingElement.style.display = 'none';
+    }
+    
     const geographySelect = document.getElementById('geographySelect');
     if (geographySelect) {
         geographySelect.value = '';
@@ -456,6 +706,12 @@ function handlePathogenChange() {
 
 // Handle geography change - show loader and submit form
 function handleGeographyChange() {
+    // Stop typing animation
+    const typingElement = document.getElementById('geographyTypingAnimation');
+    if (typingElement) {
+        typingElement.style.display = 'none';
+    }
+    
     // Show loader before submitting form
     const loader = document.getElementById('pageLoader');
     if (loader) {

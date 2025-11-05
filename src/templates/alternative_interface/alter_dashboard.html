@@ -69,25 +69,31 @@
             <div class="filter-hero-content">
                 <form method="get" id="filterForm" class="filter-form-inline">
                     <span class="filter-label">Show</span>
-                    <select class="form-select filter-select" id="pathogenSelect" name="pathogen" onchange="handlePathogenChange()">
-                        <option value="">All Pathogens</option>
-                        {% for pathogen in pathogens %}
-                            <option value="{{ pathogen.id }}" {% if pathogen.id|stringformat:"s" == selected_pathogen %}selected{% endif %}>
-                                {{ pathogen.display_name }}
-                            </option>
-                        {% endfor %}
-                    </select>
+                    <div style="position: relative; display: inline-block; width: 100%;">
+                        <select class="form-select filter-select" id="pathogenSelect" name="pathogen" onchange="handlePathogenChange()" style="position: relative;">
+                            <option value=""></option>
+                            {% for pathogen in pathogens %}
+                                <option value="{{ pathogen.id }}" {% if pathogen.id|stringformat:"s" == selected_pathogen %}selected{% endif %}>
+                                    {{ pathogen.display_name }}
+                                </option>
+                            {% endfor %}
+                        </select>
+                        <span id="pathogenTypingAnimation" class="pathogen-typing-animation" style="position: absolute; left: 12px; top: 50%; transform: translateY(-50%); pointer-events: none; z-index: 10; color: #6c757d; font-size: 0.875rem; white-space: nowrap; overflow: hidden; display: none;"></span>
+                    </div>
                     <span class="filter-label">in</span>
-                    <select class="form-select filter-select" id="geographySelect" name="geography" onchange="handleGeographyChange()">
-                        <option value="">All Geographies</option>
-                        {% for geography in available_geos %}
-                            <optgroup label="{{ geography.text }}">
-                                {% for child in geography.children %}
-                                    <option value="{{ child.id }}" {% if child.id == selected_geography %}selected{% endif %}>{{ child.text }}</option>
-                                {% endfor %}
-                            </optgroup>
-                        {% endfor %}
-                    </select>
+                    <div style="position: relative; display: inline-block; width: 100%;">
+                        <select class="form-select filter-select" id="geographySelect" name="geography" onchange="handleGeographyChange()" style="position: relative;">
+                            <option value=""></option>
+                            {% for geography in available_geos %}
+                                <optgroup label="{{ geography.text }}">
+                                    {% for child in geography.children %}
+                                        <option value="{{ child.id }}" {% if child.id == selected_geography %}selected{% endif %}>{{ child.text }}</option>
+                                    {% endfor %}
+                                </optgroup>
+                            {% endfor %}
+                        </select>
+                        <span id="geographyTypingAnimation" class="geography-typing-animation" style="position: absolute; left: 12px; top: 50%; transform: translateY(-50%); pointer-events: none; z-index: 10; color: #6c757d; font-size: 0.875rem; white-space: nowrap; overflow: hidden; display: none;"></span>
+                    </div>
                 </form>
             </div> 
         </div>
@@ -144,6 +150,25 @@
                 }
             }
         })();
+
+        // Pass pathogen names for typing animation
+        window.pathogenNames = [
+            {% for pathogen in pathogens %}
+                "{{ pathogen.display_name }}"{% if not forloop.last %},{% endif %}
+            {% endfor %}
+        ];
+
+        // Pass geography names for typing animation (limited to 25)
+        window.geographyNames = [];
+        {% for geography in available_geos %}
+            {% for child in geography.children %}
+                window.geographyNames.push("{{ child.text }}");
+            {% endfor %}
+        {% endfor %}
+        // Limit to 25 total
+        if (window.geographyNames.length > 25) {
+            window.geographyNames = window.geographyNames.slice(0, 25);
+        }
     </script>
     
     <!-- Custom JavaScript -->
