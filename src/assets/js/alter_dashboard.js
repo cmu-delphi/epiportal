@@ -6,7 +6,7 @@
 class AlterDashboard {
     constructor() {
         this.originalDatasets = [];
-        this.normalized = false;
+        this.normalized = true; // Data is always normalized from backend
         this.init();
     }
 
@@ -61,13 +61,13 @@ class AlterDashboard {
             backgroundColor: sanitizeColor(ds.backgroundColor, (palette[i % palette.length] + '33')),
             borderWidth: 2,
             fill: true,
-            tension: 0.2,
+            tension: 0,
             pointRadius: 0,
             pointHoverRadius: 4,
             spanGaps: false,
         }));
 
-        // Store original datasets for normalization/de-normalization
+        // Store datasets (already normalized from backend)
         this.originalDatasets = datasets.map(d => ({
             ...d,
             originalData: Array.isArray(d.data) ? [...d.data] : []
@@ -199,16 +199,9 @@ class AlterDashboard {
                                 if (value === null || value === undefined || Number.isNaN(value)) {
                                     return label + ': n/a';
                                 }
-                                const formattedValue = dashboard && dashboard.normalized 
-                                    ? value.toFixed(1) + '%'
-                                    : value.toFixed(2);
+                                // Data is always normalized from backend
+                                const formattedValue = value.toFixed(1) + '%';
                                 return label + ': ' + formattedValue;
-                            },
-                            afterBody: function(context) {
-                                if (dashboard && dashboard.normalized) {
-                                    return 'Values normalized to 0-100% range';
-                                }
-                                return '';
                             }
                         }
                     }
@@ -230,7 +223,7 @@ class AlterDashboard {
                     },
                     y: {
                         display: true,
-                        beginAtZero: this.normalized,
+                        beginAtZero: true, // Always normalized to 0-100%
                         grid: {
                             color: 'rgba(226, 232, 240, 0.8)',
                             drawBorder: false
@@ -241,12 +234,12 @@ class AlterDashboard {
                             },
                             color: '#64748b',
                             callback: (value) => {
-                                return value.toFixed(1);
+                                return value.toFixed(0) + '%';
                             }
                         },
                         title: {
                             display: true,
-                            text: 'Value',
+                            text: 'Scaled value (%)',
                             font: {
                                 size: 12,
                                 weight: '500'
@@ -287,73 +280,6 @@ class AlterDashboard {
         return div.innerHTML;
     }
 
-    // Normalize all datasets to 0-100% range for better comparison
-    // Data Normalization
-    // Normalizes each dataset to 0–100% based on its min/max
-    // Updates y-axis labels to show percentages (%)
-    // Updates axis title to "Normalized Value (%)"
-    // Button toggles to "Restore" when normalized
-    normalizeData() {
-        if (!this.chart) return;
-        
-        const datasets = this.chart.data.datasets;
-        datasets.forEach((dataset, index) => {
-            const originalData = this.originalDatasets[index].originalData;
-            const numericValues = originalData.filter(v => v !== null && v !== undefined && !Number.isNaN(v));
-            const min = numericValues.length ? Math.min(...numericValues) : 0;
-            const max = numericValues.length ? Math.max(...numericValues) : 1;
-            const range = (max - min) || 1; // Avoid division by zero
-            
-            dataset.data = originalData.map(value => {
-                if (value === null || value === undefined || Number.isNaN(value)) return null;
-                return ((value - min) / range) * 100;
-            });
-        });
-        
-        this.normalized = true;
-        // Update y-axis to show percentage
-        this.chart.options.scales.y.beginAtZero = true;
-        this.chart.options.scales.y.ticks.callback = (value) => {
-            return value.toFixed(0) + '%';
-        };
-        if (this.chart.options.scales.y.title) {
-            this.chart.options.scales.y.title.text = 'Normalized Value (%)';
-        }
-        this.chart.update();
-        this.updateNormalizeButton();
-    }
-
-    // Restore original data values
-    restoreData() {
-        if (!this.chart) return;
-        
-        const datasets = this.chart.data.datasets;
-        datasets.forEach((dataset, index) => {
-            dataset.data = [...this.originalDatasets[index].originalData];
-        });
-        
-        this.normalized = false;
-        // Restore y-axis to original
-        this.chart.options.scales.y.beginAtZero = false;
-        this.chart.options.scales.y.ticks.callback = (value) => {
-            return value.toFixed(1);
-        };
-        if (this.chart.options.scales.y.title) {
-            this.chart.options.scales.y.title.text = 'Value';
-        }
-        this.chart.update();
-        this.updateNormalizeButton();
-    }
-
-    // Toggle normalization
-    toggleNormalization() {
-        if (this.normalized) {
-            this.restoreData();
-        } else {
-            this.normalizeData();
-        }
-    }
-
     // Reset all datasets to visible
     showAllDatasets() {
         if (!this.chart) return;
@@ -381,10 +307,6 @@ class AlterDashboard {
                     controls.className = 'chart-controls';
                     controls.innerHTML = `
                         <div class="controls-group">
-                            <button id="normalizeBtn" class="btn-control" title="Normalize data to 0-100% range">
-                                <span class="control-icon">📊</span>
-                                <span class="control-text">Normalize</span>
-                            </button>
                             <button id="showAllBtn" class="btn-control" title="Show all indicators">
                                 <span class="control-icon">👁️</span>
                                 <span class="control-text">Show All</span>
@@ -397,11 +319,6 @@ class AlterDashboard {
         }
 
         // Attach event listeners
-        const normalizeBtn = document.getElementById('normalizeBtn');
-        if (normalizeBtn) {
-            normalizeBtn.addEventListener('click', () => this.toggleNormalization());
-        }
-
         const showAllBtn = document.getElementById('showAllBtn');
         if (showAllBtn) {
             showAllBtn.addEventListener('click', () => this.showAllDatasets());
@@ -414,34 +331,270 @@ class AlterDashboard {
         // Additional styling can be added here if needed
     }
 
-    // Update normalize button state
-    updateNormalizeButton() {
-        const btn = document.getElementById('normalizeBtn');
-        if (btn) {
-            if (this.normalized) {
-                btn.classList.add('active');
-                btn.querySelector('.control-text').textContent = 'Restore';
-            } else {
-                btn.classList.remove('active');
-                btn.querySelector('.control-text').textContent = 'Normalize';
-            }
-        }
-    }
-
     // Update legend state display
     updateLegendState() {
         // Can add custom legend state management here
     }
 }
 
+// Typing animation for pathogen select
+function initPathogenTypingAnimation() {
+    const typingElement = document.getElementById('pathogenTypingAnimation');
+    const selectElement = document.getElementById('pathogenSelect');
+    
+    if (!typingElement || !selectElement) {
+        console.log('Typing animation: Missing elements');
+        return;
+    }
+    
+    if (!window.pathogenNames || window.pathogenNames.length === 0) {
+        console.log('Typing animation: No pathogen names available');
+        return;
+    }
+    
+    console.log('Typing animation: Initializing with', window.pathogenNames.length, 'pathogens');
+    
+    let currentPathogenIndex = 0;
+    let currentText = '';
+    let isDeleting = false;
+    let typingSpeed = 100; // milliseconds per character
+    let deleteSpeed = 50;
+    let pauseBeforeDelete = 2000; // pause before deleting
+    let pauseAfterDelete = 500; // pause before typing next
+    
+    let timeoutId = null;
+    
+    function typeCharacter() {
+        const currentPathogen = window.pathogenNames[currentPathogenIndex];
+        
+        // Hide animation if pathogen is selected
+        if (selectElement.value && selectElement.value !== '') {
+            typingElement.style.display = 'none';
+            if (timeoutId) clearTimeout(timeoutId);
+            return;
+        }
+        
+        // Show animation if no pathogen is selected
+        typingElement.style.display = 'block';
+        
+        if (!isDeleting && currentText.length < currentPathogen.length) {
+            // Typing forward
+            currentText = currentPathogen.substring(0, currentText.length + 1);
+            typingElement.textContent = currentText + '|';
+            timeoutId = setTimeout(typeCharacter, typingSpeed);
+        } else if (!isDeleting && currentText.length === currentPathogen.length) {
+            // Pause before deleting
+            typingElement.textContent = currentText;
+            timeoutId = setTimeout(() => {
+                isDeleting = true;
+                timeoutId = setTimeout(typeCharacter, deleteSpeed);
+            }, pauseBeforeDelete);
+        } else if (isDeleting && currentText.length > 0) {
+            // Deleting
+            currentText = currentText.substring(0, currentText.length - 1);
+            typingElement.textContent = currentText + '|';
+            timeoutId = setTimeout(typeCharacter, deleteSpeed);
+        } else if (isDeleting && currentText.length === 0) {
+            // Move to next pathogen
+            isDeleting = false;
+            currentPathogenIndex = (currentPathogenIndex + 1) % window.pathogenNames.length;
+            typingElement.textContent = '|';
+            timeoutId = setTimeout(typeCharacter, pauseAfterDelete);
+        }
+    }
+    
+    // Check if pathogen is selected and update visibility
+    function checkSelection() {
+        if (selectElement.value && selectElement.value !== '') {
+            typingElement.style.display = 'none';
+            if (timeoutId) {
+                clearTimeout(timeoutId);
+                timeoutId = null;
+            }
+        } else {
+            // Only show and start animation if not focused
+            if (document.activeElement !== selectElement) {
+                typingElement.style.display = 'block';
+                if (!timeoutId) {
+                    // Reset animation state when restarting
+                    currentText = '';
+                    isDeleting = false;
+                    typingElement.textContent = '|';
+                    typeCharacter();
+                }
+            }
+        }
+    }
+    
+    // Initial check
+    checkSelection();
+    
+    // Listen for changes
+    selectElement.addEventListener('change', checkSelection);
+    selectElement.addEventListener('focus', () => {
+        // Always hide when focused
+        typingElement.style.display = 'none';
+        if (timeoutId) {
+            clearTimeout(timeoutId);
+            timeoutId = null;
+        }
+    });
+    selectElement.addEventListener('blur', () => {
+        // Small delay to ensure focus is lost
+        setTimeout(() => {
+            checkSelection();
+        }, 100);
+    });
+    
+    // Start typing animation after a short delay
+    setTimeout(() => {
+        if (!selectElement.value || selectElement.value === '') {
+            if (document.activeElement !== selectElement) {
+                typingElement.style.display = 'block';
+                typingElement.textContent = '|';
+                typeCharacter();
+            }
+        }
+    }, 500);
+}
+
+// Typing animation for geography select
+function initGeographyTypingAnimation() {
+    const typingElement = document.getElementById('geographyTypingAnimation');
+    const selectElement = document.getElementById('geographySelect');
+    
+    if (!typingElement || !selectElement) {
+        console.log('Geography typing animation: Missing elements');
+        return;
+    }
+    
+    if (!window.geographyNames || window.geographyNames.length === 0) {
+        console.log('Geography typing animation: No geography names available');
+        return;
+    }
+    
+    console.log('Geography typing animation: Initializing with', window.geographyNames.length, 'geographies');
+    
+    let currentGeographyIndex = 0;
+    let currentText = '';
+    let isDeleting = false;
+    let typingSpeed = 100; // milliseconds per character
+    let deleteSpeed = 50;
+    let pauseBeforeDelete = 2000; // pause before deleting
+    let pauseAfterDelete = 500; // pause before typing next
+    
+    let timeoutId = null;
+    
+    function typeCharacter() {
+        const currentGeography = window.geographyNames[currentGeographyIndex];
+        
+        // Hide animation if geography is selected
+        if (selectElement.value && selectElement.value !== '') {
+            typingElement.style.display = 'none';
+            if (timeoutId) clearTimeout(timeoutId);
+            return;
+        }
+        
+        // Show animation if no geography is selected
+        typingElement.style.display = 'block';
+        
+        if (!isDeleting && currentText.length < currentGeography.length) {
+            // Typing forward
+            currentText = currentGeography.substring(0, currentText.length + 1);
+            typingElement.textContent = currentText + '|';
+            timeoutId = setTimeout(typeCharacter, typingSpeed);
+        } else if (!isDeleting && currentText.length === currentGeography.length) {
+            // Pause before deleting
+            typingElement.textContent = currentText;
+            timeoutId = setTimeout(() => {
+                isDeleting = true;
+                timeoutId = setTimeout(typeCharacter, deleteSpeed);
+            }, pauseBeforeDelete);
+        } else if (isDeleting && currentText.length > 0) {
+            // Deleting
+            currentText = currentText.substring(0, currentText.length - 1);
+            typingElement.textContent = currentText + '|';
+            timeoutId = setTimeout(typeCharacter, deleteSpeed);
+        } else if (isDeleting && currentText.length === 0) {
+            // Move to next geography
+            isDeleting = false;
+            currentGeographyIndex = (currentGeographyIndex + 1) % window.geographyNames.length;
+            typingElement.textContent = '|';
+            timeoutId = setTimeout(typeCharacter, pauseAfterDelete);
+        }
+    }
+    
+    // Check if geography is selected and update visibility
+    function checkSelection() {
+        if (selectElement.value && selectElement.value !== '') {
+            typingElement.style.display = 'none';
+            if (timeoutId) {
+                clearTimeout(timeoutId);
+                timeoutId = null;
+            }
+        } else {
+            // Only show and start animation if not focused
+            if (document.activeElement !== selectElement) {
+                typingElement.style.display = 'block';
+                if (!timeoutId) {
+                    // Reset animation state when restarting
+                    currentText = '';
+                    isDeleting = false;
+                    typingElement.textContent = '|';
+                    typeCharacter();
+                }
+            }
+        }
+    }
+    
+    // Initial check
+    checkSelection();
+    
+    // Listen for changes
+    selectElement.addEventListener('change', checkSelection);
+    selectElement.addEventListener('focus', () => {
+        // Always hide when focused
+        typingElement.style.display = 'none';
+        if (timeoutId) {
+            clearTimeout(timeoutId);
+            timeoutId = null;
+        }
+    });
+    selectElement.addEventListener('blur', () => {
+        // Small delay to ensure focus is lost
+        setTimeout(() => {
+            checkSelection();
+        }, 100);
+    });
+    
+    // Start typing animation after a short delay
+    setTimeout(() => {
+        if (!selectElement.value || selectElement.value === '') {
+            if (document.activeElement !== selectElement) {
+                typingElement.style.display = 'block';
+                typingElement.textContent = '|';
+                typeCharacter();
+            }
+        }
+    }, 500);
+}
+
 // Initialize dashboard when DOM is loaded
 let dashboard;
 document.addEventListener('DOMContentLoaded', function() {
     dashboard = new AlterDashboard();
+    initPathogenTypingAnimation();
+    initGeographyTypingAnimation();
 });
 
 // Handle pathogen change - reset geography select and submit form
 function handlePathogenChange() {
+    // Stop typing animation
+    const typingElement = document.getElementById('pathogenTypingAnimation');
+    if (typingElement) {
+        typingElement.style.display = 'none';
+    }
+    
     const geographySelect = document.getElementById('geographySelect');
     if (geographySelect) {
         geographySelect.value = '';
@@ -456,6 +609,12 @@ function handlePathogenChange() {
 
 // Handle geography change - show loader and submit form
 function handleGeographyChange() {
+    // Stop typing animation
+    const typingElement = document.getElementById('geographyTypingAnimation');
+    if (typingElement) {
+        typingElement.style.display = 'none';
+    }
+    
     // Show loader before submitting form
     const loader = document.getElementById('pageLoader');
     if (loader) {
