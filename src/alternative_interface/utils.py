@@ -178,6 +178,34 @@ def prepare_chart_series_multi(
     return {"labels": labels, "datasets": datasets}
 
 
+def normalize_dataset(data):
+    """
+    Normalize a dataset to 0-100% range based on its min/max.
+    Preserves None values for missing data.
+    """
+    # Filter out None values for min/max calculation
+    numeric_values = [v for v in data if v is not None and not (isinstance(v, float) and (v != v or v in (float('inf'), float('-inf'))))]
+    
+    if not numeric_values:
+        return data  # Return as-is if no valid numeric values
+    
+    min_val = min(numeric_values)
+    max_val = max(numeric_values)
+    range_val = (max_val - min_val) or 1  # Avoid division by zero
+    
+    # Normalize each value
+    normalized = []
+    for value in data:
+        if value is None:
+            normalized.append(None)
+        elif isinstance(value, float) and (value != value or value in (float('inf'), float('-inf'))):
+            normalized.append(None)
+        else:
+            normalized.append(((value - min_val) / range_val) * 100)
+    
+    return normalized
+
+
 def get_chart_data(indicators, geography):
     chart_data = {"labels": [], "datasets": []}
     geo_type, geo_value = geography.split(":")
@@ -197,11 +225,14 @@ def get_chart_data(indicators, geography):
                 "2025-01-31",
                 series_by="signal",  # label per indicator (adjust to ("signal","geo_value") if needed)
             )
-            # Apply readable label and color to each dataset
+            # Apply readable label, color, and normalize data for each dataset
             for ds in series["datasets"]:
                 ds["label"] = f"{title} - {ds['label']}"
                 ds["borderColor"] = color
                 ds["backgroundColor"] = f"{color}33"
+                # Normalize data to 0-100% range
+                if ds.get("data"):
+                    ds["data"] = normalize_dataset(ds["data"])
             # Initialize labels once; assume same date range for all
             if not chart_data["labels"]:
                 chart_data["labels"] = series["labels"]
