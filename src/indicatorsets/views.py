@@ -154,6 +154,11 @@ class IndicatorSetListView(ListView):
                 if self.request.GET.get("temporal_scope_end")
                 else ""
             ),
+            "hosted_by_delphi": (
+                str(self.request.GET.get("hosted_by_delphi") in ["True", "true", "on", "1"]).lower()
+                if self.request.GET.get("hosted_by_delphi")
+                else "false"
+            ),
             "location_search": (
                 [el for el in self.request.GET.getlist("location_search")]
                 if self.request.GET.get("location_search")
@@ -203,7 +208,11 @@ class IndicatorSetListView(ListView):
         context["url_params_dict"] = url_params_dict
         context["epivis_url"] = settings.EPIVIS_URL
         context["epidata_url"] = settings.EPIDATA_URL
-        context["form"] = IndicatorSetFilterForm(initial=url_params_dict)
+        # Convert hosted_by_delphi string back to boolean for form initialization
+        form_initial = url_params_dict.copy()
+        if "hosted_by_delphi" in form_initial:
+            form_initial["hosted_by_delphi"] = form_initial["hosted_by_delphi"] == "true"
+        context["form"] = IndicatorSetFilterForm(initial=form_initial)
         context["filter"] = filter
         context["APP_VERSION"] = settings.APP_VERSION
         context["indicator_sets"] = filter.qs.annotate(
