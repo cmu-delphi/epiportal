@@ -38,6 +38,7 @@ from indicatorsets.utils import (
     generate_query_code_flusurv,
     log_form_data,
     log_form_stats,
+    get_grouped_original_data_provider_choices,
 )
 
 from delphi_utils import get_structured_logger
@@ -256,6 +257,7 @@ class IndicatorSetListView(ListView):
         context["geographic_granularities"] = (
             self.get_grouped_geographic_granularities()
         )
+        context["grouped_data_providers"] = get_grouped_original_data_provider_choices()
         return context
 
 

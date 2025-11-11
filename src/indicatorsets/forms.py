@@ -27,9 +27,10 @@ class IndicatorSetFilterForm(forms.ModelForm):
         widget=forms.CheckboxSelectMultiple(),
     )
 
-    original_data_provider = forms.ChoiceField(
+    original_data_provider = forms.MultipleChoiceField(
         choices=get_original_data_provider_choices,
         widget=forms.CheckboxSelectMultiple(),
+        required=False,
     )
 
     temporal_granularity = forms.ChoiceField(
