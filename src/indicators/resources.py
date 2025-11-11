@@ -17,6 +17,7 @@ from indicators.models import (
     IndicatorType,
     NonDelphiIndicator,
     OtherEndpointIndicator,
+    USStateIndicator,
 )
 from indicatorsets.models import IndicatorSet, NonDelphiIndicatorSet
 
@@ -713,4 +714,36 @@ class NonDelphiIndicatorResource(resources.ModelResource):
 
     def after_save_instance(self, instance, row, **kwargs):
         instance.source_type = "non_delphi"
+        instance.save()
+
+
+class USStateIndicatorResource(ModelResource):
+    name = Field(attribute="name", column_name="Indicator Name")
+    indicator_set = Field(
+        attribute="indicator_set",
+        column_name="Indicator Set",
+        widget=PermissiveForeignKeyWidget(IndicatorSet),
+    )
+
+    class Meta:
+        model = USStateIndicator
+        fields: list[str] = [
+            "name",
+            "indicator_set",
+        ]
+        import_id_fields: list[str] = ["name", "indicator_set"]
+        skip_unchanged = True
+
+    def skip_row(self, instance, original, row, import_validation_errors=None):
+        if not row["Include in indicator app"]:
+            return True
+
+    def before_import_row(self, row, **kwargs) -> None:
+        """Post-processes each row after importing."""
+        strip_all_string_values(row)
+        fix_boolean_fields(row)
+        process_indicator_set(row)
+
+    def after_save_instance(self, instance, row, **kwargs):
+        instance.source_type = "us_state"
         instance.save()

@@ -466,3 +466,11 @@ class NonDelphiIndicator(Indicator):
         proxy = True
         verbose_name = "Non-Delphi Indicator"
         verbose_name_plural = "Non-Delphi Indicators"
+
+
+class USStateIndicator(Indicator):
+
+    class Meta:
+        proxy = True
+        verbose_name = "US State Indicator"
+        verbose_name_plural = "US State Indicators"
