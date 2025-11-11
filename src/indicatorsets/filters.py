@@ -81,6 +81,11 @@ class IndicatorSetFilter(django_filters.FilterSet):
         required=False,
     )
 
+    hosted_by_delphi = django_filters.CharFilter(
+        method="hosted_by_delphi_filter",
+        required=False,
+    )
+
     location_search = django_filters.CharFilter(
         method="location_search_filter", required=False, widget=QueryArrayWidget
     )
@@ -94,8 +99,29 @@ class IndicatorSetFilter(django_filters.FilterSet):
             "original_data_provider",
             "temporal_granularity",
             "temporal_scope_end",
+            "hosted_by_delphi",
             "location_search",
         ]
+
+    def hosted_by_delphi_filter(self, queryset, name, value):
+        """
+        Filter for IndicatorSets where source_type is 'covidcast' or 'other_endpoint'
+        when hosted_by_delphi checkbox is checked.
+        """
+        # HTML checkboxes send "on" when checked, nothing when unchecked
+        # Handle different value types that indicate checkbox is checked
+        if not value:
+            return queryset
+
+        # Convert value to string for comparison
+        value_str = str(value).lower().strip()
+        checked_values = ["true", "on", "1", "yes"]
+
+        if value_str in checked_values or value is True:
+            logger.debug("Filtering for hosted_by_delphi=True")
+            return queryset.filter(source_type__in=["covidcast", "other_endpoint"])
+
+        return queryset
 
     def location_search_filter(self, queryset, name, value):
         if not value:
