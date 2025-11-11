@@ -9,6 +9,7 @@ SOURCE_TYPES = [
     ("covidcast", "Covidcast"),
     ("other_endpoint", "Other Endpoint"),
     ("non_delphi", "Non Delphi"),
+    ("us_state", "US State"),
 ]
 
 

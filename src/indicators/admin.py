@@ -6,11 +6,12 @@ from import_export.admin import ImportExportModelAdmin
 from base.utils import download_source_file, import_data
 from indicators.models import (Category, FormatType, Indicator,
                                IndicatorGeography, IndicatorType,
-                               NonDelphiIndicator, OtherEndpointIndicator)
+                               NonDelphiIndicator, OtherEndpointIndicator,
+                               USStateIndicator)
 from indicators.resources import (IndicatorBaseResource, IndicatorResource,
                                   NonDelphiIndicatorResource,
-                                  OtherEndpointIndicatorResource)
-
+                                  OtherEndpointIndicatorResource,
+                                  USStateIndicatorResource)
 
 @admin.register(IndicatorType)
 class IndicatorTypeAdmin(admin.ModelAdmin):
@@ -201,7 +202,7 @@ class NonDelphiIndicatorAdmin(ImportExportModelAdmin):
         return custom_urls + urls
 
     def import_from_spreadsheet(self, request):
-        spreadsheet_url = "https://docs.google.com/spreadsheets/d/1zb7ItJzY5oq1n-2xtvnPBiJu2L3AqmCKubrLkKJZVHs/export?format=csv&gid=493612863"
+        spreadsheet_url = settings.SPREADSHEET_URLS["non_delphi_indicators"]
 
         return import_data(self, request, NonDelphiIndicatorResource, spreadsheet_url)
 
@@ -209,4 +210,51 @@ class NonDelphiIndicatorAdmin(ImportExportModelAdmin):
         return download_source_file(
             settings.SPREADSHEET_URLS["non_delphi_indicators"],
             "Non_Delphi_Indicators.csv",
+        )
+
+
+@admin.register(USStateIndicator)
+class USStateIndicatorAdmin(ImportExportModelAdmin):
+    list_display = ("name", "indicator_set")
+    search_fields = ("name", "indicator_set")
+    ordering = ("name",)
+    list_per_page = 50
+    list_select_related = True
+    list_editable = ("indicator_set",)
+    list_display_links = ("name",)
+
+    resource_classes = [USStateIndicatorResource]
+
+    change_list_template = "admin/indicators/indicator_changelist.html"
+
+    def get_queryset(self, request):
+        # Exclude proxy model objects
+        qs = super().get_queryset(request)
+        return qs.filter(source_type="us_state")
+
+    def get_urls(self):
+        urls = super().get_urls()
+        custom_urls = [
+            path(
+                "import-from-spreadsheet",
+                self.admin_site.admin_view(self.import_from_spreadsheet),
+                name="import_us_state_indicators",
+            ),
+            path(
+                "download-source-file",
+                self.admin_site.admin_view(self.download_us_state_indicator),
+                name="download_us_state_indicator",
+            ),
+        ]
+        return custom_urls + urls
+
+    def import_from_spreadsheet(self, request):
+        spreadsheet_url = settings.SPREADSHEET_URLS["us_state_indicators"]
+
+        return import_data(self, request, USStateIndicatorResource, spreadsheet_url)
+
+    def download_us_state_indicator(self, request):
+        return download_source_file(
+            settings.SPREADSHEET_URLS["us_state_indicators"],
+            "US_State_Indicators.csv",
         )

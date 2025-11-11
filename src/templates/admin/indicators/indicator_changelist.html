@@ -24,6 +24,13 @@
             <a class="button" href="{% url 'admin:download_nondelphi_indicator' %}">
                 Download source file
             </a>
+        {% elif opts.model_name == "usstateindicator" %}
+            <a class="button" href="{% url 'admin:import_us_state_indicators' %}">
+                Import data from spreadsheet
+            </a>
+            <a class="button" href="{% url 'admin:download_us_state_indicator' %}">
+                Download source file
+            </a>
         {% endif %}
     </li>
 {% endblock object-tools-items %}

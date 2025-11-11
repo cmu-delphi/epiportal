@@ -9,8 +9,10 @@ from indicatorsets.models import (
     FilterDescription,
     IndicatorSet,
     NonDelphiIndicatorSet,
+    USStateIndicatorSet,
 )
 from indicatorsets.resources import IndicatorSetResource, NonDelphiIndicatorSetResource
+from indicatorsets.resources import USStateIndicatorSetResource
 
 
 # Register your models here.
@@ -135,6 +137,60 @@ class NonDelphiIndicatorSetAdmin(ImportExportModelAdmin):
         return download_source_file(
             settings.SPREADSHEET_URLS["non_delphi_indicator_sets"],
             "Non_Delphi_Indicator_Sets.csv",
+        )
+
+
+@admin.register(USStateIndicatorSet)
+class USStateIndicatorSetAdmin(ImportExportModelAdmin):
+    """
+    Admin interface for the USStateIndicatorSet model.
+    """
+
+    resource_class = USStateIndicatorSetResource
+    list_display = (
+        "name",
+        "state",
+        "description",
+    )
+    search_fields = ("name", "state", "description")
+    ordering = ["name"]
+    list_filter = ["state"]
+
+    def get_queryset(self, request):
+        # Exclude proxy model objects
+        qs = super().get_queryset(request)
+        return qs.filter(source_type="us_state")
+
+    change_list_template = "admin/indicatorsets/indicator_set_changelist.html"
+
+    def get_urls(self):
+        urls = super().get_urls()
+        custom_urls = [
+            path(
+                "import-from-spreadsheet",
+                self.admin_site.admin_view(self.import_from_spreadsheet),
+                name="import_us_state_indicatorsets",
+            ),
+            path(
+                "download-source-file",
+                self.admin_site.admin_view(self.download_us_state_indicator_set),
+                name="download_us_state_indicator_set",
+            ),
+        ]
+        return custom_urls + urls
+
+    def import_from_spreadsheet(self, request):
+        return import_data(
+            self,
+            request,
+            USStateIndicatorSetResource,
+            settings.SPREADSHEET_URLS["us_state_indicator_sets"],
+        )
+
+    def download_us_state_indicator_set(self, request):
+        return download_source_file(
+            settings.SPREADSHEET_URLS["us_state_indicator_sets"],
+            "US_State_Indicator_Sets.csv",
         )
 
 
