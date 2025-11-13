@@ -111,6 +111,11 @@ def strip_all_string_values(row) -> None:
             row[key] = value.strip()
 
 
+def process_data_use_terms(row) -> None:
+    if not row["Data Use Terms"]:
+        row["Data Use Terms"] = "None found"
+
+
 class IndicatorSetResource(resources.ModelResource):
     name = Field(attribute="name", column_name="Indicator Set name* ")
     short_name = Field(attribute="short_name", column_name="Indicator Set Short Name")
@@ -260,6 +265,7 @@ class IndicatorSetResource(resources.ModelResource):
         process_severity_pyramid_rungs(row)
         process_pathogens(row)
         process_available_geographies(row)
+        process_data_use_terms(row)
 
     def after_save_instance(self, instance, row, **kwargs):
         instance.source_type = (
@@ -405,6 +411,7 @@ class NonDelphiIndicatorSetResource(resources.ModelResource):
         process_severity_pyramid_rungs(row)
         process_pathogens(row)
         process_available_geographies(row)
+        process_data_use_terms(row)
 
     def after_save_instance(self, instance, row, **kwargs):
         instance.source_type = "non_delphi"
@@ -467,6 +474,7 @@ class USStateIndicatorSetResource(resources.ModelResource):
     documentation_link = Field(
         attribute="documentation_link", column_name="Link to documentation"
     )
+    license = Field(attribute="license", column_name="Data Use Terms")
 
     class Meta:
         model = USStateIndicatorSet
@@ -493,6 +501,7 @@ class USStateIndicatorSetResource(resources.ModelResource):
             "original_data_provider",
             "preprocessing_description",
             "documentation_link",
+            "license",
         )
 
     def skip_row(self, instance, original, row, import_validation_errors=None):
@@ -518,6 +527,7 @@ class USStateIndicatorSetResource(resources.ModelResource):
         process_pathogens(row)
         process_available_geographies(row)
         process_severity_pyramid_rungs(row)
+        process_data_use_terms(row)
 
     def after_save_instance(self, instance, row, **kwargs):
         instance.source_type = "us_state"
