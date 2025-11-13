@@ -40,7 +40,7 @@ GEOGRAPHIC_GRANULARITY_MAPPING = {
         "short_name": "ADM 3",
     },
     "hsa": {
-        "display_name": "Hospital Referral Region (HRR)",
+        "display_name": "Health Service Area (HSA-NCI)",
         "display_order_number": 8,
         "short_name": "HSA-NCI",
     },
