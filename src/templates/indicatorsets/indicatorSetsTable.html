@@ -303,10 +303,10 @@
                         <td>{{ indicator_set.censoring }}</td>
                         <td>{{ indicator_set.missingness }}</td>
                         <td>
-                            {% if indicator_set.source_type == "non_delphi" %}
-                                No
-                            {% else %}
+                            {% if indicator_set.delphi_hosted %}
                                 Yes
+                            {% else %}
+                                No
                             {% endif %}
                         </td>
                         <td>{{ indicator_set.dua_required }}</td>

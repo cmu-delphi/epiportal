@@ -3,13 +3,25 @@ from django.contrib import admin
 from django.urls import path
 from import_export.admin import ImportExportModelAdmin
 
+from base.models import Geography, Pathogen, SeverityPyramidRung
 from base.utils import download_source_file, import_data
-from indicators.models import (Category, FormatType, Indicator,
-                               IndicatorGeography, IndicatorType,
-                               NonDelphiIndicator, OtherEndpointIndicator)
-from indicators.resources import (IndicatorBaseResource, IndicatorResource,
-                                  NonDelphiIndicatorResource,
-                                  OtherEndpointIndicatorResource)
+from indicators.models import (
+    Category,
+    FormatType,
+    Indicator,
+    IndicatorGeography,
+    IndicatorType,
+    NonDelphiIndicator,
+    OtherEndpointIndicator,
+    USStateIndicator,
+)
+from indicators.resources import (
+    IndicatorBaseResource,
+    IndicatorResource,
+    NonDelphiIndicatorResource,
+    OtherEndpointIndicatorResource,
+    USStateIndicatorResource,
+)
 
 
 @admin.register(IndicatorType)
@@ -46,8 +58,35 @@ class IndicatorGeographyAdmin(admin.ModelAdmin):
     list_select_related = True
 
 
+class BaseIndicatorAdmin(ImportExportModelAdmin):
+    def formfield_for_manytomany(self, db_field, request, **kwargs):
+        """
+        Filter geographic_levels field to show only a subset of Geography objects.
+        Modify the filter criteria as needed.
+        """
+        if db_field.name == "geographic_levels":
+            # Filter to show only geographies used in indicatorsets
+            # You can modify this filter to show a different subset
+            kwargs["queryset"] = Geography.objects.filter(
+                used_in="indicators"
+            ).order_by("display_order_number")
+        if db_field.name == "pathogens":
+            # Filter to show only geographies used in indicatorsets
+            # You can modify this filter to show a different subset
+            kwargs["queryset"] = Pathogen.objects.filter(used_in="indicators").order_by(
+                "display_order_number"
+            )
+        if db_field.name == "severity_pyramid_rungs":
+            # Filter to show only geographies used in indicatorsets
+            # You can modify this filter to show a different subset
+            kwargs["queryset"] = SeverityPyramidRung.objects.filter(
+                used_in="indicators"
+            ).order_by("display_order_number")
+        return super().formfield_for_manytomany(db_field, request, **kwargs)
+
+
 @admin.register(Indicator)
-class IndicatorAdmin(ImportExportModelAdmin):
+class IndicatorAdmin(BaseIndicatorAdmin):
     list_display = (
         "name",
         "description",
@@ -101,7 +140,7 @@ class IndicatorAdmin(ImportExportModelAdmin):
 
 
 @admin.register(OtherEndpointIndicator)
-class OtherEndpointIndicatorAdmin(ImportExportModelAdmin):
+class OtherEndpointIndicatorAdmin(BaseIndicatorAdmin):
     list_display = (
         "name",
         "description",
@@ -137,9 +176,7 @@ class OtherEndpointIndicatorAdmin(ImportExportModelAdmin):
             ),
             path(
                 "download-source-file",
-                self.admin_site.admin_view(
-                    self.download_other_endpoint_indicator
-                ),
+                self.admin_site.admin_view(self.download_other_endpoint_indicator),
                 name="download_other_endpoint_indicator",
             ),
         ]
@@ -161,7 +198,7 @@ class OtherEndpointIndicatorAdmin(ImportExportModelAdmin):
 
 
 @admin.register(NonDelphiIndicator)
-class NonDelphiIndicatorAdmin(ImportExportModelAdmin):
+class NonDelphiIndicatorAdmin(BaseIndicatorAdmin):
     list_display = (
         "name",
         "member_name",
@@ -201,7 +238,7 @@ class NonDelphiIndicatorAdmin(ImportExportModelAdmin):
         return custom_urls + urls
 
     def import_from_spreadsheet(self, request):
-        spreadsheet_url = "https://docs.google.com/spreadsheets/d/1zb7ItJzY5oq1n-2xtvnPBiJu2L3AqmCKubrLkKJZVHs/export?format=csv&gid=493612863"
+        spreadsheet_url = settings.SPREADSHEET_URLS["non_delphi_indicators"]
 
         return import_data(self, request, NonDelphiIndicatorResource, spreadsheet_url)
 
@@ -209,4 +246,51 @@ class NonDelphiIndicatorAdmin(ImportExportModelAdmin):
         return download_source_file(
             settings.SPREADSHEET_URLS["non_delphi_indicators"],
             "Non_Delphi_Indicators.csv",
+        )
+
+
+@admin.register(USStateIndicator)
+class USStateIndicatorAdmin(BaseIndicatorAdmin):
+    list_display = ("name", "indicator_set")
+    search_fields = ("name", "indicator_set")
+    ordering = ("name",)
+    list_per_page = 50
+    list_select_related = True
+    list_editable = ("indicator_set",)
+    list_display_links = ("name",)
+
+    resource_classes = [USStateIndicatorResource]
+
+    change_list_template = "admin/indicators/indicator_changelist.html"
+
+    def get_queryset(self, request):
+        # Exclude proxy model objects
+        qs = super().get_queryset(request)
+        return qs.filter(source_type="us_state")
+
+    def get_urls(self):
+        urls = super().get_urls()
+        custom_urls = [
+            path(
+                "import-from-spreadsheet",
+                self.admin_site.admin_view(self.import_from_spreadsheet),
+                name="import_us_state_indicators",
+            ),
+            path(
+                "download-source-file",
+                self.admin_site.admin_view(self.download_us_state_indicator),
+                name="download_us_state_indicator",
+            ),
+        ]
+        return custom_urls + urls
+
+    def import_from_spreadsheet(self, request):
+        spreadsheet_url = settings.SPREADSHEET_URLS["us_state_indicators"]
+
+        return import_data(self, request, USStateIndicatorResource, spreadsheet_url)
+
+    def download_us_state_indicator(self, request):
+        return download_source_file(
+            settings.SPREADSHEET_URLS["us_state_indicators"],
+            "US_State_Indicators.csv",
         )

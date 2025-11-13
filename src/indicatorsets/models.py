@@ -195,6 +195,13 @@ class IndicatorSet(models.Model):
         null=True,
     )
 
+    state: models.CharField = models.CharField(
+        verbose_name="State",
+        max_length=255,
+        blank=True,
+        help_text="State of the indicator set",
+    )
+
     class Meta:
         verbose_name = "Indicator Set"
         verbose_name_plural = "Indicator Sets"
@@ -219,6 +226,16 @@ class NonDelphiIndicatorSet(IndicatorSet):
         proxy = True
         verbose_name = "Non-Delphi Indicator Set"
         verbose_name_plural = "Non-Delphi Indicators Sets"
+
+
+class USStateIndicatorSet(IndicatorSet):
+    class Meta:
+        proxy = True
+        verbose_name = "US State Indicator Set"
+        verbose_name_plural = "US State Indicators Sets"
+
+    def __str__(self):
+        return self.name
 
 
 class FilterDescription(models.Model):

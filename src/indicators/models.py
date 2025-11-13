@@ -390,6 +390,12 @@ class Indicator(models.Model):
         null=True,
     )
 
+    use_in_express_interface: models.BooleanField = models.BooleanField(
+        verbose_name="Use in Express Interface",
+        default=False,
+        help_text="Indicates if the indicator is used in the Express Interface",
+    )
+
     class Meta:
         verbose_name = "Indicator"
         verbose_name_plural = "Indicators"
@@ -460,3 +466,11 @@ class NonDelphiIndicator(Indicator):
         proxy = True
         verbose_name = "Non-Delphi Indicator"
         verbose_name_plural = "Non-Delphi Indicators"
+
+
+class USStateIndicator(Indicator):
+
+    class Meta:
+        proxy = True
+        verbose_name = "US State Indicator"
+        verbose_name_plural = "US State Indicators"

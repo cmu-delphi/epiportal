@@ -17,6 +17,13 @@
             <a class="button" href="{% url 'admin:download_nondelphi_indicator_set' %}">
                 Download source file
             </a>
+        {% elif opts.model_name == "usstateindicatorset" %}
+            <a class="button" href="{% url 'admin:import_us_state_indicatorsets' %}">
+                Import data from spreadsheet
+            </a>
+            <a class="button" href="{% url 'admin:download_us_state_indicator_set' %}">
+                Download source file
+            </a>
         {% endif %}
     </li>
 {% endblock %}

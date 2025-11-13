@@ -66,12 +66,60 @@ def get_epiweek(start_date, end_date):
 
 
 def get_original_data_provider_choices():
+    """
+    Returns flat list of choices for form compatibility.
+    """
     return [
         (el, el)
         for el in IndicatorSet.objects.values_list("original_data_provider", flat=True)
         .order_by("original_data_provider")
         .distinct()
     ]
+
+
+def get_grouped_original_data_provider_choices():
+    """
+    Returns grouped choices with U.S. States providers in a sublist.
+    """
+    # Define U.S. States providers that should be grouped under "U.S. States"
+    US_STATES_PROVIDERS = [
+        "California Department of Public Health",
+        "Florida Department of Health",
+        "Illinois Department of Public Health",
+        "Massachusetts Department of Public Health",
+        "New York State Department of Health",
+        "Pennsylvania Department of Health",
+        "Texas Department of State Health Services",
+        "State of Alaska Department of Health",
+        "Vermont Department of Health",
+    ]
+
+    all_providers = list(
+        IndicatorSet.objects.values_list("original_data_provider", flat=True)
+        .order_by("original_data_provider")
+        .distinct()
+    )
+
+    # Separate providers into main list and U.S. States sublist
+    main_providers = []
+    us_states_providers = []
+
+    for provider in all_providers:
+        if provider and provider in US_STATES_PROVIDERS:
+            us_states_providers.append(provider)
+        else:
+            main_providers.append(provider)
+
+    return {
+        "main": main_providers,
+        "groups": [
+            {
+                "label": "U.S. States",
+                "providers": sorted(us_states_providers),
+            }
+        ],
+        "all": all_providers,  # Keep flat list for form compatibility
+    }
 
 
 def group_by_property(list_of_dicts, property):

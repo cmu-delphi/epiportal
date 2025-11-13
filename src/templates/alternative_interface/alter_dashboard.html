@@ -1,0 +1,177 @@
+{% load static %}
+{% load i18n %}
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="utf-8" />
+    <meta http-equiv="X-UA-Compatible" content="IE=edge" />
+    <meta name="viewport" content="width=device-width, initial-scale=1, shrink-to-fit=no" />
+    <meta name="description" content="Access up-to-date infectious disease data and insights with Delphi EpiPortal." />
+    <meta name="keywords" content="epidemiology, disease tracking, Delphi portal, health analytics, real-time data, public health" />
+    <title>Delphi EpiPortal - Disease Dashboard</title>
+    
+    <!-- Fonts -->
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    
+    <!-- Bootstrap CSS -->
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    
+    <!-- Chart.js -->
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    
+    <!-- Custom CSS -->
+    <link href="{% static 'css/alter_dashboard.css' %}" rel="stylesheet" />
+</head>
+
+<body>
+    <!-- Loader Overlay -->
+    <div id="pageLoader" class="page-loader" style="display: none;">
+        <div class="loader-content">
+            <div class="spinner-border text-primary" role="status">
+                <span class="visually-hidden">Loading...</span>
+            </div>
+            <p class="loader-text">Loading chart data...</p>
+        </div>
+    </div>
+
+    <!-- Navigation -->
+    <nav class="navbar navbar-expand-lg">
+        <div class="container">
+            <a class="navbar-brand" href="{% url 'indicatorsets' %}">
+                <img src="{% static 'img/CMU-wordmark.svg' %}" alt="Delphi" height="75" width="242" class="me-2">
+                Delphi EpiPortal
+            </a>
+            <div class="navbar-nav ms-auto">
+                <span class="nav-text text-muted">Real-time Infectious Disease Indicators</span>
+            </div>
+        </div>
+    </nav>
+
+    <!-- Hero Section -->
+    <div class="hero-section">
+        <div class="container">
+            <div class="hero-content">
+                <div class="row align-items-center">
+                    <div class="col-lg-12">
+                        <h1 class="hero-title">Respiratory Diseases Dashboard</h1>
+                        <p class="hero-subtitle">
+                            Track COVID-19, influenza, and RSV activity across the United States with real-time data from multiple sources.
+                        </p>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Filter Hero Section -->
+    <div class="filter-hero-section">
+        <div class="container">
+            <div class="filter-hero-content">
+                <form method="get" id="filterForm" class="filter-form-inline">
+                    <span class="filter-label">Show</span>
+                    <div style="position: relative; display: inline-block; width: 100%;">
+                        <select class="form-select filter-select" id="pathogenSelect" name="pathogen" onchange="handlePathogenChange()" style="position: relative;">
+                            <option value=""></option>
+                            {% for pathogen in pathogens %}
+                                <option value="{{ pathogen.id }}" {% if pathogen.id|stringformat:"s" == selected_pathogen %}selected{% endif %}>
+                                    {{ pathogen.display_name }}
+                                </option>
+                            {% endfor %}
+                        </select>
+                        <span id="pathogenTypingAnimation" class="pathogen-typing-animation" style="position: absolute; left: 12px; top: 50%; transform: translateY(-50%); pointer-events: none; z-index: 10; color: #6c757d; font-size: 0.875rem; white-space: nowrap; overflow: hidden; display: none;"></span>
+                    </div>
+                    <span class="filter-label">in</span>
+                    <div style="position: relative; display: inline-block; width: 100%;">
+                        <select class="form-select filter-select" id="geographySelect" name="geography" onchange="handleGeographyChange()" style="position: relative;">
+                            <option value=""></option>
+                            {% for geography in available_geos %}
+                                <optgroup label="{{ geography.text }}">
+                                    {% for child in geography.children %}
+                                        <option value="{{ child.id }}" {% if child.id == selected_geography %}selected{% endif %}>{{ child.text }}</option>
+                                    {% endfor %}
+                                </optgroup>
+                            {% endfor %}
+                        </select>
+                        <span id="geographyTypingAnimation" class="geography-typing-animation" style="position: absolute; left: 12px; top: 50%; transform: translateY(-50%); pointer-events: none; z-index: 10; color: #6c757d; font-size: 0.875rem; white-space: nowrap; overflow: hidden; display: none;"></span>
+                    </div>
+                </form>
+            </div> 
+        </div>
+    </div>
+
+    <div class="container">
+        <!-- Chart Section -->
+        <div class="chart-section">
+            <div class="card-header">
+                <h5 class="card-title">Indicator Visualization</h5>
+                <p class="text-muted mb-0">Visualize trends and patterns</p>
+            </div>
+            <div class="chart-container-wrapper">
+                <div class="chart-container">
+                    <canvas id="indicatorChart"></canvas>
+                </div>
+            </div>
+        </div>
+
+    </div>
+
+    <!-- Footer -->
+    <footer class="bg-white mt-5 py-4">
+        <div class="container">
+            <div class="row">
+                <div class="col-md-6">
+                    <p class="text-muted mb-0">© 2024 Delphi EpiPortal. All rights reserved.</p>
+                </div>
+                <div class="col-md-6 text-end">
+                    <a href="#" class="text-muted me-3">Privacy Policy</a>
+                    <a href="#" class="text-muted">Terms of Service</a>
+                </div>
+            </div>
+        </div>
+    </footer>
+
+    <!-- Bootstrap JS -->
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+    
+    <!-- Django Context Data -->
+    {{ chart_data|json_script:"chart-data" }}
+    <script>        
+        window.csrfToken = '{{ csrf_token }}';
+
+        // Safely parse chart data to avoid Python None/NaN leaking into JS
+        (function(){
+            var el = document.getElementById('chart-data');
+            if (el && el.textContent) {
+                try {
+                    window.chartData = JSON.parse(el.textContent);
+                } catch (e) {
+                    console.error('Failed to parse chart-data JSON', e);
+                    window.chartData = null;
+                }
+            }
+        })();
+
+        // Pass pathogen names for typing animation
+        window.pathogenNames = [
+            {% for pathogen in pathogens %}
+                "{{ pathogen.display_name }}"{% if not forloop.last %},{% endif %}
+            {% endfor %}
+        ];
+
+        // Pass geography names for typing animation (limited to 25)
+        window.geographyNames = [];
+        {% for geography in available_geos %}
+            {% for child in geography.children %}
+                window.geographyNames.push("{{ child.text }}");
+            {% endfor %}
+        {% endfor %}
+        // Limit to 25 total
+        if (window.geographyNames.length > 25) {
+            window.geographyNames = window.geographyNames.slice(0, 25);
+        }
+    </script>
+    
+    <!-- Custom JavaScript -->
+    <script src="{% static 'js/alter_dashboard.js' %}"></script>
+</body>
+</html>

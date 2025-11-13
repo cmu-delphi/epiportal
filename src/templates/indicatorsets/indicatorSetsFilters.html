@@ -116,10 +116,97 @@
                              data-mdb-parent="#accordionIndicatorSetFilters">
                             <div class="accordion-body margin-top-1rem">
                                 <div class="bulk-select form-check">
-                                    <input type="checkbox" class="form-check-input" id="select-all" />
-                                    <label class="form-check-label" for="select-all">Select all</label>
+                                    <input type="checkbox" class="form-check-input" id="select-all-original-data-provider" />
+                                    <label class="form-check-label" for="select-all-original-data-provider">Select all</label>
                                 </div>
-                                {{ form.original_data_provider|as_crispy_field }}
+                                <div class="original-data-provider-checkboxes">
+                                    {% with selected_providers=url_params_dict.original_data_provider|default:"" %}
+                                        {% if grouped_data_providers.groups %}
+                                            {# Render main providers first #}
+                                            {% if grouped_data_providers.main %}
+                                                <div class="data-provider-main-list">
+                                                    {% for provider in grouped_data_providers.main %}
+                                                        {% if provider %}
+                                                            <div class="form-check">
+                                                                <input class="form-check-input original-data-provider-checkbox" 
+                                                                       type="checkbox" 
+                                                                       name="original_data_provider" 
+                                                                       value="{{ provider }}" 
+                                                                       id="provider_main_{{ forloop.counter }}"
+                                                                       {% if selected_providers and provider in selected_providers %}checked{% endif %}>
+                                                                <label class="form-check-label" for="provider_main_{{ forloop.counter }}">
+                                                                    {{ provider }}
+                                                                </label>
+                                                            </div>
+                                                        {% endif %}
+                                                    {% endfor %}
+                                                </div>
+                                            {% endif %}
+                                            {# Render grouped providers #}
+                                            {% for group in grouped_data_providers.groups %}
+                                                {% if group.providers %}
+                                                    <div class="data-provider-group" style="margin-top: 10px;">
+                                                        <div class="form-check d-flex align-items-center">
+                                                            <input class="form-check-input original-data-provider-group-checkbox" 
+                                                                   type="checkbox" 
+                                                                   id="group_{{ forloop.counter }}"
+                                                                   data-group-id="group_{{ forloop.counter }}">
+                                                            <label class="form-check-label flex-grow-1" for="group_{{ forloop.counter }}" style="font-weight: 600; cursor: pointer;">
+                                                                {{ group.label }}
+                                                            </label>
+                                                            <button class="btn btn-link btn-sm p-0 ms-2 expand-collapse-btn" 
+                                                                    type="button" 
+                                                                    data-mdb-collapse-init
+                                                                    data-mdb-toggle="collapse" 
+                                                                    data-mdb-target="#group_sublist_{{ forloop.counter }}" 
+                                                                    aria-expanded="false" 
+                                                                    aria-controls="group_sublist_{{ forloop.counter }}"
+                                                                    style="text-decoration: none; min-width: 20px;">
+                                                                <i class="fas fa-chevron-down expand-icon"></i>
+                                                                <i class="fas fa-chevron-up collapse-icon" style="display: none;"></i>
+                                                            </button>
+                                                        </div>
+                                                        <div class="collapse data-provider-sublist" id="group_sublist_{{ forloop.counter }}" style="margin-left: 20px; margin-top: 5px;">
+                                                            {% for provider in group.providers %}
+                                                                {% if provider %}
+                                                                    <div class="form-check">
+                                                                        <input class="form-check-input original-data-provider-checkbox group_{{ forloop.parentloop.counter }}_checkbox" 
+                                                                               type="checkbox" 
+                                                                               name="original_data_provider" 
+                                                                               value="{{ provider }}" 
+                                                                               id="provider_group_{{ forloop.parentloop.counter }}_{{ forloop.counter }}"
+                                                                               data-group-id="group_{{ forloop.parentloop.counter }}"
+                                                                               {% if selected_providers and provider in selected_providers %}checked{% endif %}>
+                                                                        <label class="form-check-label" for="provider_group_{{ forloop.parentloop.counter }}_{{ forloop.counter }}">
+                                                                            {{ provider }}
+                                                                        </label>
+                                                                    </div>
+                                                                {% endif %}
+                                                            {% endfor %}
+                                                        </div>
+                                                    </div>
+                                                {% endif %}
+                                            {% endfor %}
+                                        {% else %}
+                                            {# Fallback to regular rendering if no groups configured #}
+                                            {% for provider in grouped_data_providers.all %}
+                                                {% if provider %}
+                                                    <div class="form-check">
+                                                        <input class="form-check-input original-data-provider-checkbox" 
+                                                               type="checkbox" 
+                                                               name="original_data_provider" 
+                                                               value="{{ provider }}" 
+                                                               id="provider_{{ forloop.counter }}"
+                                                               {% if selected_providers and provider in selected_providers %}checked{% endif %}>
+                                                        <label class="form-check-label" for="provider_{{ forloop.counter }}">
+                                                            {{ provider }}
+                                                        </label>
+                                                    </div>
+                                                {% endif %}
+                                            {% endfor %}
+                                        {% endif %}
+                                    {% endwith %}
+                                </div>
                             </div>
                         </div>
                     </div>
@@ -134,6 +221,20 @@
                            data-mdb-trigger="hover"
                            data-mdb-placement="right"
                            data-mdb-content="{{ filters_descriptions|dict_get:"temporal_scope_end" }}">
+                            <i class="far fa-circle-question"></i>
+                        </a>
+                    </div>
+                    <div class="input-group margin-top-1rem">
+                        {{ form.hosted_by_delphi|as_crispy_field }}
+                        <a tabindex="0"
+                           type="button"
+                           class="info-button filter-description-popover margin-left-10"
+                           data-mdb-container="body"
+                           data-mdb-ripple-init
+                           data-mdb-popover-init
+                           data-mdb-trigger="hover"
+                           data-mdb-placement="right"
+                           data-mdb-content="{{ filters_descriptions|dict_get:"hosted_by_delphi" }}">
                             <i class="far fa-circle-question"></i>
                         </a>
                     </div>

@@ -38,6 +38,7 @@ from indicatorsets.utils import (
     generate_query_code_flusurv,
     log_form_data,
     log_form_stats,
+    get_grouped_original_data_provider_choices,
 )
 
 from delphi_utils import get_structured_logger
@@ -154,6 +155,11 @@ class IndicatorSetListView(ListView):
                 if self.request.GET.get("temporal_scope_end")
                 else ""
             ),
+            "hosted_by_delphi": (
+                str(self.request.GET.get("hosted_by_delphi") in ["True", "true", "on", "1"]).lower()
+                if self.request.GET.get("hosted_by_delphi")
+                else "false"
+            ),
             "location_search": (
                 [el for el in self.request.GET.getlist("location_search")]
                 if self.request.GET.get("location_search")
@@ -203,7 +209,11 @@ class IndicatorSetListView(ListView):
         context["url_params_dict"] = url_params_dict
         context["epivis_url"] = settings.EPIVIS_URL
         context["epidata_url"] = settings.EPIDATA_URL
-        context["form"] = IndicatorSetFilterForm(initial=url_params_dict)
+        # Convert hosted_by_delphi string back to boolean for form initialization
+        form_initial = url_params_dict.copy()
+        if "hosted_by_delphi" in form_initial:
+            form_initial["hosted_by_delphi"] = form_initial["hosted_by_delphi"] == "true"
+        context["form"] = IndicatorSetFilterForm(initial=form_initial)
         context["filter"] = filter
         context["APP_VERSION"] = settings.APP_VERSION
         context["indicator_sets"] = filter.qs.annotate(
@@ -228,6 +238,11 @@ class IndicatorSetListView(ListView):
                 default=Value(0),
                 output_field=IntegerField(),
             ),
+            delphi_hosted=Case(
+                When(source_type__in=["covidcast", "other_endpoint"], then=Value(1)),
+                default=Value(0),
+                output_field=IntegerField(),
+            ),
         ).order_by("beta_last", "-is_ongoing", "-is_dua_required", "name")
         context["related_indicators"] = json.dumps(
             self.get_related_indicators(
@@ -247,6 +262,7 @@ class IndicatorSetListView(ListView):
         context["geographic_granularities"] = (
             self.get_grouped_geographic_granularities()
         )
+        context["grouped_data_providers"] = get_grouped_original_data_provider_choices()
         return context
 
 
