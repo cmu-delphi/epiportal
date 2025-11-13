@@ -476,6 +476,7 @@ class USStateIndicatorSetResource(resources.ModelResource):
     )
     license = Field(attribute="license", column_name="Data Use Terms")
 
+
     class Meta:
         model = USStateIndicatorSet
         import_id_fields = ("name", "state", "original_data_provider")
