@@ -3,6 +3,7 @@ from django.contrib import admin
 from django.urls import path
 from import_export.admin import ImportExportModelAdmin
 
+from base.models import Geography, Pathogen, SeverityPyramidRung
 from base.utils import download_source_file, import_data
 from indicatorsets.models import (
     ColumnDescription,
@@ -44,6 +45,31 @@ class IndicatorSetAdmin(ImportExportModelAdmin):
         # Exclude proxy model objects
         qs = super().get_queryset(request)
         return qs.exclude(source_type="non_delphi")
+
+    def formfield_for_manytomany(self, db_field, request, **kwargs):
+        """
+        Filter geographic_levels field to show only a subset of Geography objects.
+        Modify the filter criteria as needed.
+        """
+        if db_field.name == "geographic_levels":
+            # Filter to show only geographies used in indicatorsets
+            # You can modify this filter to show a different subset
+            kwargs["queryset"] = Geography.objects.filter(
+                used_in="indicatorsets"
+            ).order_by("display_order_number")
+        if db_field.name == "pathogens":
+            # Filter to show only geographies used in indicatorsets
+            # You can modify this filter to show a different subset
+            kwargs["queryset"] = Pathogen.objects.filter(
+                used_in="indicatorsets"
+            ).order_by("display_order_number")
+        if db_field.name == "severity_pyramid_rungs":
+            # Filter to show only geographies used in indicatorsets
+            # You can modify this filter to show a different subset
+            kwargs["queryset"] = SeverityPyramidRung.objects.filter(
+                used_in="indicatorsets"
+            ).order_by("display_order_number")
+        return super().formfield_for_manytomany(db_field, request, **kwargs)
 
     change_list_template = "admin/indicatorsets/indicator_set_changelist.html"
 
