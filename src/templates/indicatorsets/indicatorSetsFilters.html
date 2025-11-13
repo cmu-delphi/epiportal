@@ -211,20 +211,6 @@
                         </div>
                     </div>
                     <div class="input-group margin-top-1rem">
-                        {{ form.hosted_by_delphi|as_crispy_field }}
-                        <a tabindex="0"
-                           type="button"
-                           class="info-button filter-description-popover margin-left-10"
-                           data-mdb-container="body"
-                           data-mdb-ripple-init
-                           data-mdb-popover-init
-                           data-mdb-trigger="hover"
-                           data-mdb-placement="right"
-                           data-mdb-content="{{ filters_descriptions|dict_get:"hosted_by_delphi" }}">
-                            <i class="far fa-circle-question"></i>
-                        </a>
-                    </div>
-                    <div class="input-group margin-top-1rem">
                         {{ form.temporal_scope_end|as_crispy_field }}
                         <a tabindex="0"
                            type="button"
@@ -235,6 +221,20 @@
                            data-mdb-trigger="hover"
                            data-mdb-placement="right"
                            data-mdb-content="{{ filters_descriptions|dict_get:"temporal_scope_end" }}">
+                            <i class="far fa-circle-question"></i>
+                        </a>
+                    </div>
+                    <div class="input-group margin-top-1rem">
+                        {{ form.hosted_by_delphi|as_crispy_field }}
+                        <a tabindex="0"
+                           type="button"
+                           class="info-button filter-description-popover margin-left-10"
+                           data-mdb-container="body"
+                           data-mdb-ripple-init
+                           data-mdb-popover-init
+                           data-mdb-trigger="hover"
+                           data-mdb-placement="right"
+                           data-mdb-content="{{ filters_descriptions|dict_get:"hosted_by_delphi" }}">
                             <i class="far fa-circle-question"></i>
                         </a>
                     </div>
