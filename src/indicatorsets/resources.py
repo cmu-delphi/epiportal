@@ -464,6 +464,9 @@ class USStateIndicatorSetResource(resources.ModelResource):
     )
     censoring = Field(attribute="censoring", column_name="Censoring")
     missingness = Field(attribute="missingness", column_name="Missingness")
+    documentation_link = Field(
+        attribute="documentation_link", column_name="Link to documentation"
+    )
 
     class Meta:
         model = USStateIndicatorSet
@@ -489,6 +492,7 @@ class USStateIndicatorSetResource(resources.ModelResource):
             "missingness",
             "original_data_provider",
             "preprocessing_description",
+            "documentation_link",
         )
 
     def skip_row(self, instance, original, row, import_validation_errors=None):
