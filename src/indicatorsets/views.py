@@ -238,6 +238,11 @@ class IndicatorSetListView(ListView):
                 default=Value(0),
                 output_field=IntegerField(),
             ),
+            delphi_hosted=Case(
+                When(source_type__in=["covidcast", "other_endpoint"], then=Value(1)),
+                default=Value(0),
+                output_field=IntegerField(),
+            ),
         ).order_by("beta_last", "-is_ongoing", "-is_dua_required", "name")
         context["related_indicators"] = json.dumps(
             self.get_related_indicators(
