@@ -303,7 +303,7 @@
                         <td>{{ indicator_set.censoring }}</td>
                         <td>{{ indicator_set.missingness }}</td>
                         <td>
-                            {% if indicator_set.source_type == "covidcast" or indicator_set.source_type == "other_endpoint" %}
+                            {% if indicator_set.delphi_hosted %}
                                 Yes
                             {% else %}
                                 No
