@@ -54,7 +54,7 @@ class IndicatorSetFilterForm(forms.ModelForm):
     )
 
     hosted_by_delphi = forms.BooleanField(
-        label="Hosted by Delphi",
+        label="Delphi-hosted Only",
         required=False,
         widget=forms.CheckboxInput(attrs={"value": "on"}),
     )
@@ -90,4 +90,4 @@ class IndicatorSetFilterForm(forms.ModelForm):
             if field_name != "hosted_by_delphi":
                 field.label = ""
             else:
-                field.label = "Hosted by Delphi"
+                field.label = "Delphi-hosted Only"

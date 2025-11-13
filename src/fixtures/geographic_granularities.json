@@ -78,11 +78,22 @@
     },
     {
         "model": "base.Geography",
+        "pk": 14,
+        "fields": {
+            "name": "hsa",
+            "display_name": "Health Service Area (HSA-NCI)",
+            "display_order_number": 8,
+            "used_in": "indicatorsets",
+            "short_name": "HSA-NCI"
+        }
+    },
+    {
+        "model": "base.Geography",
         "pk": 8,
         "fields": {
             "name": "hrr",
             "display_name": "Hospital Referral Region (HRR)",
-            "display_order_number": 8,
+            "display_order_number": 9,
             "used_in": "indicatorsets",
             "short_name": "HRR"
         }
@@ -93,7 +104,7 @@
         "fields": {
             "name": "msa",
             "display_name": "Metropolitan Statistical Area (MSA)",
-            "display_order_number": 9,
+            "display_order_number": 10,
             "used_in": "indicatorsets",
             "short_name": "MSA"
         }
@@ -104,7 +115,7 @@
         "fields": {
             "name": "dma",
             "display_name": "Designated Market Area (DMA)",
-            "display_order_number": 10,
+            "display_order_number": 11,
             "used_in": "indicatorsets",
             "short_name": "DMA"
         }
@@ -115,7 +126,7 @@
         "fields": {
             "name": "facility",
             "display_name": "Hospital (\"Facility\")",
-            "display_order_number": 11,
+            "display_order_number": 12,
             "used_in": "indicatorsets",
             "short_name": "Facility"
         }
@@ -126,7 +137,7 @@
         "fields": {
             "name": "FluSurv-Net site",
             "display_name": "FluSurv-Net site (see documentation)",
-            "display_order_number": 12,
+            "display_order_number": 13,
             "used_in": "indicatorsets",
             "short_name": "FluSurv-Net site"
         }
@@ -137,7 +148,7 @@
         "fields": {
             "name": "N/A",
             "display_name": "N/A",
-            "display_order_number": 13,
+            "display_order_number": 14,
             "used_in": "indicatorsets",
             "short_name": "N/A"
         }

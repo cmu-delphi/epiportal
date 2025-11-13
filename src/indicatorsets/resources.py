@@ -4,7 +4,7 @@ from import_export.fields import Field
 from import_export.widgets import ForeignKeyWidget, ManyToManyWidget
 
 from base.models import GeographicScope, Geography, Pathogen, SeverityPyramidRung
-from base.resources import GEOGRAPHIC_GRANULARITY_MAPPING
+from base.resources import get_geographic_mapping_by_name
 from indicatorsets.models import (
     IndicatorSet,
     NonDelphiIndicatorSet,
@@ -70,9 +70,11 @@ def process_available_geographies(row) -> None:
     for geography in available_geographies:
         geography_name = geography.strip()
         default_params = {"used_in": "indicatorsets"}
-        try:
-            default_params.update(GEOGRAPHIC_GRANULARITY_MAPPING[geography_name])
-        except KeyError:
+        result = get_geographic_mapping_by_name(geography_name)
+        if result:
+            geography_name, mapping = result
+            default_params.update(mapping)
+        else:
             max_display_order_number = Geography.objects.filter(
                 used_in="indicatorsets"
             ).aggregate(Max("display_order_number"))["display_order_number__max"]
