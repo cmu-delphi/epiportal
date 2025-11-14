@@ -288,7 +288,7 @@ class IndicatorHandler {
             numFlusurvIndicators: this.getFlusurvIndicators().length,
             formStartDate: document.getElementById("start_date").value,
             formEndDate: document.getElementById("end_date").value,
-            apiKey: document.getElementById("apiKey").value ? document.getElementById("apiKey").value : "Not provided",
+            apiKey: document.getElementById("apiKey").value ? document.getElementById("apiKey").value : "",
             clientId: clientId ? clientId : "Not available",
         };
         var covidcastGeoValues = $("#geographic_value").select2("data")
@@ -441,7 +441,7 @@ class IndicatorHandler {
             nidssFluLocations: nidssFluLocations,
             nidssDengueLocations: nidssDengueLocations,
             flusurvLocations: flusurvLocations,
-            apiKey: document.getElementById("apiKey").value ? document.getElementById("apiKey").value : "Not provided",
+            apiKey: document.getElementById("apiKey").value ? document.getElementById("apiKey").value : "",
             clientId: clientId ? clientId : "Not available",
         };
         const csrftoken = Cookies.get("csrftoken");
@@ -480,7 +480,7 @@ class IndicatorHandler {
             nidssFluLocations: nidssFluLocations,
             nidssDengueLocations: nidssDengueLocations,
             flusurvLocations: flusurvLocations,
-            apiKey: document.getElementById("apiKey").value ? document.getElementById("apiKey").value : "Not provided",
+            apiKey: document.getElementById("apiKey").value ? document.getElementById("apiKey").value : "",
             clientId: clientId ? clientId : "Not available",
         }
         const csrftoken = Cookies.get("csrftoken");
@@ -519,7 +519,7 @@ class IndicatorHandler {
             nidssFluLocations: nidssFluLocations,
             nidssDengueLocations: nidssDengueLocations,
             flusurvLocations: flusurvLocations,
-            apiKey: document.getElementById("apiKey").value ? document.getElementById("apiKey").value : "Not provided",
+            apiKey: document.getElementById("apiKey").value ? document.getElementById("apiKey").value : "",
             clientId: clientId ? clientId : "Not available",
         }
         const csrftoken = Cookies.get("csrftoken");
@@ -558,7 +558,7 @@ class IndicatorHandler {
             nidssFluLocations: nidssFluLocations,
             nidssDengueLocations: nidssDengueLocations,
             flusurvLocations: flusurvLocations,
-            apiKey: document.getElementById("apiKey").value ? document.getElementById("apiKey").value : "Not provided",
+            apiKey: document.getElementById("apiKey").value ? document.getElementById("apiKey").value : "",
             clientId: clientId ? clientId : "Not available",
         }
         const csrftoken = Cookies.get("csrftoken");
