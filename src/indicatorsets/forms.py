@@ -1,4 +1,5 @@
 from django import forms
+from django.db.models import Case, When, IntegerField
 
 from base.models import Pathogen, Geography, SeverityPyramidRung
 from indicatorsets.models import IndicatorSet
@@ -10,7 +11,13 @@ class IndicatorSetFilterForm(forms.ModelForm):
     pathogens = forms.ModelMultipleChoiceField(
         queryset=Pathogen.objects.filter(
             id__in=IndicatorSet.objects.values_list("pathogens", flat=True)
-        ).order_by("display_order_number"),
+        ).annotate(
+            sort_priority=Case(
+                When(name__iexact="pathogen independent", then=1),
+                default=0,
+                output_field=IntegerField(),
+            )
+        ).order_by("sort_priority", "name").distinct(),
         widget=forms.CheckboxSelectMultiple(),
     )
 
