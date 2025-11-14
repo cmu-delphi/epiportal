@@ -127,11 +127,14 @@ class IndicatorSetFilter(django_filters.FilterSet):
         if not value:
             return queryset
         filtered_indicators = get_list_of_indicators_filtered_by_geo(value)
-        query = Q()
-        for item in filtered_indicators["epidata"]:
-            query |= Q(source__name=item["source"], name=item["signal"])
-        self.indicators_qs = self.indicators_qs.filter(query)
-        indicator_sets = self.indicators_qs.values_list(
-            "indicator_set_id", flat=True
-        ).distinct()
-        return queryset.filter(id__in=indicator_sets)
+        if filtered_indicators["epidata"]:
+            query = Q()
+            for item in filtered_indicators["epidata"]:
+                query |= Q(source__name=item["source"], name=item["signal"])
+            self.indicators_qs = self.indicators_qs.filter(query)
+            indicator_sets = self.indicators_qs.values_list(
+                "indicator_set_id", flat=True
+            ).distinct()
+            return queryset.filter(id__in=indicator_sets)
+        else:
+            return IndicatorSet.objects.none()

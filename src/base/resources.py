@@ -9,7 +9,7 @@ GEOGRAPHIC_GRANULARITY_MAPPING = {
         "display_order_number": 2,
         "short_name": "HHS",
     },
-    "hhs-region": {
+    "hhs": {
         "display_name": "U.S. HHS Region",
         "display_order_number": 2,
         "short_name": "HHS",
@@ -39,7 +39,7 @@ GEOGRAPHIC_GRANULARITY_MAPPING = {
         "display_order_number": 7,
         "short_name": "ADM 3",
     },
-    "hsa": {
+    "hsa_nci": {
         "display_name": "Health Service Area (HSA-NCI)",
         "display_order_number": 8,
         "short_name": "HSA-NCI",
