@@ -392,7 +392,7 @@ class IndicatorResource(ModelResource):
         widget=PermissiveForeignKeyWidget(IndicatorSet),
     )
     use_in_express_interface = Field(
-        attribute="use_in_express_interface", column_name="Include in express"
+        attribute="use_in_express_interface", column_name="Include in express app"
     )
 
     class Meta:
@@ -596,7 +596,7 @@ class OtherEndpointIndicatorResource(ModelResource):
         widget=PermissiveForeignKeyWidget(IndicatorSet),
     )
     use_in_express_interface = Field(
-        attribute="use_in_express_interface", column_name="Include in express"
+        attribute="use_in_express_interface", column_name="Include in express app"
     )
 
     class Meta:
@@ -686,7 +686,7 @@ class NonDelphiIndicatorResource(resources.ModelResource):
         widget=PermissiveForeignKeyWidget(NonDelphiIndicatorSet),
     )
     use_in_express_interface = Field(
-        attribute="use_in_express_interface", column_name="Include in express"
+        attribute="use_in_express_interface", column_name="Include in express app"
     )
 
     class Meta:
