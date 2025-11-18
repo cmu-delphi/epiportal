@@ -33,7 +33,7 @@ def fix_boolean_fields(row) -> None:
         "Has StdErr",
         "Has Sample Size",
         "Include in indicator app",
-        "Include in express",
+        "Include in express app",
     ]
 
     for field in fields:
