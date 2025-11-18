@@ -45,6 +45,30 @@ def _epiweek_label(w: Week) -> str:
     return f"{w.year}-W{w.week:02d}"
 
 
+def _day_key(d: datetime.date) -> int:
+    # Matches API time_value format YYYYMMDD, e.g. 20240115
+    return d.year * 10000 + d.month * 100 + d.day
+
+
+def _day_label(d: datetime.date) -> str:
+    return d.strftime("%Y-%m-%d")
+
+
+def days_in_date_range(start_date_str: str, end_date_str: str):
+    """Generate all days in the date range."""
+    start_date = datetime.strptime(start_date_str, "%Y-%m-%d").date()
+    end_date = datetime.strptime(end_date_str, "%Y-%m-%d").date()
+    if end_date < start_date:
+        start_date, end_date = end_date, start_date
+
+    days = []
+    d = start_date
+    while d <= end_date:
+        days.append(d)
+        d += timedelta(days=1)
+    return days
+
+
 def get_available_geos(indicators):
     geo_values = []
     grouped_indicators = group_by_property(indicators, "data_source")
@@ -117,16 +141,60 @@ def prepare_chart_series_multi(
     start_date: str,
     end_date: str,
     series_by: Union[str, Iterable[str]] = "signal",
+    time_type: str = None,
 ):
     """
-    api_rows: list of dicts with at least 'time_value' (YYYYWW) and 'value'
+    api_rows: list of dicts with at least 'time_value' (YYYYWW or YYYYMMDD) and 'value'
     series_by: a field name (e.g., 'signal' or 'geo_value') or an iterable of fields (e.g., ('signal','geo_value'))
-    returns: { labels: [...], datasets: [{ label, data }, ...] }
+    time_type: 'week' or 'day' - determines how to interpret time_value
+    returns: { labels: [...], dayLabels: [...], timePositions: [...], datasets: [{ label, data, timeType }, ...] }
     """
-    # 1) Build aligned epiweek axis
+    # 1) Build unified timeline with both days and weeks
+    days = days_in_date_range(start_date, end_date)
     weeks = epiweeks_in_date_range(start_date, end_date)
-    labels = [_epiweek_label(w) for w in weeks]
-    keys = [_epiweek_key(w) for w in weeks]
+
+    # Create a unified timeline: each position can be either a day or a week
+    # We'll use day positions as the base, and mark week positions
+    day_keys = [_day_key(d) for d in days]
+    week_keys = [_epiweek_key(w) for w in weeks]
+
+    # Create mapping: week_key -> list of day_keys in that week
+    week_to_days = {}
+    for w in weeks:
+        week_start = w.startdate()
+        week_end = w.enddate()
+        week_key = _epiweek_key(w)
+        week_to_days[week_key] = []
+        for d in days:
+            if week_start <= d <= week_end:
+                week_to_days[week_key].append(_day_key(d))
+
+    # Build labels and time positions
+    # timePositions will indicate: 'day' or 'week' for each position
+    labels = []  # Primary labels (weeks)
+    day_labels = []  # Secondary labels (days)
+    time_positions = []  # 'day' or 'week' for each position
+
+    # Use days as the base timeline
+    for d in days:
+        day_key = _day_key(d)
+        day_labels.append(_day_label(d))
+
+        # Check if this day is the start of a week
+        w = Week.fromdate(d)
+        week_key = _epiweek_key(w)
+        if week_key in week_keys and d == w.startdate():
+            labels.append(_epiweek_label(w))
+            time_positions.append("week")
+        else:
+            # Check if any week contains this day
+            is_in_week = any(day_key in week_to_days.get(wk, []) for wk in week_keys)
+            if is_in_week:
+                labels.append("")  # Empty label for days within weeks
+                time_positions.append("day")
+            else:
+                labels.append("")
+                time_positions.append("day")
 
     # 2) Group rows by series key
     if isinstance(series_by, (list, tuple)):
@@ -145,37 +213,114 @@ def prepare_chart_series_multi(
         def series_label_of(key):
             return str(key)
 
+    # 3) Process data based on time_type
     series_to_values: dict[object, dict[int, float]] = {}
+    detected_time_type = time_type
+
     for row in api_rows:
         tv = row.get("time_value")
-        # If the API returned daily values (YYYYMMDD), convert to epiweek key (YYYYWW)
-        if tv is not None and (row.get("time_type") == "day"):
-            try:
-                tv_str = str(tv)
-                year = int(tv_str[0:4])
-                month = int(tv_str[4:6])
-                day = int(tv_str[6:8])
-                d = datetime(year, month, day).date()
-                w = Week.fromdate(d)
-                tv = _epiweek_key(w)
-            except Exception:
-                # Skip malformed dates
-                tv = None
+        row_time_type = row.get("time_type") or time_type
+
         if tv is None:
             continue
+
+        # Determine time_type if not provided
+        if detected_time_type is None:
+            # Try to detect from time_value format
+            tv_str = str(tv)
+            if len(tv_str) == 8:  # YYYYMMDD format
+                detected_time_type = "day"
+            elif len(tv_str) == 6:  # YYYYWW format
+                detected_time_type = "week"
+            else:
+                detected_time_type = row_time_type or "week"
+
+        # Use row's time_type if available, otherwise use detected
+        actual_time_type = row_time_type or detected_time_type
+
+        # Convert time_value to appropriate key
+        if actual_time_type == "day":
+            try:
+                tv_str = str(tv)
+                if len(tv_str) == 8:
+                    year = int(tv_str[0:4])
+                    month = int(tv_str[4:6])
+                    day = int(tv_str[6:8])
+                    d = datetime(year, month, day).date()
+                    tv = _day_key(d)
+                else:
+                    continue
+            except Exception:
+                continue
+        else:  # week
+            try:
+                tv_str = str(tv)
+                if len(tv_str) == 6:
+                    year = int(tv_str[0:4])
+                    week = int(tv_str[4:6])
+                    w = Week(year, week)
+                    tv = _epiweek_key(w)
+                elif len(tv_str) == 8:
+                    # Convert day to week
+                    year = int(tv_str[0:4])
+                    month = int(tv_str[4:6])
+                    day = int(tv_str[6:8])
+                    d = datetime(year, month, day).date()
+                    w = Week.fromdate(d)
+                    tv = _epiweek_key(w)
+                else:
+                    continue
+            except Exception:
+                continue
+
         skey = series_key_of(row)
         if skey not in series_to_values:
             series_to_values[skey] = {}
         # last one wins if duplicates
         series_to_values[skey][tv] = row.get("value", None)
 
-    # 3) Align each series to the epiweek axis, filling with None
+    # 4) Align each series to the unified timeline (day-based)
     datasets = []
     for skey, tv_map in series_to_values.items():
-        data = [tv_map.get(k, None) for k in keys]
-        datasets.append({"label": series_label_of(skey), "data": data})
+        data = []
+        # Determine if this series is weekly or daily based on its keys
+        series_keys = list(tv_map.keys())
+        series_time_type = detected_time_type or "week"
 
-    return {"labels": labels, "datasets": datasets}
+        if series_keys:
+            # Check if keys match day format (8 digits) or week format (6 digits)
+            first_key = series_keys[0]
+            if first_key >= 10000000:  # Day key (YYYYMMDD >= 10000000)
+                series_time_type = "day"
+                # Map directly to day positions
+                for day_key in day_keys:
+                    data.append(tv_map.get(day_key, None))
+            else:  # Week key (YYYYWW < 10000000)
+                series_time_type = "week"
+                # Map week values to day positions
+                # For each day, check if it's the start of a week that has data
+                for d in days:
+                    w = Week.fromdate(d)
+                    week_key = _epiweek_key(w)
+                    # If this is the start of the week and we have data for this week
+                    if d == w.startdate() and week_key in tv_map:
+                        data.append(tv_map.get(week_key, None))
+                    else:
+                        # For other days in the week, use None
+                        data.append(None)
+        else:
+            data = [None] * len(day_keys)
+
+        datasets.append(
+            {"label": series_label_of(skey), "data": data, "timeType": series_time_type}
+        )
+
+    return {
+        "labels": labels,
+        "dayLabels": day_labels,
+        "timePositions": time_positions,
+        "datasets": datasets,
+    }
 
 
 def normalize_dataset(data):
@@ -184,46 +329,78 @@ def normalize_dataset(data):
     Preserves None values for missing data.
     """
     # Filter out None values for min/max calculation
-    numeric_values = [v for v in data if v is not None and not (isinstance(v, float) and (v != v or v in (float('inf'), float('-inf'))))]
-    
+    numeric_values = [
+        v
+        for v in data
+        if v is not None
+        and not (
+            isinstance(v, float) and (v != v or v in (float("inf"), float("-inf")))
+        )
+    ]
+
     if not numeric_values:
         return data  # Return as-is if no valid numeric values
-    
+
     min_val = min(numeric_values)
     max_val = max(numeric_values)
     range_val = (max_val - min_val) or 1  # Avoid division by zero
-    
+
     # Normalize each value
     normalized = []
     for value in data:
         if value is None:
             normalized.append(None)
-        elif isinstance(value, float) and (value != value or value in (float('inf'), float('-inf'))):
+        elif isinstance(value, float) and (
+            value != value or value in (float("inf"), float("-inf"))
+        ):
             normalized.append(None)
         else:
             normalized.append(((value - min_val) / range_val) * 100)
-    
+
     return normalized
 
 
 def get_chart_data(indicators, geography):
-    chart_data = {"labels": [], "datasets": []}
+    chart_data = {"labels": [], "dayLabels": [], "timePositions": [], "datasets": []}
     geo_type, geo_value = geography.split(":")
     geo_display_name = GeographyUnit.objects.get(
         geo_level__name=geo_type, geo_id=geo_value
     ).display_name
+
+    # Calculate date range: last 12 months from today, but fetch data from 2020
+    today = datetime.now().date()
+    two_years_ago = today - timedelta(days=730)
+    # Format dates as strings
+    end_date = today.strftime("%Y-%m-%d")
+    start_date = two_years_ago.strftime("%Y-%m-%d")
+
+    # Store the initial view range (last 12 months)
+    chart_data["initialViewStart"] = start_date
+    chart_data["initialViewEnd"] = end_date
+
+    # Fetch data from a wider range (2020 to today) for scrolling
+    data_start_date = "2010-01-01"
+    data_end_date = today.strftime("%Y-%m-%d")
+
     for indicator in indicators:
         title = generate_epivis_custom_title(indicator, geo_display_name)
         color = generate_random_color()
+        indicator_time_type = indicator.get("time_type", "week")
         data = get_covidcast_data(
-            indicator, "2010-01-01", "2025-01-31", geography, settings.EPIDATA_API_KEY
+            indicator,
+            data_start_date,
+            data_end_date,
+            geography,
+            settings.EPIDATA_API_KEY,
         )
         if data:
+            # Prepare series with full data range for scrolling
             series = prepare_chart_series_multi(
                 data,
-                "2020-01-01",
-                "2025-01-31",
+                data_start_date,
+                data_end_date,
                 series_by="signal",  # label per indicator (adjust to ("signal","geo_value") if needed)
+                time_type=indicator_time_type,
             )
             # Apply readable label, color, and normalize data for each dataset
             for ds in series["datasets"]:
@@ -236,5 +413,7 @@ def get_chart_data(indicators, geography):
             # Initialize labels once; assume same date range for all
             if not chart_data["labels"]:
                 chart_data["labels"] = series["labels"]
+                chart_data["dayLabels"] = series["dayLabels"]
+                chart_data["timePositions"] = series["timePositions"]
             chart_data["datasets"].extend(series["datasets"])
     return chart_data
