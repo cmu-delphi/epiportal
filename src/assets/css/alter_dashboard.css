@@ -201,6 +201,103 @@ body {
 
 .chart-container-wrapper {
     padding: 1.5rem;
+    position: relative;
+}
+
+/* Chart Interaction Hint */
+.chart-hint {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    background: linear-gradient(135deg, #e0f2fe 0%, #dbeafe 100%);
+    border: 1px solid #93c5fd;
+    border-radius: 8px;
+    padding: 0.75rem 1rem;
+    margin-bottom: 1rem;
+    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.05);
+    animation: slideDown 0.3s ease-out;
+}
+
+@keyframes slideDown {
+    from {
+        opacity: 0;
+        transform: translateY(-10px);
+    }
+    to {
+        opacity: 1;
+        transform: translateY(0);
+    }
+}
+
+.chart-hint-content {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    flex: 1;
+}
+
+.chart-hint-icon {
+    font-size: 1.2rem;
+    flex-shrink: 0;
+}
+
+.chart-hint-text {
+    font-size: 0.875rem;
+    color: #1e40af;
+    line-height: 1.5;
+}
+
+.chart-hint-text strong {
+    font-weight: 600;
+}
+
+.chart-hint-close {
+    background: none;
+    border: none;
+    color: #1e40af;
+    font-size: 1.5rem;
+    line-height: 1;
+    cursor: pointer;
+    padding: 0;
+    width: 24px;
+    height: 24px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    border-radius: 4px;
+    transition: opacity 0.2s ease, background-color 0.2s;
+    opacity: 0.7;
+    flex-shrink: 0;
+    margin-left: 0.5rem;
+}
+
+.chart-hint-close:hover {
+    opacity: 1;
+    background-color: rgba(30, 64, 175, 0.1);
+}
+
+.chart-hint-close:active {
+    background-color: rgba(30, 64, 175, 0.2);
+}
+
+@keyframes fadeOut {
+    from {
+        opacity: 1;
+        transform: translateY(0);
+    }
+    to {
+        opacity: 0;
+        transform: translateY(-10px);
+    }
+}
+
+.chart-hint-close:focus {
+    outline: 2px solid #1e40af;
+    outline-offset: 2px;
+}
+
+.chart-hint.hidden {
+    display: none;
 }
 
 /* Chart Container */
@@ -212,6 +309,12 @@ body {
 
 .chart-container canvas {
     max-height: 100%;
+    touch-action: pan-y pinch-zoom; /* Allow vertical scrolling and pinch zoom, enable horizontal pan */
+    cursor: grab;
+}
+
+.chart-container canvas:active {
+    cursor: grabbing;
 }
 
 /* Chart Controls */
