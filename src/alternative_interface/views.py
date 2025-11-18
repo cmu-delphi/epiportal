@@ -1,6 +1,7 @@
 from django.shortcuts import render
 from indicators.models import Indicator
 from base.models import Pathogen
+from epiportal.settings import ALTERNATIVE_INTERFACE_VERSION
 
 from alternative_interface.utils import get_available_geos, get_chart_data
 
@@ -12,7 +13,7 @@ def alternative_interface_view(request):
     try:
         ctx = {}
         ctx["header_description"] = HEADER_DESCRIPTION
-
+        ctx["alternative_interface_version"] = ALTERNATIVE_INTERFACE_VERSION
         # Get filters from URL parameters
         pathogen_filter = request.GET.get("pathogen", "")
         geography_filter = request.GET.get("geography", "")
