@@ -789,6 +789,16 @@ function initGeographyTypingAnimation() {
     
     // Check if geography is selected and update visibility
     function checkSelection() {
+        // Don't show animation if select is disabled (no pathogen selected)
+        if (selectElement.disabled) {
+            typingElement.style.display = 'none';
+            if (timeoutId) {
+                clearTimeout(timeoutId);
+                timeoutId = null;
+            }
+            return;
+        }
+        
         if (selectElement.value && selectElement.value !== '') {
             typingElement.style.display = 'none';
             if (timeoutId) {
@@ -842,12 +852,34 @@ function initGeographyTypingAnimation() {
     }, 500);
 }
 
+// Update geography select enabled/disabled state based on pathogen selection
+function updateGeographySelectState() {
+    const pathogenSelect = document.getElementById('pathogenSelect');
+    const geographySelect = document.getElementById('geographySelect');
+    
+    if (!pathogenSelect || !geographySelect) {
+        return;
+    }
+    
+    const hasPathogen = pathogenSelect.value && pathogenSelect.value !== '';
+    
+    // Enable or disable geography select based on pathogen selection
+    geographySelect.disabled = !hasPathogen;
+    
+    // If pathogen is cleared, also clear geography selection
+    if (!hasPathogen && geographySelect.value) {
+        geographySelect.value = '';
+    }
+}
+
 // Initialize dashboard when DOM is loaded
 let dashboard;
 document.addEventListener('DOMContentLoaded', function() {
     dashboard = new AlterDashboard();
     initPathogenTypingAnimation();
     initGeographyTypingAnimation();
+    // Initialize geography select state based on pathogen selection
+    updateGeographySelectState();
 });
 
 // Handle pathogen change - reset geography select and submit form
@@ -862,6 +894,10 @@ function handlePathogenChange() {
     if (geographySelect) {
         geographySelect.value = '';
     }
+    
+    // Update geography select state before submitting
+    updateGeographySelectState();
+    
     // Show loader before submitting form
     const loader = document.getElementById('pageLoader');
     if (loader) {
