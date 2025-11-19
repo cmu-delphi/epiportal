@@ -620,7 +620,7 @@ function initPathogenTypingAnimation() {
     let currentPathogenIndex = 0;
     let currentText = '';
     let isDeleting = false;
-    let typingSpeed = 100; // milliseconds per character
+    let typingSpeed = 300; // milliseconds per character
     let deleteSpeed = 50;
     let pauseBeforeDelete = 2000; // pause before deleting
     let pauseAfterDelete = 500; // pause before typing next
@@ -741,7 +741,7 @@ function initGeographyTypingAnimation() {
     let currentGeographyIndex = 0;
     let currentText = '';
     let isDeleting = false;
-    let typingSpeed = 100; // milliseconds per character
+    let typingSpeed = 300; // milliseconds per character
     let deleteSpeed = 50;
     let pauseBeforeDelete = 2000; // pause before deleting
     let pauseAfterDelete = 500; // pause before typing next
