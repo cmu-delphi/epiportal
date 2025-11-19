@@ -14,6 +14,20 @@ class AlterDashboard {
         this.initChart();
         this.initControls();
         this.initLegendInteractivity();
+        this.initChartHint();
+    }
+    
+    initChartHint() {
+        // Check if hint was previously dismissed
+        if (localStorage.getItem('chartHintDismissed') === 'true') {
+            const hint = document.getElementById('chartHint');
+            if (hint) {
+                hint.style.display = 'none';
+            }
+        } else {
+            // Auto-hide hint after 10 seconds
+            autoHideChartHint();
+        }
     }
 
     initChart() {
@@ -21,13 +35,22 @@ class AlterDashboard {
         if (!ctx) return;
 
         // Require backend-provided chartData
-        if (!window.chartData || !Array.isArray(window.chartData.labels) || !Array.isArray(window.chartData.datasets)) {
+        if (!window.chartData || !Array.isArray(window.chartData.datasets)) {
             return;
         }
         const palette = ['#2563eb','#16a34a','#dc2626','#a855f7','#f59e0b','#0ea5e9','#ef4444','#10b981'];
-        const labels = Array.isArray(window.chartData.labels)
+        
+        // Use dayLabels as the base timeline, fallback to labels if dayLabels not available
+        const dayLabels = Array.isArray(window.chartData.dayLabels)
+            ? window.chartData.dayLabels.map(l => String(l))
+            : (Array.isArray(window.chartData.labels) ? window.chartData.labels.map(l => String(l)) : []);
+        const weekLabels = Array.isArray(window.chartData.labels)
             ? window.chartData.labels.map(l => String(l))
             : [];
+        const timePositions = Array.isArray(window.chartData.timePositions)
+            ? window.chartData.timePositions
+            : [];
+        
         const sanitizeValue = (v) => {
             if (v === null || v === undefined) return null;
             if (typeof v === 'number') return Number.isFinite(v) ? v : null;
@@ -54,18 +77,27 @@ class AlterDashboard {
             if (a.length < targetLen) return a.concat(Array(targetLen - a.length).fill(null));
             return a;
         };
-        const datasets = window.chartData.datasets.map((ds, i) => ({
-            label: (ds.label === null || ds.label === undefined) ? '' : String(ds.label),
-            data: alignData(Array.isArray(ds.data) ? ds.data.map(sanitizeValue) : [], labels.length),
-            borderColor: sanitizeColor(ds.borderColor, palette[i % palette.length]),
-            backgroundColor: sanitizeColor(ds.backgroundColor, (palette[i % palette.length] + '33')),
-            borderWidth: 2,
-            fill: true,
-            tension: 0,
-            pointRadius: 0,
-            pointHoverRadius: 4,
-            spanGaps: false,
-        }));
+        const datasets = window.chartData.datasets.map((ds, i) => {
+            const timeType = ds.timeType || 'week';
+            const isWeekly = timeType === 'week';
+            
+            return {
+                label: (ds.label === null || ds.label === undefined) ? '' : String(ds.label),
+                data: alignData(Array.isArray(ds.data) ? ds.data.map(sanitizeValue) : [], dayLabels.length),
+                borderColor: sanitizeColor(ds.borderColor, palette[i % palette.length]),
+                backgroundColor: sanitizeColor(ds.backgroundColor, (palette[i % palette.length] + '33')),
+                borderWidth: 2,
+                fill: true,
+                tension: 0, // No bezier curves for better performance
+                pointRadius: isWeekly ? 3 : 0, // Show points for weekly indicators
+                pointHoverRadius: isWeekly ? 6 : 4, // Larger hover radius for weekly
+                pointBackgroundColor: isWeekly ? sanitizeColor(ds.borderColor, palette[i % palette.length]) : undefined,
+                pointBorderColor: isWeekly ? '#fff' : undefined,
+                pointBorderWidth: isWeekly ? 1.5 : 0,
+                spanGaps: isWeekly ? true : false, // Connect across gaps for weekly data (to link weekly points)
+                timeType: timeType // Store timeType for reference
+            };
+        });
 
         // Store datasets (already normalized from backend)
         this.originalDatasets = datasets.map(d => ({
@@ -156,15 +188,94 @@ class AlterDashboard {
 			}
 		};
 
+		// Dual-level X-axis plugin (weeks on top, days below)
+		// Optimized to reduce redraws during pan/zoom
+		const dualAxisPlugin = {
+			id: 'dualAxis',
+			afterDraw(chart) {
+				// Skip redraw only during active animations for better performance
+				if (chart.animating) return;
+				
+				const ctx = chart.ctx;
+				const xAxis = chart.scales.x;
+				const chartArea = chart.chartArea;
+				const weekLabels = window.chartData?.labels || [];
+				const dayLabels = window.chartData?.dayLabels || [];
+				
+				if (!xAxis || !chartArea || weekLabels.length === 0 || dayLabels.length === 0) {
+					console.log('Dual axis: Missing data', {
+						hasXAxis: !!xAxis,
+						hasChartArea: !!chartArea,
+						weekLabelsLength: weekLabels.length,
+						dayLabelsLength: dayLabels.length
+					});
+					return;
+				}
+				
+				ctx.save();
+				ctx.font = 'bold 11px Inter, sans-serif';
+				ctx.textAlign = 'center';
+				ctx.textBaseline = 'top';
+				ctx.fillStyle = '#64748b';
+				
+				// Draw week labels above the chart
+				// Only draw labels for visible ticks to improve performance
+				const weekLabelY = chartArea.top - 20;
+				
+				// Get visible ticks from the x-axis
+				if (!xAxis.ticks || xAxis.ticks.length === 0) {
+					ctx.restore();
+					return;
+				}
+				
+				const visibleTicks = xAxis.ticks.filter(tick => {
+					const dataIndex = tick.value;
+					return dataIndex >= 0 && dataIndex < weekLabels.length && 
+					       weekLabels[dataIndex] && weekLabels[dataIndex].trim() !== '';
+				});
+				
+				// Limit the number of labels drawn to improve performance
+				const maxLabels = 50;
+				if (visibleTicks.length > maxLabels) {
+					// Sample labels if too many
+					const step = Math.ceil(visibleTicks.length / maxLabels);
+					visibleTicks.forEach((tick, index) => {
+						if (index % step === 0) {
+							const dataIndex = tick.value;
+							const label = weekLabels[dataIndex];
+							if (label && label.trim() !== '') {
+								ctx.fillText(label, tick.x, weekLabelY);
+							}
+						}
+					});
+				} else {
+					visibleTicks.forEach((tick) => {
+						const dataIndex = tick.value;
+						const label = weekLabels[dataIndex];
+						if (label && label.trim() !== '') {
+							ctx.fillText(label, tick.x, weekLabelY);
+						}
+					});
+				}
+				
+				ctx.restore();
+			}
+		};
+
 		this.chart = new Chart(ctx, {
             type: 'line',
             data: {
-                labels: labels,
+                labels: dayLabels, // Use day labels as base timeline
                 datasets: datasets
             },
             options: {
                 responsive: true,
                 maintainAspectRatio: false,
+                layout: {
+                    padding: {
+                        top: 30 // Add padding for week labels
+                    }
+                },
                 plugins: {
 					legend: { display: false },
 					htmlLegend: { containerID: 'chartHtmlLegend' },
@@ -185,13 +296,23 @@ class AlterDashboard {
                         borderColor: 'rgba(255, 255, 255, 0.1)',
                         borderWidth: 1,
                         cornerRadius: 8,
+                        enabled: function(context) {
+                            // Disable tooltips during pan/zoom for better performance
+                            const chart = context.chart;
+                            return !chart._isPanning && !chart._isZooming;
+                        },
                         filter: function(tooltipItem) {
                             // Only show tooltips for visible datasets
                             return !tooltipItem.hidden;
                         },
                         callbacks: {
                             title: function(context) {
-                                return 'Date: ' + context[0].label;
+                                const dayLabel = dayLabels[context[0].dataIndex] || '';
+                                const weekLabel = weekLabels[context[0].dataIndex] || '';
+                                if (weekLabel && weekLabel.trim() !== '') {
+                                    return 'Week: ' + weekLabel + ' | Day: ' + dayLabel;
+                                }
+                                return 'Date: ' + dayLabel;
                             },
                             label: function(context) {
                                 const label = context.dataset.label || '';
@@ -202,6 +323,38 @@ class AlterDashboard {
                                 // Data is always normalized from backend
                                 const formattedValue = value.toFixed(1) + '%';
                                 return label + ': ' + formattedValue;
+                            }
+                        }
+                    },
+                    // Zoom and pan configuration
+                    zoom: {
+                        pan: {
+                            enabled: true,
+                            mode: 'x',
+                            modifierKey: null, // No modifier key needed for panning
+                            threshold: 5,
+                            speed: 1
+                        },
+                        zoom: {
+                            wheel: {
+                                enabled: true,
+                                speed: 0.1
+                            },
+                            pinch: {
+                                enabled: true
+                            },
+                            mode: 'x',
+                            limits: {
+                                x: {
+                                    min: 0,
+                                    max: dayLabels.length - 1
+                                }
+                            }
+                        },
+                        limits: {
+                            x: {
+                                min: 0,
+                                max: dayLabels.length - 1
                             }
                         }
                     }
@@ -215,10 +368,28 @@ class AlterDashboard {
                         },
                         ticks: {
                             font: {
-                                size: 11
+                                size: 10
                             },
                             color: '#64748b',
-                            maxTicksLimit: 8
+                            maxTicksLimit: 20, // Show more ticks for daily data
+                            autoSkip: true, // Automatically skip ticks when crowded
+                            autoSkipPadding: 5,
+                            callback: function(value, index) {
+                                // Show day labels, but only for selected ticks
+                                const label = dayLabels[index];
+                                if (!label) return '';
+                                // Format date to be more compact
+                                try {
+                                    const date = new Date(label);
+                                    const month = date.getMonth() + 1;
+                                    const day = date.getDate();
+                                    return month + '/' + day;
+                                } catch (e) {
+                                    return label;
+                                }
+                            },
+                            maxRotation: 45,
+                            minRotation: 45
                         }
                     },
                     y: {
@@ -255,15 +426,87 @@ class AlterDashboard {
                 interaction: {
                     mode: 'nearest',
                     axis: 'x',
-                    intersect: false
+                    intersect: false,
+                    // Allow panning even when hovering over data points
+                    includeInvisible: true
                 },
                 animation: {
                     duration: 1000,
-                    easing: 'easeInOutQuart'
+                    easing: 'easeInOutQuart',
+                    // Disable animations during interactions for better performance
+                    onProgress: function() {
+                        // Throttle updates during animation
+                    },
+                    onComplete: function() {
+                        // Re-enable full rendering after animation
+                    }
+                },
+                // Performance optimizations
+                elements: {
+                    point: {
+                        radius: 0, // Hide points by default (only show for weekly)
+                        hoverRadius: 4
+                    },
+                    line: {
+                        borderWidth: 2,
+                        tension: 0 // Disable bezier curves for better performance
+                    }
+                },
+                // Optimize tooltip rendering
+                hover: {
+                    animationDuration: 0 // Disable hover animations
+                },
+                // Reduce unnecessary redraws
+                transitions: {
+                    active: {
+                        animation: {
+                            duration: 0
+                        }
+                    }
                 }
 			},
-			plugins: [htmlLegendPlugin]
+			plugins: [htmlLegendPlugin, dualAxisPlugin]
 		});
+        
+        // Set initial zoom to last 12 months after chart is created
+        setTimeout(() => {
+            if (window.chartData?.initialViewStart && window.chartData?.initialViewEnd && this.chart) {
+                const initialStart = window.chartData.initialViewStart;
+                const initialEnd = window.chartData.initialViewEnd;
+                
+                // Find indices in dayLabels that match the initial view dates
+                let startIndex = dayLabels.findIndex(d => d >= initialStart);
+                let endIndex = dayLabels.findIndex(d => d > initialEnd);
+                
+                // If exact match not found, use closest
+                if (startIndex === -1) startIndex = 0;
+                if (endIndex === -1) endIndex = dayLabels.length - 1;
+                
+                // Ensure valid range
+                if (startIndex >= 0 && endIndex > startIndex && endIndex < dayLabels.length) {
+                    // Zoom to the last 12 months using the zoom plugin API
+                    try {
+                        // Use zoomScale method if available (chartjs-plugin-zoom v2)
+                        if (typeof this.chart.zoomScale === 'function') {
+                            this.chart.zoomScale('x', {
+                                min: startIndex,
+                                max: endIndex
+                            });
+                        } else {
+                            // Fallback: set scale min/max directly
+                            const xScale = this.chart.scales.x;
+                            if (xScale) {
+                                xScale.options.min = startIndex;
+                                xScale.options.max = endIndex;
+                                this.chart.update('none');
+                            }
+                        }
+                    } catch (e) {
+                        console.warn('Could not set initial zoom:', e);
+                    }
+                }
+            }
+        }, 100);
         
         // Hide loader after chart is initialized
         const loader = document.getElementById('pageLoader');
@@ -330,10 +573,30 @@ class AlterDashboard {
         // Legend interactivity is handled in Chart.js config
         // Additional styling can be added here if needed
     }
+}
 
-    // Update legend state display
-    updateLegendState() {
-        // Can add custom legend state management here
+// Dismiss chart hint function (called from HTML onclick)
+function dismissChartHint() {
+    const hint = document.getElementById('chartHint');
+    if (hint) {
+        hint.style.animation = 'fadeOut 0.3s ease-out';
+        setTimeout(() => {
+            hint.style.display = 'none';
+        }, 300);
+        // Store dismissal in localStorage so it doesn't show again
+        localStorage.setItem('chartHintDismissed', 'true');
+    }
+}
+
+// Auto-hide chart hint after 10 seconds
+function autoHideChartHint() {
+    const hint = document.getElementById('chartHint');
+    if (hint && !localStorage.getItem('chartHintDismissed')) {
+        setTimeout(() => {
+            if (hint && hint.style.display !== 'none') {
+                dismissChartHint();
+            }
+        }, 10000); // Hide after 10 seconds
     }
 }
 
@@ -357,7 +620,7 @@ function initPathogenTypingAnimation() {
     let currentPathogenIndex = 0;
     let currentText = '';
     let isDeleting = false;
-    let typingSpeed = 100; // milliseconds per character
+    let typingSpeed = 300; // milliseconds per character
     let deleteSpeed = 50;
     let pauseBeforeDelete = 2000; // pause before deleting
     let pauseAfterDelete = 500; // pause before typing next
@@ -478,7 +741,7 @@ function initGeographyTypingAnimation() {
     let currentGeographyIndex = 0;
     let currentText = '';
     let isDeleting = false;
-    let typingSpeed = 100; // milliseconds per character
+    let typingSpeed = 300; // milliseconds per character
     let deleteSpeed = 50;
     let pauseBeforeDelete = 2000; // pause before deleting
     let pauseAfterDelete = 500; // pause before typing next
