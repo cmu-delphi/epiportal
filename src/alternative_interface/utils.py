@@ -12,6 +12,7 @@ from indicatorsets.utils import (
     get_epiweek,
     group_by_property,
 )
+from alternative_interface.helper import covidcast_fluview_locations_mapping
 
 
 def epiweeks_in_date_range(start_date_str: str, end_date_str: str):
@@ -72,6 +73,7 @@ def days_in_date_range(start_date_str: str, end_date_str: str):
 def get_available_geos(indicators):
     geo_values = []
     grouped_indicators = group_by_property(indicators, "data_source")
+    sources = grouped_indicators.keys()
     for data_source, indicators in grouped_indicators.items():
         indicators_str = ",".join(indicator["name"] for indicator in indicators)
         response = requests.get(
@@ -98,6 +100,27 @@ def get_available_geos(indicators):
         .prefetch_related("geo_level")
         .order_by("level")
     ]
+    if "fluview" in sources:
+        geographic_granularities.extend(
+            [
+                {
+                    "id": f"{geo_unit.geo_level.name}:{geo_unit.geo_id}",
+                    "geoType": geo_unit.geo_level.name,
+                    "text": geo_unit.display_name,
+                    "geoTypeDisplayName": geo_unit.geo_level.display_name,
+                }
+                for geo_unit in GeographyUnit.objects.filter(
+                    geo_level__name__in=[
+                        "census-region",
+                        "us-territory",
+                        "us-city",
+                        "ny_minus_jfk",
+                    ]
+                )
+                .prefetch_related("geo_level")
+                .order_by("level")
+            ]
+        )
     grouped_geographic_granularities = group_by_property(
         geographic_granularities, "geoTypeDisplayName"
     )
@@ -113,26 +136,57 @@ def get_available_geos(indicators):
 
 
 def get_covidcast_data(indicator, start_date, end_date, geo, api_key):
-    if indicator["_endpoint"] == "covidcast":
-        time_values = f"{start_date}--{end_date}"
-        if indicator["time_type"] == "week":
-            start_day, end_day = get_epiweek(start_date, end_date)
-            time_values = f"{start_day}-{end_day}"
-        geo_type, geo_value = geo.split(":")
-        params = {
-            "time_type": indicator["time_type"],
-            "time_values": time_values,
-            "data_source": indicator["data_source"],
-            "signal": indicator["name"],
-            "geo_type": geo_type,
-            "geo_values": geo_value.lower(),
-            "api_key": api_key if api_key else settings.EPIDATA_API_KEY,
-        }
-        response = requests.get(f"{settings.EPIDATA_URL}covidcast", params=params)
-        if response.status_code == 200:
-            response_data = response.json()
-            if len(response_data["epidata"]):
-                return response_data["epidata"]
+    time_values = f"{start_date}--{end_date}"
+    if indicator["time_type"] == "week":
+        start_day, end_day = get_epiweek(start_date, end_date)
+        time_values = f"{start_day}-{end_day}"
+    geo_type, geo_value = geo.split(":")
+    params = {
+        "time_type": indicator["time_type"],
+        "time_values": time_values,
+        "data_source": indicator["data_source"],
+        "signal": indicator["name"],
+        "geo_type": geo_type,
+        "geo_values": geo_value.lower(),
+        "api_key": api_key if api_key else settings.EPIDATA_API_KEY,
+    }
+    response = requests.get(f"{settings.EPIDATA_URL}covidcast", params=params)
+    if response.status_code == 200:
+        response_data = response.json()
+        if len(response_data["epidata"]):
+            return response_data["epidata"]
+    return []
+
+
+def get_fluview_data(indicator, geo, start_date, end_date, api_key):
+    region = None
+    try:
+        region = covidcast_fluview_locations_mapping[geo]
+    except KeyError:
+        region = geo.split(":")[1]
+    time_values = f"{start_date}--{end_date}"
+    if indicator["time_type"] == "week":
+        start_day, end_day = get_epiweek(start_date, end_date)
+        time_values = f"{start_day}-{end_day}"
+    params = {
+        "regions": region,
+        "epiweeks": time_values,
+        "api_key": api_key if api_key else settings.EPIDATA_API_KEY,
+    }
+    print(indicator)
+    response = requests.get(f"{settings.EPIDATA_URL}{indicator['data_source']}", params=params)
+    if response.status_code == 200:
+        data = response.json()
+        if len(data["epidata"]):
+            return [
+                {
+                    "time_value": el["epiweek"],
+                    "value": el[indicator["name"]],
+                    "signal": indicator["name"],
+                    "time_type": indicator["time_type"],
+                }
+                for el in data["epidata"]
+            ]
     return []
 
 
@@ -379,20 +433,30 @@ def get_chart_data(indicators, geography):
     chart_data["initialViewEnd"] = end_date
 
     # Fetch data from a wider range (2020 to today) for scrolling
-    data_start_date = "2010-01-01"
+    data_start_date = "1990-01-01"
     data_end_date = today.strftime("%Y-%m-%d")
 
     for indicator in indicators:
         title = generate_epivis_custom_title(indicator, geo_display_name)
         color = generate_random_color()
         indicator_time_type = indicator.get("time_type", "week")
-        data = get_covidcast_data(
-            indicator,
-            data_start_date,
-            data_end_date,
-            geography,
-            settings.EPIDATA_API_KEY,
-        )
+        data = None
+        if indicator["_endpoint"] == "covidcast":
+            data = get_covidcast_data(
+                indicator,
+                data_start_date,
+                data_end_date,
+                geography,
+                settings.EPIDATA_API_KEY,
+            )
+        elif indicator["data_source"] in ["fluview", "fluview_clinical"]:
+            data = get_fluview_data(
+                indicator,
+                geography,
+                data_start_date,
+                data_end_date,
+                settings.EPIDATA_API_KEY,
+            )
         if data:
             # Prepare series with full data range for scrolling
             series = prepare_chart_series_multi(

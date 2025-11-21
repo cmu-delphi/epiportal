@@ -1,0 +1,52 @@
+[
+    {
+        "model": "base.GeographyUnit",
+        "fields": {
+            "geo_id": "as",
+            "name": "American Samoa",
+            "display_name": "American Samoa",
+            "level": 100,
+            "geo_level": 100
+        }
+    },
+    {
+        "model": "base.GeographyUnit",
+        "fields": {
+            "geo_id": "mp",
+            "name": "Mariana Islands",
+            "display_name": "Mariana Islands",
+            "level": 100,
+            "geo_level": 100
+        }
+    },
+    {
+        "model": "base.GeographyUnit",
+        "fields": {
+            "geo_id": "gu",
+            "name": "Guam",
+            "display_name": "Guam",
+            "level": 100,
+            "geo_level": 100
+        }
+    },
+    {
+        "model": "base.GeographyUnit",
+        "fields": {
+            "geo_id": "pr",
+            "name": "Puerto Rico",
+            "display_name": "Puerto Rico",
+            "level": 100,
+            "geo_level": 100
+        }
+    },
+    {
+        "model": "base.GeographyUnit",
+        "fields": {
+            "geo_id": "vi",
+            "name": "Virgin Islands",
+            "display_name": "Virgin Islands",
+            "level": 100,
+            "geo_level": 100
+        }
+    }
+]
