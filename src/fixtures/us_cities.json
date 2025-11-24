@@ -1,6 +1,7 @@
 [
     {
         "model": "base.GeographyUnit",
+        "pk": 4939,
         "fields": {
             "geo_id": "ord",
             "name": "Chicago",
@@ -11,6 +12,7 @@
     },
     {
         "model": "base.GeographyUnit",
+        "pk": 4940,
         "fields": {
             "geo_id": "lax",
             "name": "Los Angeles",
@@ -21,6 +23,7 @@
     },
     {
         "model": "base.GeographyUnit",
+        "pk": 4941,
         "fields": {
             "geo_id": "jfk",
             "name": "New York City",

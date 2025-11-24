@@ -1,6 +1,7 @@
 [
     {
         "model": "base.GeographyUnit",
+        "pk": 4942,
         "fields": {
             "geo_id": "as",
             "name": "American Samoa",
@@ -11,6 +12,7 @@
     },
     {
         "model": "base.GeographyUnit",
+        "pk": 4943,
         "fields": {
             "geo_id": "mp",
             "name": "Mariana Islands",
@@ -21,6 +23,7 @@
     },
     {
         "model": "base.GeographyUnit",
+        "pk": 4944,
         "fields": {
             "geo_id": "gu",
             "name": "Guam",
@@ -31,6 +34,7 @@
     },
     {
         "model": "base.GeographyUnit",
+        "pk": 4945,
         "fields": {
             "geo_id": "pr",
             "name": "Puerto Rico",
@@ -47,6 +51,7 @@
             "display_name": "Virgin Islands",
             "level": 100,
             "geo_level": 100
-        }
+        },
+        "pk": 4946
     }
 ]

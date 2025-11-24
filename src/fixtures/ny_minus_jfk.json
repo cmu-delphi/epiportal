@@ -1,6 +1,7 @@
 [
     {
         "model": "base.GeographyUnit",
+        "pk": 4882,
         "fields": {
             "geo_id": "ny_minus_jfk",
             "name": "NY (minus NYC)",
