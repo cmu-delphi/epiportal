@@ -12,7 +12,7 @@ from indicatorsets.utils import (
     get_epiweek,
     group_by_property,
 )
-from alternative_interface.helper import covidcast_fluview_locations_mapping
+from alternative_interface.helper import COVIDCAST_FLUVIEW_LOCATIONS_MAPPING, EXPRESS_VIEW_LABELS_MAPPING
 
 
 def epiweeks_in_date_range(start_date_str: str, end_date_str: str):
@@ -161,7 +161,7 @@ def get_covidcast_data(indicator, start_date, end_date, geo, api_key):
 def get_fluview_data(indicator, geo, start_date, end_date, api_key):
     region = None
     try:
-        region = covidcast_fluview_locations_mapping[geo]
+        region = COVIDCAST_FLUVIEW_LOCATIONS_MAPPING[geo]
     except KeyError:
         region = geo.split(":")[1]
     time_values = f"{start_date}--{end_date}"
@@ -173,7 +173,6 @@ def get_fluview_data(indicator, geo, start_date, end_date, api_key):
         "epiweeks": time_values,
         "api_key": api_key if api_key else settings.EPIDATA_API_KEY,
     }
-    print(indicator)
     response = requests.get(f"{settings.EPIDATA_URL}{indicator['data_source']}", params=params)
     if response.status_code == 200:
         data = response.json()
@@ -437,7 +436,7 @@ def get_chart_data(indicators, geography):
     data_end_date = today.strftime("%Y-%m-%d")
 
     for indicator in indicators:
-        title = generate_epivis_custom_title(indicator, geo_display_name)
+        title = EXPRESS_VIEW_LABELS_MAPPING.get(indicator["name"], generate_epivis_custom_title(indicator, geo_display_name))
         color = generate_random_color()
         indicator_time_type = indicator.get("time_type", "week")
         data = None
@@ -468,7 +467,7 @@ def get_chart_data(indicators, geography):
             )
             # Apply readable label, color, and normalize data for each dataset
             for ds in series["datasets"]:
-                ds["label"] = f"{title} - {ds['label']}"
+                ds["label"] = title
                 ds["borderColor"] = color
                 ds["backgroundColor"] = f"{color}33"
                 # Normalize data to 0-100% range
