@@ -188,6 +188,41 @@ class AlterDashboard {
 			}
 		};
 
+		// Plugin to draw vertical tick marks on X axis
+		const xAxisTickMarksPlugin = {
+			id: 'xAxisTickMarks',
+			afterDraw(chart) {
+				if (chart.animating) return;
+				
+				const ctx = chart.ctx;
+				const xAxis = chart.scales.x;
+				const chartArea = chart.chartArea;
+				
+				if (!xAxis || !chartArea || !xAxis.ticks || xAxis.ticks.length === 0) {
+					return;
+				}
+				
+				ctx.save();
+				ctx.strokeStyle = '#64748b';
+				ctx.lineWidth = 1;
+				
+				// Draw small vertical lines at each tick position
+				const tickLength = 4; // Length of tick marks in pixels
+				const tickY = chartArea.bottom; // Bottom of chart area
+				
+				xAxis.ticks.forEach((tick) => {
+					if (tick.label !== '') { // Only draw ticks that have labels
+						ctx.beginPath();
+						ctx.moveTo(tick.x, tickY);
+						ctx.lineTo(tick.x, tickY + tickLength);
+						ctx.stroke();
+					}
+				});
+				
+				ctx.restore();
+			}
+		};
+
 		// Dual-level X-axis plugin (weeks on top, days below)
 		// Optimized to reduce redraws during pan/zoom
 		const dualAxisPlugin = {
@@ -375,22 +410,40 @@ class AlterDashboard {
                             autoSkip: true, // Automatically skip ticks when crowded
                             autoSkipPadding: 5,
                             callback: function(value, index) {
-                                // Show day labels, but only for selected ticks
-                                const label = dayLabels[index];
+                                // Use value (data index) instead of index for correct alignment
+                                const dataIndex = Math.round(value);
+                                if (dataIndex < 0 || dataIndex >= dayLabels.length) return '';
+                                const label = dayLabels[dataIndex];
                                 if (!label) return '';
-                                // Format date to be more compact
+                                // Format date with month abbreviation and year in January
                                 try {
-                                    const date = new Date(label);
-                                    const month = date.getMonth() + 1;
-                                    const day = date.getDate();
-                                    return month + '/' + day;
+                                    // Parse YYYY-MM-DD format explicitly to avoid timezone issues
+                                    const parts = String(label).match(/^(\d{4})-(\d{2})-(\d{2})$/);
+                                    if (!parts) return label;
+                                    
+                                    const year = parseInt(parts[1], 10);
+                                    const month = parseInt(parts[2], 10) - 1; // 0-indexed
+                                    const day = parseInt(parts[3], 10);
+                                    
+                                    const monthNames = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun',
+                                                       'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+                                    const monthName = monthNames[month];
+                                    
+                                    // Show year every January
+                                    if (month === 0) {
+                                        return monthName + ' ' + day + ' ' + year;
+                                    }
+                                    return monthName + ' ' + day;
                                 } catch (e) {
                                     return label;
                                 }
                             },
                             maxRotation: 45,
                             minRotation: 45
-                        }
+                        },
+                        // Add vertical tick marks on the X axis
+                        drawOnChartArea: true,
+                        drawTicks: true
                     },
                     y: {
                         display: true,
@@ -465,7 +518,7 @@ class AlterDashboard {
                     }
                 }
 			},
-			plugins: [htmlLegendPlugin, dualAxisPlugin]
+			plugins: [htmlLegendPlugin, dualAxisPlugin, xAxisTickMarksPlugin]
 		});
         
         // Set initial zoom to last 12 months after chart is created
