@@ -398,8 +398,10 @@ class AlterDashboard {
                     x: {
                         display: true,
                         grid: {
-                            display: false,
-                            drawBorder: false
+                            display: true,
+                            color: 'rgba(226, 232, 240, 0.5)',
+                            drawBorder: false,
+                            lineWidth: 1
                         },
                         ticks: {
                             font: {
