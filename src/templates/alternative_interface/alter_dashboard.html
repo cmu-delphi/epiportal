@@ -102,6 +102,9 @@
                             {% endfor %}
                         </select>
                         <span id="geographyTypingAnimation" class="geography-typing-animation" style="position: absolute; left: 12px; top: 50%; transform: translateY(-50%); pointer-events: none; z-index: 10; color: rgb(72, 78, 83); font-size: 1rem; white-space: nowrap; overflow: hidden; display: none;"></span>
+                        <span id="geographyLoader" class="geography-loader" style="position: absolute; left: 50%; top: 50%; transform: translate(-50%, -50%); pointer-events: none; z-index: 10; display: none;">
+                            <span class="spinner-border spinner-border-sm" role="status" aria-hidden="true" style="width: 1rem; height: 1rem; border-width: 0.15em; color: rgb(72, 78, 83);"></span>
+                        </span>
                     </div>
                 </form>
             </div> 
@@ -128,8 +131,13 @@
                         <span aria-hidden="true">×</span>
                     </button>
                 </div>
-                <div class="chart-container">
+                <div class="chart-container" style="position: relative;">
                     <canvas id="indicatorChart"></canvas>
+                    <div id="chartLoader" class="chart-loader" style="position: absolute; left: 50%; top: 50%; transform: translate(-50%, -50%); z-index: 10; display: none;">
+                        <div class="spinner-border text-primary" role="status" style="width: 3rem; height: 3rem;">
+                            <span class="visually-hidden">Loading...</span>
+                        </div>
+                    </div>
                 </div>
             </div>
         </div>
@@ -158,6 +166,8 @@
     {{ chart_data|json_script:"chart-data" }}
     <script>        
         window.csrfToken = '{{ csrf_token }}';
+        window.getAvailableGeosUrl = '{% url "get_available_geos_ajax" %}';
+        window.getChartDataUrl = '{% url "get_chart_data_ajax" %}';
 
         // Safely parse chart data to avoid Python None/NaN leaking into JS
         (function(){
@@ -175,7 +185,7 @@
         // Pass pathogen names for typing animation
         window.pathogenNames = [
             {% for pathogen in pathogens %}
-                "{{ pathogen.display_name }}"{% if not forloop.last %},{% endif %}
+                "{{ pathogen }}"{% if not forloop.last %},{% endif %}
             {% endfor %}
         ];
 
