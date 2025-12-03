@@ -1,10 +1,17 @@
 from django.shortcuts import render
-from indicators.models import Indicator
-from base.models import Pathogen
+from django.db.models import Case, When, Value, IntegerField
+from alternative_interface.models import ExpressViewIndicator
 from epiportal.settings import ALTERNATIVE_INTERFACE_VERSION
 
 from alternative_interface.utils import get_available_geos, get_chart_data
 
+
+MENU_ITEMS_DISPLAY_ORDER_NUMBER = {
+    "Influenza": 1,
+    "COVID-19": 2,
+    "RSV": 3,
+    "Influenza-Like Illness (ILI)": 4,
+}
 
 HEADER_DESCRIPTION = "Discover, display and download real-time infectious disease indicators (time series) that track a variety of pathogens, diseases and syndromes in a variety of locations (primarily within the USA). Browse the list, or filter it first by locations and pathogens of interest, by surveillance categories, and more. Expand any row to expose and select from a set of related indicators, then hit 'Show Selected Indicators' at bottom to plot or export your selected indicators, or to generate code snippets to retrieve them from the Delphi Epidata API. Most indicators are served from the Delphi Epidata real-time repository, but some may be available only from third parties or may require prior approval."
 
@@ -20,41 +27,52 @@ def alternative_interface_view(request):
         ctx["selected_pathogen"] = pathogen_filter
         ctx["selected_geography"] = geography_filter
 
-        # Build queryset with optional filtering
-        indicators_qs = Indicator.objects.filter(
-            use_in_express_interface=True
-        ).prefetch_related("pathogens", "available_geographies", "indicator_set")
-
         # Fetch pathogens for dropdown
-        pathogens_qs = Pathogen.objects.filter(
-            id__in=indicators_qs.values_list("pathogens", flat=True)
-        ).order_by("display_order_number")
-        ctx["pathogens"] = list[Pathogen](pathogens_qs)
-
-        if pathogen_filter:
-            indicators_qs = indicators_qs.filter(
-                pathogens__id=pathogen_filter,
+        pathogens_qs = (
+            ExpressViewIndicator.objects.annotate(
+                order_number=Case(
+                    *[
+                        When(menu_item=key, then=Value(value))
+                        for key, value in MENU_ITEMS_DISPLAY_ORDER_NUMBER.items()
+                    ],
+                    default=Value(999),
+                    output_field=IntegerField(),
+                )
             )
+            .values("menu_item", "order_number")
+            .distinct()
+            .order_by("order_number")
+        )
+        pathogens = [item["menu_item"] for item in pathogens_qs]
+        ctx["pathogens"] = pathogens
+
+        indicators_qs = ExpressViewIndicator.objects.filter(
+            menu_item=pathogen_filter
+        ).prefetch_related("indicator")
 
         # Convert to list of dictionaries
         ctx["indicators"] = [
             {
                 "_endpoint": (
-                    indicator.indicator_set.epidata_endpoint
-                    if indicator.indicator_set
+                    indicator.indicator.indicator_set.epidata_endpoint
+                    if indicator.indicator.indicator_set
                     else ""
                 ),
-                "name": indicator.name,
-                "data_source": indicator.source.name if indicator.source else "Unknown",
-                "time_type": indicator.time_type,
+                "name": indicator.indicator.name,
+                "data_source": (
+                    indicator.indicator.source.name
+                    if indicator.indicator.source
+                    else "Unknown"
+                ),
+                "time_type": indicator.indicator.time_type,
                 "indicator_set_short_name": (
-                    indicator.indicator_set.short_name
-                    if indicator.indicator_set
+                    indicator.indicator.indicator_set.short_name
+                    if indicator.indicator.indicator_set
                     else "Unknown"
                 ),
                 "member_short_name": (
-                    indicator.member_short_name
-                    if indicator.member_short_name
+                    indicator.indicator.member_short_name
+                    if indicator.indicator.member_short_name
                     else "Unknown"
                 ),
             }

@@ -148,9 +148,42 @@
         "fields": {
             "name": "N/A",
             "display_name": "N/A",
-            "display_order_number": 14,
+            "display_order_number": 17,
             "used_in": "indicatorsets",
             "short_name": "N/A"
+        }
+    },
+    {
+        "model": "base.Geography",
+        "pk": 100,
+        "fields": {
+            "name": "us-territory",
+            "display_name": "US Territory",
+            "display_order_number": 14,
+            "used_in": "indicators",
+            "short_name": "US Territory"
+        }
+    },
+    {
+        "model": "base.Geography",
+        "pk": 101,
+        "fields": {
+            "name": "us-city",
+            "display_name": "US City",
+            "display_order_number": 15,
+            "used_in": "indicators",
+            "short_name": "US City"
+        }
+    },
+    {
+        "model": "base.Geography",
+        "pk": 102,
+        "fields": {
+            "name": "ny_minus_jfk",
+            "display_name": "NY (minus NYC)",
+            "display_order_number": 16,
+            "used_in": "indicators",
+            "short_name": "NY (minus NYC)"
         }
     }
 ]

@@ -82,8 +82,8 @@
                         <select class="form-select filter-select" id="pathogenSelect" name="pathogen" onchange="handlePathogenChange()" style="position: relative;">
                             <option value=""></option>
                             {% for pathogen in pathogens %}
-                                <option value="{{ pathogen.id }}" {% if pathogen.id|stringformat:"s" == selected_pathogen %}selected{% endif %}>
-                                    {{ pathogen.display_name }}
+                                <option value="{{ pathogen }}" {% if pathogen == selected_pathogen %}selected{% endif %}>
+                                    {{ pathogen }}
                                 </option>
                             {% endfor %}
                         </select>
@@ -125,7 +125,7 @@
                         </span>
                     </div>
                     <button type="button" class="chart-hint-close" onclick="dismissChartHint()" aria-label="Dismiss hint">
-                        <span aria-hidden="true">&times;</span>
+                        <span aria-hidden="true">×</span>
                     </button>
                 </div>
                 <div class="chart-container">
