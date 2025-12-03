@@ -3,10 +3,290 @@
  * Enhanced dashboard with EpiVis-like features: interactive controls, normalization, and advanced chart options
  */
 
+// Constants
+const CHART_PALETTE = ['#2563eb','#16a34a','#dc2626','#a855f7','#f59e0b','#0ea5e9','#ef4444','#10b981'];
+const TYPING_SPEED = 300;
+const DELETE_SPEED = 50;
+const PAUSE_BEFORE_DELETE = 2000;
+const PAUSE_AFTER_DELETE = 500;
+const MAX_GEOGRAPHY_NAMES = 25;
+const MAX_DUAL_AXIS_LABELS = 50;
+const INITIAL_ZOOM_DELAY = 100;
+const CHART_REDRAW_DELAY = 100;
+const CHART_RESIZE_DELAY = 10;
+const TYPING_ANIMATION_DELAY = 500;
+const BLUR_DELAY = 100;
+const HINT_AUTO_HIDE_DELAY = 10000;
+
+// Utility functions
+const ChartUtils = {
+    sanitizeValue(v) {
+        if (v === null || v === undefined) return null;
+        if (typeof v === 'number') return Number.isFinite(v) ? v : null;
+        if (typeof v === 'string') {
+            const s = v.trim().toLowerCase();
+            if (s === '' || s === 'none' || s === 'null' || s === 'nan') return null;
+            const num = parseFloat(s);
+            return Number.isFinite(num) ? num : null;
+        }
+        return null;
+    },
+
+    sanitizeColor(c, fallback) {
+        if (c === null || c === undefined) return fallback;
+        if (typeof c === 'string') {
+            const s = c.trim().toLowerCase();
+            if (s === 'none' || s === 'null' || s === '') return fallback;
+        }
+        return c;
+    },
+
+    alignData(arr, targetLen) {
+        const a = Array.isArray(arr) ? arr : [];
+        if (a.length > targetLen) return a.slice(0, targetLen);
+        if (a.length < targetLen) return a.concat(Array(targetLen - a.length).fill(null));
+        return a;
+    },
+
+    processLabels(chartData) {
+        const dayLabels = Array.isArray(chartData.dayLabels)
+            ? chartData.dayLabels.map(l => String(l))
+            : (Array.isArray(chartData.labels) ? chartData.labels.map(l => String(l)) : []);
+        const weekLabels = Array.isArray(chartData.labels)
+            ? chartData.labels.map(l => String(l))
+            : [];
+        return { dayLabels, weekLabels };
+    },
+
+    formatDateLabel(label) {
+        try {
+            const parts = String(label).match(/^(\d{4})-(\d{2})-(\d{2})$/);
+            if (!parts) return label;
+            
+            const year = parseInt(parts[1], 10);
+            const month = parseInt(parts[2], 10) - 1;
+            const day = parseInt(parts[3], 10);
+            
+            const monthNames = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun',
+                               'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+            const monthName = monthNames[month];
+            
+            return month === 0 
+                ? `${monthName} ${day} ${year}`
+                : `${monthName} ${day}`;
+        } catch (e) {
+            return label;
+        }
+    },
+
+    createDataset(ds, i, dayLabelsLength) {
+        const timeType = ds.timeType || 'week';
+        const isWeekly = timeType === 'week';
+        // Always use palette color based on index for consistency between chart and legend
+        const color = CHART_PALETTE[i % CHART_PALETTE.length];
+        
+        return {
+            label: (ds.label === null || ds.label === undefined) ? '' : String(ds.label),
+            data: ChartUtils.alignData(Array.isArray(ds.data) ? ds.data.map(ChartUtils.sanitizeValue) : [], dayLabelsLength),
+            // Use palette color to ensure consistency with legend
+            borderColor: color,
+            backgroundColor: color + '33',
+            borderWidth: 2,
+            fill: true,
+            tension: 0,
+            pointRadius: isWeekly ? 3 : 0,
+            pointHoverRadius: isWeekly ? 6 : 4,
+            pointBackgroundColor: isWeekly ? color : undefined,
+            pointBorderColor: isWeekly ? '#fff' : undefined,
+            pointBorderWidth: isWeekly ? 1.5 : 0,
+            spanGaps: isWeekly,
+            timeType: timeType
+        };
+    }
+};
+
+// Typing animation manager
+class TypingAnimation {
+    constructor(elementId, selectId, namesKey) {
+        this.typingElement = null;
+        this.selectElement = null;
+        this.namesKey = namesKey;
+        this.timeoutId = null;
+        this.changeHandler = null;
+        this.focusHandler = null;
+        this.blurHandler = null;
+        this.currentIndex = 0;
+        this.currentText = '';
+        this.isDeleting = false;
+        
+        this.init(elementId, selectId);
+    }
+
+    init(elementId, selectId) {
+        this.typingElement = document.getElementById(elementId);
+        this.selectElement = document.getElementById(selectId);
+        
+        if (!this.typingElement || !this.selectElement) {
+            return;
+        }
+
+        this.cleanup();
+        this.setupHandlers();
+        this.checkSelection();
+        
+        setTimeout(() => {
+            if (!this.selectElement.value && document.activeElement !== this.selectElement && !this.selectElement.disabled) {
+                this.typingElement.style.display = 'block';
+                this.typingElement.textContent = '|';
+                this.typeCharacter();
+            }
+        }, TYPING_ANIMATION_DELAY);
+    }
+
+    cleanup() {
+        if (this.timeoutId) {
+            clearTimeout(this.timeoutId);
+            this.timeoutId = null;
+        }
+        
+        if (this.selectElement) {
+            if (this.changeHandler) {
+                this.selectElement.removeEventListener('change', this.changeHandler);
+            }
+            if (this.focusHandler) {
+                this.selectElement.removeEventListener('focus', this.focusHandler);
+            }
+            if (this.blurHandler) {
+                this.selectElement.removeEventListener('blur', this.blurHandler);
+            }
+        }
+        
+        if (this.typingElement) {
+            this.typingElement.style.display = 'none';
+        }
+        
+        this.currentText = '';
+        this.isDeleting = false;
+        this.currentIndex = 0;
+    }
+
+    setupHandlers() {
+        this.changeHandler = () => this.checkSelection();
+        this.focusHandler = () => {
+            if (this.typingElement) {
+                this.typingElement.style.display = 'none';
+            }
+            if (this.timeoutId) {
+                clearTimeout(this.timeoutId);
+                this.timeoutId = null;
+            }
+        };
+        this.blurHandler = () => {
+            setTimeout(() => this.checkSelection(), BLUR_DELAY);
+        };
+        
+        if (this.selectElement) {
+            this.selectElement.addEventListener('change', this.changeHandler);
+            this.selectElement.addEventListener('focus', this.focusHandler);
+            this.selectElement.addEventListener('blur', this.blurHandler);
+        }
+    }
+
+    checkSelection() {
+        if (!this.selectElement || !this.typingElement) return;
+        
+        if (this.selectElement.disabled) {
+            this.typingElement.style.display = 'none';
+            if (this.timeoutId) {
+                clearTimeout(this.timeoutId);
+                this.timeoutId = null;
+            }
+            return;
+        }
+        
+        if (this.selectElement.value) {
+            this.typingElement.style.display = 'none';
+            if (this.timeoutId) {
+                clearTimeout(this.timeoutId);
+                this.timeoutId = null;
+            }
+        } else if (document.activeElement !== this.selectElement) {
+            this.typingElement.style.display = 'block';
+            if (!this.timeoutId) {
+                this.currentText = '';
+                this.isDeleting = false;
+                this.currentIndex = 0;
+                this.typingElement.textContent = '|';
+                this.typeCharacter();
+            }
+        }
+    }
+
+    typeCharacter() {
+        const names = window[this.namesKey] || [];
+        if (names.length === 0) {
+            if (this.typingElement) {
+                this.typingElement.style.display = 'none';
+            }
+            return;
+        }
+
+        const currentName = names[this.currentIndex];
+        
+        if (this.selectElement.value) {
+            if (this.typingElement) {
+                this.typingElement.style.display = 'none';
+            }
+            if (this.timeoutId) {
+                clearTimeout(this.timeoutId);
+                this.timeoutId = null;
+            }
+            return;
+        }
+        
+        if (this.typingElement) {
+            this.typingElement.style.display = 'block';
+        }
+        
+        if (!this.isDeleting && this.currentText.length < currentName.length) {
+            this.currentText = currentName.substring(0, this.currentText.length + 1);
+            if (this.typingElement) {
+                this.typingElement.textContent = this.currentText + '|';
+            }
+            this.timeoutId = setTimeout(() => this.typeCharacter(), TYPING_SPEED);
+        } else if (!this.isDeleting && this.currentText.length === currentName.length) {
+            if (this.typingElement) {
+                this.typingElement.textContent = this.currentText;
+            }
+            this.timeoutId = setTimeout(() => {
+                this.isDeleting = true;
+                this.timeoutId = setTimeout(() => this.typeCharacter(), DELETE_SPEED);
+            }, PAUSE_BEFORE_DELETE);
+        } else if (this.isDeleting && this.currentText.length > 0) {
+            this.currentText = this.currentText.substring(0, this.currentText.length - 1);
+            if (this.typingElement) {
+                this.typingElement.textContent = this.currentText + '|';
+            }
+            this.timeoutId = setTimeout(() => this.typeCharacter(), DELETE_SPEED);
+        } else if (this.isDeleting && this.currentText.length === 0) {
+            this.isDeleting = false;
+            this.currentIndex = (this.currentIndex + 1) % names.length;
+            if (this.typingElement) {
+                this.typingElement.textContent = '|';
+            }
+            this.timeoutId = setTimeout(() => this.typeCharacter(), PAUSE_AFTER_DELETE);
+        }
+    }
+}
+
+// Typing animation instances
+let pathogenTypingAnimation = null;
+let geographyTypingAnimation = null;
+
 class AlterDashboard {
     constructor() {
         this.originalDatasets = [];
-        this.normalized = true; // Data is always normalized from backend
+        this.normalized = true;
         this.init();
     }
 
@@ -18,14 +298,12 @@ class AlterDashboard {
     }
     
     initChartHint() {
-        // Check if hint was previously dismissed
         if (localStorage.getItem('chartHintDismissed') === 'true') {
             const hint = document.getElementById('chartHint');
             if (hint) {
                 hint.style.display = 'none';
             }
         } else {
-            // Auto-hide hint after 10 seconds
             autoHideChartHint();
         }
     }
@@ -34,521 +312,475 @@ class AlterDashboard {
         const ctx = document.getElementById('indicatorChart');
         if (!ctx) return;
 
-        // Require backend-provided chartData
         if (!window.chartData || !Array.isArray(window.chartData.datasets)) {
-            return;
+            window.chartData = {
+                labels: [],
+                dayLabels: [],
+                timePositions: [],
+                datasets: []
+            };
         }
-        const palette = ['#2563eb','#16a34a','#dc2626','#a855f7','#f59e0b','#0ea5e9','#ef4444','#10b981'];
         
-        // Use dayLabels as the base timeline, fallback to labels if dayLabels not available
-        const dayLabels = Array.isArray(window.chartData.dayLabels)
-            ? window.chartData.dayLabels.map(l => String(l))
-            : (Array.isArray(window.chartData.labels) ? window.chartData.labels.map(l => String(l)) : []);
-        const weekLabels = Array.isArray(window.chartData.labels)
-            ? window.chartData.labels.map(l => String(l))
-            : [];
+        const { dayLabels, weekLabels } = ChartUtils.processLabels(window.chartData);
         const timePositions = Array.isArray(window.chartData.timePositions)
             ? window.chartData.timePositions
             : [];
         
-        const sanitizeValue = (v) => {
-            if (v === null || v === undefined) return null;
-            if (typeof v === 'number') return Number.isFinite(v) ? v : null;
-            if (typeof v === 'string') {
-                const s = v.trim().toLowerCase();
-                if (s === '' || s === 'none' || s === 'null' || s === 'nan') return null;
-                const num = parseFloat(s);
-                return Number.isFinite(num) ? num : null;
-            }
-            // For booleans, objects, arrays, etc.
-            return null;
-        };
-        const sanitizeColor = (c, fallback) => {
-            if (c === null || c === undefined) return fallback;
-            if (typeof c === 'string') {
-                const s = c.trim().toLowerCase();
-                if (s === 'none' || s === 'null' || s === '') return fallback;
-            }
-            return c;
-        };
-        const alignData = (arr, targetLen) => {
-            const a = Array.isArray(arr) ? arr : [];
-            if (a.length > targetLen) return a.slice(0, targetLen);
-            if (a.length < targetLen) return a.concat(Array(targetLen - a.length).fill(null));
-            return a;
-        };
-        const datasets = window.chartData.datasets.map((ds, i) => {
-            const timeType = ds.timeType || 'week';
-            const isWeekly = timeType === 'week';
-            
-            return {
-                label: (ds.label === null || ds.label === undefined) ? '' : String(ds.label),
-                data: alignData(Array.isArray(ds.data) ? ds.data.map(sanitizeValue) : [], dayLabels.length),
-                borderColor: sanitizeColor(ds.borderColor, palette[i % palette.length]),
-                backgroundColor: sanitizeColor(ds.backgroundColor, (palette[i % palette.length] + '33')),
-                borderWidth: 2,
-                fill: true,
-                tension: 0, // No bezier curves for better performance
-                pointRadius: isWeekly ? 3 : 0, // Show points for weekly indicators
-                pointHoverRadius: isWeekly ? 6 : 4, // Larger hover radius for weekly
-                pointBackgroundColor: isWeekly ? sanitizeColor(ds.borderColor, palette[i % palette.length]) : undefined,
-                pointBorderColor: isWeekly ? '#fff' : undefined,
-                pointBorderWidth: isWeekly ? 1.5 : 0,
-                spanGaps: isWeekly ? true : false, // Connect across gaps for weekly data (to link weekly points)
-                timeType: timeType // Store timeType for reference
-            };
-        });
+        const datasets = (window.chartData.datasets || []).map((ds, i) => 
+            ChartUtils.createDataset(ds, i, dayLabels.length)
+        );
 
-        // Store datasets (already normalized from backend)
         this.originalDatasets = datasets.map(d => ({
             ...d,
             originalData: Array.isArray(d.data) ? [...d.data] : []
         }));
 
-		// Ensure an external legend container exists (scrollable) in the card header (always visible)
-		let legendContainer = document.getElementById('chartHtmlLegend');
-		if (!legendContainer) {
-			const section = document.querySelector('.chart-section');
-			const header = section ? section.querySelector('.card-header') : null;
-			legendContainer = document.createElement('div');
-			legendContainer.id = 'chartHtmlLegend';
-			legendContainer.style.maxHeight = '260px';
-			legendContainer.style.overflow = 'auto';
-			legendContainer.style.marginTop = '8px';
-			legendContainer.style.display = 'flex';
-			legendContainer.style.flexWrap = 'wrap';
-			legendContainer.style.gap = '8px';
-			legendContainer.style.alignItems = 'center';
-			legendContainer.style.fontSize = '11px';
-			legendContainer.style.paddingBottom = '8px';
-			if (header) header.appendChild(legendContainer);
-		}
+        this.createLegendContainer();
+        const htmlLegendPlugin = this.createHtmlLegendPlugin();
+        const xAxisTickMarksPlugin = this.createXAxisTickMarksPlugin();
+        const dualAxisPlugin = this.createDualAxisPlugin();
 
-		// Custom HTML legend plugin (renders all items, clickable to toggle)
-		const htmlLegendPlugin = {
-			id: 'htmlLegend',
-			afterUpdate(chart, args, options) {
-				const container = document.getElementById(options.containerID);
-				if (!container) return;
-				// Clear
-				while (container.firstChild) {
-					container.firstChild.remove();
-				}
-				const list = document.createElement('div');
-				list.style.display = 'flex';
-				list.style.flexWrap = 'wrap';
-				list.style.gap = '8px';
-				const items = chart.options.plugins.legend.labels.generateLabels(chart);
-				items.forEach(item => {
-					const button = document.createElement('button');
-					button.type = 'button';
-					button.style.display = 'inline-flex';
-					button.style.alignItems = 'center';
-					button.style.gap = '6px';
-					button.style.border = '1px solid #e2e8f0';
-					button.style.borderRadius = '12px';
-					button.style.padding = '4px 8px';
-					button.style.background = '#fff';
-					button.style.cursor = 'pointer';
-					button.style.fontSize = '11px';
-					button.style.lineHeight = '1.2';
-					button.style.maxWidth = '100%';
-					button.title = item.text;
-					// Color dot
-					const box = document.createElement('span');
-					box.style.width = '10px';
-					box.style.height = '10px';
-					box.style.display = 'inline-block';
-					box.style.borderRadius = '50%';
-					box.style.background = item.fillStyle;
-					box.style.border = '1px solid rgba(0,0,0,0.1)';
-					// Label
-					const text = document.createElement('span');
-					text.textContent = item.text;
-					text.style.whiteSpace = 'nowrap';
-					text.style.overflow = 'hidden';
-					text.style.textOverflow = 'ellipsis';
-					if (item.hidden) {
-						button.style.opacity = '0.5';
-					}
-					button.onclick = () => {
-						const { type } = chart.config;
-						if (type === 'pie' || type === 'doughnut') {
-							chart.toggleDataVisibility(item.index);
-						} else {
-							chart.setDatasetVisibility(item.datasetIndex, !chart.isDatasetVisible(item.datasetIndex));
-						}
-						chart.update();
-					};
-					button.appendChild(box);
-					button.appendChild(text);
-					list.appendChild(button);
-				});
-				container.appendChild(list);
-			}
-		};
-
-		// Plugin to draw vertical tick marks on X axis
-		const xAxisTickMarksPlugin = {
-			id: 'xAxisTickMarks',
-			afterDraw(chart) {
-				if (chart.animating) return;
-				
-				const ctx = chart.ctx;
-				const xAxis = chart.scales.x;
-				const chartArea = chart.chartArea;
-				
-				if (!xAxis || !chartArea || !xAxis.ticks || xAxis.ticks.length === 0) {
-					return;
-				}
-				
-				ctx.save();
-				ctx.strokeStyle = '#64748b';
-				ctx.lineWidth = 1;
-				
-				// Draw small vertical lines at each tick position
-				const tickLength = 4; // Length of tick marks in pixels
-				const tickY = chartArea.bottom; // Bottom of chart area
-				
-				xAxis.ticks.forEach((tick) => {
-					if (tick.label !== '') { // Only draw ticks that have labels
-						ctx.beginPath();
-						ctx.moveTo(tick.x, tickY);
-						ctx.lineTo(tick.x, tickY + tickLength);
-						ctx.stroke();
-					}
-				});
-				
-				ctx.restore();
-			}
-		};
-
-		// Dual-level X-axis plugin (weeks on top, days below)
-		// Optimized to reduce redraws during pan/zoom
-		const dualAxisPlugin = {
-			id: 'dualAxis',
-			afterDraw(chart) {
-				// Skip redraw only during active animations for better performance
-				if (chart.animating) return;
-				
-				const ctx = chart.ctx;
-				const xAxis = chart.scales.x;
-				const chartArea = chart.chartArea;
-				const weekLabels = window.chartData?.labels || [];
-				const dayLabels = window.chartData?.dayLabels || [];
-				
-				if (!xAxis || !chartArea || weekLabels.length === 0 || dayLabels.length === 0) {
-					console.log('Dual axis: Missing data', {
-						hasXAxis: !!xAxis,
-						hasChartArea: !!chartArea,
-						weekLabelsLength: weekLabels.length,
-						dayLabelsLength: dayLabels.length
-					});
-					return;
-				}
-				
-				ctx.save();
-				ctx.font = 'bold 11px Inter, sans-serif';
-				ctx.textAlign = 'center';
-				ctx.textBaseline = 'top';
-				ctx.fillStyle = '#64748b';
-				
-				// Draw week labels above the chart
-				// Only draw labels for visible ticks to improve performance
-				const weekLabelY = chartArea.top - 20;
-				
-				// Get visible ticks from the x-axis
-				if (!xAxis.ticks || xAxis.ticks.length === 0) {
-					ctx.restore();
-					return;
-				}
-				
-				const visibleTicks = xAxis.ticks.filter(tick => {
-					const dataIndex = tick.value;
-					return dataIndex >= 0 && dataIndex < weekLabels.length && 
-					       weekLabels[dataIndex] && weekLabels[dataIndex].trim() !== '';
-				});
-				
-				// Limit the number of labels drawn to improve performance
-				const maxLabels = 50;
-				if (visibleTicks.length > maxLabels) {
-					// Sample labels if too many
-					const step = Math.ceil(visibleTicks.length / maxLabels);
-					visibleTicks.forEach((tick, index) => {
-						if (index % step === 0) {
-							const dataIndex = tick.value;
-							const label = weekLabels[dataIndex];
-							if (label && label.trim() !== '') {
-								ctx.fillText(label, tick.x, weekLabelY);
-							}
-						}
-					});
-				} else {
-					visibleTicks.forEach((tick) => {
-						const dataIndex = tick.value;
-						const label = weekLabels[dataIndex];
-						if (label && label.trim() !== '') {
-							ctx.fillText(label, tick.x, weekLabelY);
-						}
-					});
-				}
-				
-				ctx.restore();
-			}
-		};
-
-		this.chart = new Chart(ctx, {
+        this.chart = new Chart(ctx, {
             type: 'line',
             data: {
-                labels: dayLabels, // Use day labels as base timeline
+                labels: dayLabels,
                 datasets: datasets
             },
-            options: {
-                responsive: true,
-                maintainAspectRatio: false,
-                layout: {
-                    padding: {
-                        top: 30 // Add padding for week labels
-                    }
-                },
-                plugins: {
-					legend: { display: false },
-					htmlLegend: { containerID: 'chartHtmlLegend' },
-                    tooltip: {
-                        mode: 'index',
-                        intersect: false,
-                        backgroundColor: 'rgba(0, 0, 0, 0.85)',
-                        padding: 14,
-                        titleFont: {
-                            size: 14,
-                            weight: '600'
-                        },
-                        bodyFont: {
-                            size: 12,
-                            weight: '400'
-                        },
-                        displayColors: true,
-                        borderColor: 'rgba(255, 255, 255, 0.1)',
-                        borderWidth: 1,
-                        cornerRadius: 8,
-                        enabled: function(context) {
-                            // Disable tooltips during pan/zoom for better performance
-                            const chart = context.chart;
-                            return !chart._isPanning && !chart._isZooming;
-                        },
-                        filter: function(tooltipItem) {
-                            // Only show tooltips for visible datasets
-                            return !tooltipItem.hidden;
-                        },
-                        callbacks: {
-                            title: function(context) {
-                                const dayLabel = dayLabels[context[0].dataIndex] || '';
-                                const weekLabel = weekLabels[context[0].dataIndex] || '';
-                                if (weekLabel && weekLabel.trim() !== '') {
-                                    return 'Week: ' + weekLabel + ' | Day: ' + dayLabel;
-                                }
-                                return 'Date: ' + dayLabel;
-                            },
-                            label: function(context) {
-                                const label = context.dataset.label || '';
-                                const value = context.parsed.y;
-                                if (value === null || value === undefined || Number.isNaN(value)) {
-                                    return label + ': n/a';
-                                }
-                                // Data is always normalized from backend
-                                const formattedValue = value.toFixed(1) + '%';
-                                return label + ': ' + formattedValue;
+            options: this.getChartOptions(dayLabels),
+            plugins: [htmlLegendPlugin, dualAxisPlugin, xAxisTickMarksPlugin]
+        });
+        
+        this.setInitialZoom(dayLabels);
+        this.hidePageLoader();
+    }
+
+    createLegendContainer() {
+        let legendContainer = document.getElementById('chartHtmlLegend');
+        if (!legendContainer) {
+            const section = document.querySelector('.chart-section');
+            const header = section?.querySelector('.card-header');
+            if (header) {
+                legendContainer = document.createElement('div');
+                legendContainer.id = 'chartHtmlLegend';
+                Object.assign(legendContainer.style, {
+                    maxHeight: '260px',
+                    overflow: 'auto',
+                    marginTop: '8px',
+                    display: 'flex',
+                    flexWrap: 'wrap',
+                    gap: '8px',
+                    alignItems: 'center',
+                    fontSize: '11px',
+                    paddingBottom: '8px'
+                });
+                header.appendChild(legendContainer);
+            }
+        }
+    }
+
+    createHtmlLegendPlugin() {
+        return {
+            id: 'htmlLegend',
+            afterUpdate(chart, args, options) {
+                const container = document.getElementById(options.containerID);
+                if (!container) return;
+                
+                while (container.firstChild) {
+                    container.firstChild.remove();
+                }
+                
+                const list = document.createElement('div');
+                Object.assign(list.style, {
+                    display: 'flex',
+                    flexWrap: 'wrap',
+                    gap: '8px'
+                });
+                
+                const items = chart.options.plugins.legend.labels.generateLabels(chart);
+                items.forEach(item => {
+                    // Get the actual line color (borderColor) from the dataset
+                    // For line charts, strokeStyle matches borderColor, which is what we want
+                    const lineColor = item.strokeStyle || item.fillStyle || '#2563eb';
+                    
+                    const button = document.createElement('button');
+                    button.type = 'button';
+                    Object.assign(button.style, {
+                        display: 'inline-flex',
+                        alignItems: 'center',
+                        gap: '6px',
+                        border: '1px solid #e2e8f0',
+                        borderRadius: '12px',
+                        padding: '4px 8px',
+                        background: '#fff',
+                        cursor: 'pointer',
+                        fontSize: '11px',
+                        lineHeight: '1.2',
+                        maxWidth: '100%',
+                        opacity: item.hidden ? '0.5' : '1'
+                    });
+                    button.title = item.text;
+                    
+                    const box = document.createElement('span');
+                    Object.assign(box.style, {
+                        width: '10px',
+                        height: '10px',
+                        display: 'inline-block',
+                        borderRadius: '50%',
+                        background: lineColor,
+                        border: '1px solid rgba(0,0,0,0.1)'
+                    });
+                    
+                    const text = document.createElement('span');
+                    text.textContent = item.text;
+                    Object.assign(text.style, {
+                        whiteSpace: 'nowrap',
+                        overflow: 'hidden',
+                        textOverflow: 'ellipsis'
+                    });
+                    
+                    button.onclick = () => {
+                        const { type } = chart.config;
+                        if (type === 'pie' || type === 'doughnut') {
+                            chart.toggleDataVisibility(item.index);
+                        } else {
+                            chart.setDatasetVisibility(item.datasetIndex, !chart.isDatasetVisible(item.datasetIndex));
+                        }
+                        chart.update();
+                    };
+                    
+                    button.appendChild(box);
+                    button.appendChild(text);
+                    list.appendChild(button);
+                });
+                container.appendChild(list);
+            }
+        };
+    }
+
+    createXAxisTickMarksPlugin() {
+        return {
+            id: 'xAxisTickMarks',
+            afterDraw(chart) {
+                const ctx = chart.ctx;
+                const xAxis = chart.scales.x;
+                const chartArea = chart.chartArea;
+                
+                if (!xAxis || !chartArea) return;
+                
+                let ticks = [];
+                if (xAxis.ticks && Array.isArray(xAxis.ticks) && xAxis.ticks.length > 0) {
+                    ticks = xAxis.ticks;
+                } else if (xAxis._ticks && Array.isArray(xAxis._ticks) && xAxis._ticks.length > 0) {
+                    ticks = xAxis._ticks;
+                } else if (typeof xAxis.getTicks === 'function') {
+                    ticks = xAxis.getTicks();
+                }
+                
+                ctx.save();
+                ctx.strokeStyle = '#64748b';
+                ctx.lineWidth = 1;
+                
+                const tickLength = 4;
+                const tickY = chartArea.bottom;
+                
+                if (ticks.length > 0) {
+                    ticks.forEach((tick) => {
+                        let tickX = null;
+                        
+                        if (tick && typeof tick.x === 'number' && !isNaN(tick.x)) {
+                            tickX = tick.x;
+                        } else if (xAxis && typeof xAxis.getPixelForValue === 'function') {
+                            if (tick && typeof tick.value === 'number') {
+                                tickX = xAxis.getPixelForValue(tick.value);
+                            } else if (typeof tick === 'number') {
+                                tickX = xAxis.getPixelForValue(tick);
                             }
                         }
-                    },
-                    // Zoom and pan configuration
-                    zoom: {
-                        pan: {
-                            enabled: true,
-                            mode: 'x',
-                            modifierKey: null, // No modifier key needed for panning
-                            threshold: 5,
-                            speed: 1
-                        },
-                        zoom: {
-                            wheel: {
-                                enabled: true,
-                                speed: 0.1
-                            },
-                            pinch: {
-                                enabled: true
-                            },
-                            mode: 'x',
-                            limits: {
-                                x: {
-                                    min: 0,
-                                    max: dayLabels.length - 1
-                                }
-                            }
-                        },
-                        limits: {
-                            x: {
-                                min: 0,
-                                max: dayLabels.length - 1
-                            }
+                        
+                        if (tickX !== null && typeof tickX === 'number' && !isNaN(tickX) && 
+                            tickX >= chartArea.left && tickX <= chartArea.right) {
+                            ctx.beginPath();
+                            ctx.moveTo(tickX, tickY);
+                            ctx.lineTo(tickX, tickY + tickLength);
+                            ctx.stroke();
                         }
-                    }
-                },
-                scales: {
-                    x: {
-                        display: true,
-                        grid: {
-                            display: true,
-                            color: 'rgba(226, 232, 240, 0.5)',
-                            drawBorder: false,
-                            lineWidth: 1
-                        },
-                        ticks: {
-                            font: {
-                                size: 10
-                            },
-                            color: '#64748b',
-                            maxTicksLimit: 20, // Show more ticks for daily data
-                            autoSkip: true, // Automatically skip ticks when crowded
-                            autoSkipPadding: 5,
-                            callback: function(value, index) {
-                                // Use value (data index) instead of index for correct alignment
-                                const dataIndex = Math.round(value);
-                                if (dataIndex < 0 || dataIndex >= dayLabels.length) return '';
-                                const label = dayLabels[dataIndex];
-                                if (!label) return '';
-                                // Format date with month abbreviation and year in January
-                                try {
-                                    // Parse YYYY-MM-DD format explicitly to avoid timezone issues
-                                    const parts = String(label).match(/^(\d{4})-(\d{2})-(\d{2})$/);
-                                    if (!parts) return label;
-                                    
-                                    const year = parseInt(parts[1], 10);
-                                    const month = parseInt(parts[2], 10) - 1; // 0-indexed
-                                    const day = parseInt(parts[3], 10);
-                                    
-                                    const monthNames = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun',
-                                                       'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
-                                    const monthName = monthNames[month];
-                                    
-                                    // Show year every January
-                                    if (month === 0) {
-                                        return monthName + ' ' + day + ' ' + year;
-                                    }
-                                    return monthName + ' ' + day;
-                                } catch (e) {
-                                    return label;
-                                }
-                            },
-                            maxRotation: 45,
-                            minRotation: 45
-                        },
-                        // Add vertical tick marks on the X axis
-                        drawOnChartArea: true,
-                        drawTicks: true
-                    },
-                    y: {
-                        display: true,
-                        beginAtZero: true, // Always normalized to 0-100%
-                        grid: {
-                            color: 'rgba(226, 232, 240, 0.8)',
-                            drawBorder: false
-                        },
-                        ticks: {
-                            font: {
-                                size: 11
-                            },
-                            color: '#64748b',
-                            callback: (value) => {
-                                return value.toFixed(0) + '%';
-                            }
-                        },
-                        title: {
-                            display: true,
-                            text: 'Scaled value (%)',
-                            font: {
-                                size: 12,
-                                weight: '500'
-                            },
-                            color: '#64748b',
-                            padding: {
-                                top: 5,
-                                bottom: 5
-                            }
-                        }
-                    }
-                },
-                interaction: {
-                    mode: 'nearest',
-                    axis: 'x',
-                    intersect: false,
-                    // Allow panning even when hovering over data points
-                    includeInvisible: true
-                },
-                animation: {
-                    duration: 1000,
-                    easing: 'easeInOutQuart',
-                    // Disable animations during interactions for better performance
-                    onProgress: function() {
-                        // Throttle updates during animation
-                    },
-                    onComplete: function() {
-                        // Re-enable full rendering after animation
-                    }
-                },
-                // Performance optimizations
-                elements: {
-                    point: {
-                        radius: 0, // Hide points by default (only show for weekly)
-                        hoverRadius: 4
-                    },
-                    line: {
-                        borderWidth: 2,
-                        tension: 0 // Disable bezier curves for better performance
-                    }
-                },
-                // Optimize tooltip rendering
-                hover: {
-                    animationDuration: 0 // Disable hover animations
-                },
-                // Reduce unnecessary redraws
-                transitions: {
-                    active: {
-                        animation: {
-                            duration: 0
+                    });
+                } else if (xAxis && typeof xAxis.getPixelForValue === 'function' && chart.data && chart.data.labels) {
+                    const labels = chart.data.labels;
+                    const min = xAxis.min !== undefined ? xAxis.min : 0;
+                    const max = xAxis.max !== undefined ? xAxis.max : labels.length - 1;
+                    const numTicks = Math.min(20, labels.length);
+                    const step = (max - min) / (numTicks - 1);
+                    
+                    for (let i = 0; i < numTicks; i++) {
+                        const value = min + (i * step);
+                        const tickX = xAxis.getPixelForValue(value);
+                        
+                        if (tickX !== null && typeof tickX === 'number' && !isNaN(tickX) && 
+                            tickX >= chartArea.left && tickX <= chartArea.right) {
+                            ctx.beginPath();
+                            ctx.moveTo(tickX, tickY);
+                            ctx.lineTo(tickX, tickY + tickLength);
+                            ctx.stroke();
                         }
                     }
                 }
-			},
-			plugins: [htmlLegendPlugin, dualAxisPlugin, xAxisTickMarksPlugin]
-		});
-        
-        // Set initial zoom to last 12 months after chart is created
+                
+                ctx.restore();
+            }
+        };
+    }
+
+    createDualAxisPlugin() {
+        return {
+            id: 'dualAxis',
+            afterDraw(chart) {
+                if (chart.animating) return;
+                
+                const ctx = chart.ctx;
+                const xAxis = chart.scales.x;
+                const chartArea = chart.chartArea;
+                const weekLabels = window.chartData?.labels || [];
+                const dayLabels = window.chartData?.dayLabels || [];
+                
+                if (!xAxis || !chartArea || weekLabels.length === 0 || dayLabels.length === 0) {
+                    return;
+                }
+                
+                ctx.save();
+                ctx.font = 'bold 11px Inter, sans-serif';
+                ctx.textAlign = 'center';
+                ctx.textBaseline = 'top';
+                ctx.fillStyle = '#64748b';
+                
+                const weekLabelY = chartArea.top - 20;
+                
+                if (!xAxis.ticks || xAxis.ticks.length === 0) {
+                    ctx.restore();
+                    return;
+                }
+                
+                const visibleTicks = xAxis.ticks.filter(tick => {
+                    const dataIndex = tick.value;
+                    return dataIndex >= 0 && dataIndex < weekLabels.length && 
+                           weekLabels[dataIndex] && weekLabels[dataIndex].trim() !== '';
+                });
+                
+                const maxLabels = MAX_DUAL_AXIS_LABELS;
+                if (visibleTicks.length > maxLabels) {
+                    const step = Math.ceil(visibleTicks.length / maxLabels);
+                    visibleTicks.forEach((tick, index) => {
+                        if (index % step === 0) {
+                            const dataIndex = tick.value;
+                            const label = weekLabels[dataIndex];
+                            if (label && label.trim() !== '') {
+                                ctx.fillText(label, tick.x, weekLabelY);
+                            }
+                        }
+                    });
+                } else {
+                    visibleTicks.forEach((tick) => {
+                        const dataIndex = tick.value;
+                        const label = weekLabels[dataIndex];
+                        if (label && label.trim() !== '') {
+                            ctx.fillText(label, tick.x, weekLabelY);
+                        }
+                    });
+                }
+                
+                ctx.restore();
+            }
+        };
+    }
+
+    getChartOptions(dayLabels) {
+        return {
+            responsive: true,
+            maintainAspectRatio: false,
+            layout: {
+                padding: { top: 30 }
+            },
+            plugins: {
+                legend: { display: false },
+                htmlLegend: { containerID: 'chartHtmlLegend' },
+                tooltip: {
+                    mode: 'index',
+                    intersect: false,
+                    backgroundColor: 'rgba(0, 0, 0, 0.85)',
+                    padding: 14,
+                    titleFont: { size: 14, weight: '600' },
+                    bodyFont: { size: 12, weight: '400' },
+                    displayColors: true,
+                    borderColor: 'rgba(255, 255, 255, 0.1)',
+                    borderWidth: 1,
+                    cornerRadius: 8,
+                    enabled: function(context) {
+                        const chart = context.chart;
+                        return !chart._isPanning && !chart._isZooming;
+                    },
+                    filter: function(tooltipItem) {
+                        return !tooltipItem.hidden;
+                    },
+                    callbacks: {
+                        title: function(context) {
+                            const chart = context.chart;
+                            let dayLabels = [];
+                            let weekLabels = [];
+                            
+                            if (chart?.data?.labels) {
+                                dayLabels = chart.data.labels;
+                            }
+                            
+                            if (window.chartData) {
+                                weekLabels = window.chartData.labels || [];
+                                if (dayLabels.length === 0 && window.chartData.dayLabels) {
+                                    dayLabels = window.chartData.dayLabels;
+                                }
+                            }
+                            
+                            const dataIndex = context[0].dataIndex;
+                            const dayLabel = dayLabels[dataIndex] || '';
+                            const weekLabel = weekLabels[dataIndex] || '';
+                            
+                            if (weekLabel && weekLabel.trim() !== '') {
+                                return `Week: ${weekLabel} | Day: ${dayLabel}`;
+                            }
+                            return `Date: ${dayLabel}`;
+                        },
+                        label: function(context) {
+                            const label = context.dataset.label || '';
+                            const value = context.parsed.y;
+                            if (value === null || value === undefined || Number.isNaN(value)) {
+                                return `${label}: n/a`;
+                            }
+                            return `${label}: ${value.toFixed(1)}%`;
+                        }
+                    }
+                },
+                zoom: {
+                    pan: {
+                        enabled: true,
+                        mode: 'x',
+                        modifierKey: null,
+                        threshold: 5,
+                        speed: 1
+                    },
+                    zoom: {
+                        wheel: { enabled: true, speed: 0.1 },
+                        pinch: { enabled: true },
+                        mode: 'x',
+                        limits: {
+                            x: { min: 0, max: dayLabels.length - 1 }
+                        }
+                    },
+                    limits: {
+                        x: { min: 0, max: dayLabels.length - 1 }
+                    }
+                }
+            },
+            scales: {
+                x: {
+                    display: true,
+                    grid: {
+                        display: true,
+                        color: 'rgba(226, 232, 240, 0.5)',
+                        drawBorder: false,
+                        lineWidth: 1
+                    },
+                    ticks: {
+                        font: { size: 10 },
+                        color: '#64748b',
+                        maxTicksLimit: 20,
+                        autoSkip: true,
+                        autoSkipPadding: 5,
+                        display: true,
+                        callback: function(value) {
+                            const chart = this.chart;
+                            if (!chart?.data?.labels) return '';
+                            
+                            const dayLabels = chart.data.labels;
+                            const dataIndex = Math.round(value);
+                            if (dataIndex < 0 || dataIndex >= dayLabels.length) return '';
+                            const label = dayLabels[dataIndex];
+                            if (!label) return '';
+                            
+                            return ChartUtils.formatDateLabel(label);
+                        },
+                        maxRotation: 45,
+                        minRotation: 45
+                    },
+                    drawOnChartArea: true,
+                    drawTicks: true
+                },
+                y: {
+                    display: true,
+                    beginAtZero: true,
+                    grid: {
+                        color: 'rgba(226, 232, 240, 0.8)',
+                        drawBorder: false
+                    },
+                    ticks: {
+                        font: { size: 11 },
+                        color: '#64748b',
+                        callback: (value) => `${value.toFixed(0)}%`
+                    },
+                    title: {
+                        display: true,
+                        text: 'Scaled value (%)',
+                        font: { size: 12, weight: '500' },
+                        color: '#64748b',
+                        padding: { top: 5, bottom: 5 }
+                    }
+                }
+            },
+            interaction: {
+                mode: 'nearest',
+                axis: 'x',
+                intersect: false,
+                includeInvisible: true
+            },
+            animation: {
+                duration: 1000,
+                easing: 'easeInOutQuart'
+            },
+            elements: {
+                point: {
+                    radius: 0,
+                    hoverRadius: 4
+                },
+                line: {
+                    borderWidth: 2,
+                    tension: 0
+                }
+            },
+            hover: {
+                animationDuration: 0
+            },
+            transitions: {
+                active: {
+                    animation: { duration: 0 }
+                }
+            }
+        };
+    }
+
+    setInitialZoom(dayLabels) {
         setTimeout(() => {
             if (window.chartData?.initialViewStart && window.chartData?.initialViewEnd && this.chart) {
                 const initialStart = window.chartData.initialViewStart;
                 const initialEnd = window.chartData.initialViewEnd;
                 
-                // Find indices in dayLabels that match the initial view dates
                 let startIndex = dayLabels.findIndex(d => d >= initialStart);
                 let endIndex = dayLabels.findIndex(d => d > initialEnd);
                 
-                // If exact match not found, use closest
                 if (startIndex === -1) startIndex = 0;
                 if (endIndex === -1) endIndex = dayLabels.length - 1;
                 
-                // Ensure valid range
                 if (startIndex >= 0 && endIndex > startIndex && endIndex < dayLabels.length) {
-                    // Zoom to the last 12 months using the zoom plugin API
                     try {
-                        // Use zoomScale method if available (chartjs-plugin-zoom v2)
                         if (typeof this.chart.zoomScale === 'function') {
-                            this.chart.zoomScale('x', {
-                                min: startIndex,
-                                max: endIndex
-                            });
+                            this.chart.zoomScale('x', { min: startIndex, max: endIndex });
                         } else {
-                            // Fallback: set scale min/max directly
                             const xScale = this.chart.scales.x;
                             if (xScale) {
                                 xScale.options.min = startIndex;
@@ -561,16 +793,15 @@ class AlterDashboard {
                     }
                 }
             }
-        }, 100);
-        
-        // Hide loader after chart is initialized
+        }, INITIAL_ZOOM_DELAY);
+    }
+
+    hidePageLoader() {
         const loader = document.getElementById('pageLoader');
         if (loader) {
             loader.style.display = 'none';
         }
     }
-
-    
 
     escapeHtml(text) {
         const div = document.createElement('div');
@@ -578,12 +809,10 @@ class AlterDashboard {
         return div.innerHTML;
     }
 
-    // Reset all datasets to visible
     showAllDatasets() {
         if (!this.chart) return;
         
-        const datasets = this.chart.data.datasets;
-        datasets.forEach((dataset, index) => {
+        this.chart.data.datasets.forEach((dataset, index) => {
             const meta = this.chart.getDatasetMeta(index);
             meta.hidden = false;
         });
@@ -591,46 +820,118 @@ class AlterDashboard {
         this.chart.update();
     }
 
-    // Initialize chart controls
     initControls() {
-        // Create controls container if it doesn't exist
         let controlsContainer = document.getElementById('chartControls');
         if (!controlsContainer) {
             const chartSection = document.querySelector('.chart-section');
-            if (chartSection) {
-                const cardHeader = chartSection.querySelector('.card-header');
-                if (cardHeader) {
-                    const controls = document.createElement('div');
-                    controls.id = 'chartControls';
-                    controls.className = 'chart-controls';
-                    controls.innerHTML = `
-                        <div class="controls-group">
-                            <button id="showAllBtn" class="btn-control" title="Show all indicators">
-                                <span class="control-icon">👁️</span>
-                                <span class="control-text">Show All</span>
-                            </button>
-                        </div>
-                    `;
-                    cardHeader.appendChild(controls);
-                }
+            const cardHeader = chartSection?.querySelector('.card-header');
+            if (cardHeader) {
+                const controls = document.createElement('div');
+                controls.id = 'chartControls';
+                controls.className = 'chart-controls';
+                controls.innerHTML = `
+                    <div class="controls-group">
+                        <button id="showAllBtn" class="btn-control" title="Show all indicators">
+                            <span class="control-icon">👁️</span>
+                            <span class="control-text">Show All</span>
+                        </button>
+                    </div>
+                `;
+                cardHeader.appendChild(controls);
             }
         }
 
-        // Attach event listeners
         const showAllBtn = document.getElementById('showAllBtn');
         if (showAllBtn) {
             showAllBtn.addEventListener('click', () => this.showAllDatasets());
         }
     }
 
-    // Initialize enhanced legend interactivity
     initLegendInteractivity() {
         // Legend interactivity is handled in Chart.js config
-        // Additional styling can be added here if needed
+    }
+
+    updateChart(chartData) {
+        if (!this.chart || !chartData) return;
+
+        const { dayLabels, weekLabels } = ChartUtils.processLabels(chartData);
+        const datasets = chartData.datasets.map((ds, i) => 
+            ChartUtils.createDataset(ds, i, dayLabels.length)
+        );
+
+        this.originalDatasets = datasets.map(d => ({
+            ...d,
+            originalData: Array.isArray(d.data) ? [...d.data] : []
+        }));
+
+        this.chart.data.labels = dayLabels;
+        this.chart.data.datasets = datasets;
+
+        window.chartData = {
+            labels: weekLabels,
+            dayLabels: dayLabels,
+            timePositions: chartData.timePositions || [],
+            datasets: datasets,
+            initialViewStart: chartData.initialViewStart,
+            initialViewEnd: chartData.initialViewEnd
+        };
+
+        this.updateZoomLimits(dayLabels);
+        this.updateScaleConfiguration(dayLabels);
+        this.chart.update('none');
+        this.forceRedraw();
+        this.setInitialZoom(dayLabels);
+    }
+
+    updateZoomLimits(dayLabels) {
+        if (this.chart.options.plugins?.zoom) {
+            if (this.chart.options.plugins.zoom.zoom?.limits) {
+                this.chart.options.plugins.zoom.zoom.limits.x = {
+                    min: 0,
+                    max: dayLabels.length - 1
+                };
+            }
+            if (this.chart.options.plugins.zoom.limits) {
+                this.chart.options.plugins.zoom.limits.x = {
+                    min: 0,
+                    max: dayLabels.length - 1
+                };
+            }
+        }
+    }
+
+    updateScaleConfiguration(dayLabels) {
+        if (this.chart.options.scales?.x) {
+            this.chart.options.scales.x.min = undefined;
+            this.chart.options.scales.x.max = dayLabels.length - 1;
+            
+            if (this.chart.options.scales.x.ticks) {
+                this.chart.options.scales.x.ticks.display = true;
+            }
+            
+            if (this.chart.scales?.x) {
+                const xScale = this.chart.scales.x;
+                xScale.options.min = undefined;
+                xScale.options.max = dayLabels.length - 1;
+            }
+        }
+    }
+
+    forceRedraw() {
+        setTimeout(() => {
+            if (this.chart?.scales?.x) {
+                this.chart.resize();
+                setTimeout(() => {
+                    if (this.chart) {
+                        this.chart.update('none');
+                    }
+                }, CHART_RESIZE_DELAY);
+            }
+        }, CHART_REDRAW_DELAY);
     }
 }
 
-// Dismiss chart hint function (called from HTML onclick)
+// Chart hint functions
 function dismissChartHint() {
     const hint = document.getElementById('chartHint');
     if (hint) {
@@ -638,12 +939,10 @@ function dismissChartHint() {
         setTimeout(() => {
             hint.style.display = 'none';
         }, 300);
-        // Store dismissal in localStorage so it doesn't show again
         localStorage.setItem('chartHintDismissed', 'true');
     }
 }
 
-// Auto-hide chart hint after 10 seconds
 function autoHideChartHint() {
     const hint = document.getElementById('chartHint');
     if (hint && !localStorage.getItem('chartHintDismissed')) {
@@ -651,330 +950,207 @@ function autoHideChartHint() {
             if (hint && hint.style.display !== 'none') {
                 dismissChartHint();
             }
-        }, 10000); // Hide after 10 seconds
+        }, HINT_AUTO_HIDE_DELAY);
     }
 }
 
-// Typing animation for pathogen select
+// Initialize typing animations
 function initPathogenTypingAnimation() {
-    const typingElement = document.getElementById('pathogenTypingAnimation');
-    const selectElement = document.getElementById('pathogenSelect');
-    
-    if (!typingElement || !selectElement) {
-        console.log('Typing animation: Missing elements');
-        return;
+    if (pathogenTypingAnimation) {
+        pathogenTypingAnimation.cleanup();
     }
-    
-    if (!window.pathogenNames || window.pathogenNames.length === 0) {
-        console.log('Typing animation: No pathogen names available');
-        return;
-    }
-    
-    console.log('Typing animation: Initializing with', window.pathogenNames.length, 'pathogens');
-    
-    let currentPathogenIndex = 0;
-    let currentText = '';
-    let isDeleting = false;
-    let typingSpeed = 300; // milliseconds per character
-    let deleteSpeed = 50;
-    let pauseBeforeDelete = 2000; // pause before deleting
-    let pauseAfterDelete = 500; // pause before typing next
-    
-    let timeoutId = null;
-    
-    function typeCharacter() {
-        const currentPathogen = window.pathogenNames[currentPathogenIndex];
-        
-        // Hide animation if pathogen is selected
-        if (selectElement.value && selectElement.value !== '') {
-            typingElement.style.display = 'none';
-            if (timeoutId) clearTimeout(timeoutId);
-            return;
-        }
-        
-        // Show animation if no pathogen is selected
-        typingElement.style.display = 'block';
-        
-        if (!isDeleting && currentText.length < currentPathogen.length) {
-            // Typing forward
-            currentText = currentPathogen.substring(0, currentText.length + 1);
-            typingElement.textContent = currentText + '|';
-            timeoutId = setTimeout(typeCharacter, typingSpeed);
-        } else if (!isDeleting && currentText.length === currentPathogen.length) {
-            // Pause before deleting
-            typingElement.textContent = currentText;
-            timeoutId = setTimeout(() => {
-                isDeleting = true;
-                timeoutId = setTimeout(typeCharacter, deleteSpeed);
-            }, pauseBeforeDelete);
-        } else if (isDeleting && currentText.length > 0) {
-            // Deleting
-            currentText = currentText.substring(0, currentText.length - 1);
-            typingElement.textContent = currentText + '|';
-            timeoutId = setTimeout(typeCharacter, deleteSpeed);
-        } else if (isDeleting && currentText.length === 0) {
-            // Move to next pathogen
-            isDeleting = false;
-            currentPathogenIndex = (currentPathogenIndex + 1) % window.pathogenNames.length;
-            typingElement.textContent = '|';
-            timeoutId = setTimeout(typeCharacter, pauseAfterDelete);
-        }
-    }
-    
-    // Check if pathogen is selected and update visibility
-    function checkSelection() {
-        if (selectElement.value && selectElement.value !== '') {
-            typingElement.style.display = 'none';
-            if (timeoutId) {
-                clearTimeout(timeoutId);
-                timeoutId = null;
-            }
-        } else {
-            // Only show and start animation if not focused
-            if (document.activeElement !== selectElement) {
-                typingElement.style.display = 'block';
-                if (!timeoutId) {
-                    // Reset animation state when restarting
-                    currentText = '';
-                    isDeleting = false;
-                    typingElement.textContent = '|';
-                    typeCharacter();
-                }
-            }
-        }
-    }
-    
-    // Initial check
-    checkSelection();
-    
-    // Listen for changes
-    selectElement.addEventListener('change', checkSelection);
-    selectElement.addEventListener('focus', () => {
-        // Always hide when focused
-        typingElement.style.display = 'none';
-        if (timeoutId) {
-            clearTimeout(timeoutId);
-            timeoutId = null;
-        }
-    });
-    selectElement.addEventListener('blur', () => {
-        // Small delay to ensure focus is lost
-        setTimeout(() => {
-            checkSelection();
-        }, 100);
-    });
-    
-    // Start typing animation after a short delay
-    setTimeout(() => {
-        if (!selectElement.value || selectElement.value === '') {
-            if (document.activeElement !== selectElement) {
-                typingElement.style.display = 'block';
-                typingElement.textContent = '|';
-                typeCharacter();
-            }
-        }
-    }, 500);
+    pathogenTypingAnimation = new TypingAnimation('pathogenTypingAnimation', 'pathogenSelect', 'pathogenNames');
 }
 
-// Typing animation for geography select
 function initGeographyTypingAnimation() {
-    const typingElement = document.getElementById('geographyTypingAnimation');
-    const selectElement = document.getElementById('geographySelect');
-    
-    if (!typingElement || !selectElement) {
-        console.log('Geography typing animation: Missing elements');
-        return;
+    if (geographyTypingAnimation) {
+        geographyTypingAnimation.cleanup();
     }
-    
-    if (!window.geographyNames || window.geographyNames.length === 0) {
-        console.log('Geography typing animation: No geography names available');
-        return;
-    }
-    
-    console.log('Geography typing animation: Initializing with', window.geographyNames.length, 'geographies');
-    
-    let currentGeographyIndex = 0;
-    let currentText = '';
-    let isDeleting = false;
-    let typingSpeed = 300; // milliseconds per character
-    let deleteSpeed = 50;
-    let pauseBeforeDelete = 2000; // pause before deleting
-    let pauseAfterDelete = 500; // pause before typing next
-    
-    let timeoutId = null;
-    
-    function typeCharacter() {
-        const currentGeography = window.geographyNames[currentGeographyIndex];
-        
-        // Hide animation if geography is selected
-        if (selectElement.value && selectElement.value !== '') {
-            typingElement.style.display = 'none';
-            if (timeoutId) clearTimeout(timeoutId);
-            return;
-        }
-        
-        // Show animation if no geography is selected
-        typingElement.style.display = 'block';
-        
-        if (!isDeleting && currentText.length < currentGeography.length) {
-            // Typing forward
-            currentText = currentGeography.substring(0, currentText.length + 1);
-            typingElement.textContent = currentText + '|';
-            timeoutId = setTimeout(typeCharacter, typingSpeed);
-        } else if (!isDeleting && currentText.length === currentGeography.length) {
-            // Pause before deleting
-            typingElement.textContent = currentText;
-            timeoutId = setTimeout(() => {
-                isDeleting = true;
-                timeoutId = setTimeout(typeCharacter, deleteSpeed);
-            }, pauseBeforeDelete);
-        } else if (isDeleting && currentText.length > 0) {
-            // Deleting
-            currentText = currentText.substring(0, currentText.length - 1);
-            typingElement.textContent = currentText + '|';
-            timeoutId = setTimeout(typeCharacter, deleteSpeed);
-        } else if (isDeleting && currentText.length === 0) {
-            // Move to next geography
-            isDeleting = false;
-            currentGeographyIndex = (currentGeographyIndex + 1) % window.geographyNames.length;
-            typingElement.textContent = '|';
-            timeoutId = setTimeout(typeCharacter, pauseAfterDelete);
-        }
-    }
-    
-    // Check if geography is selected and update visibility
-    function checkSelection() {
-        // Don't show animation if select is disabled (no pathogen selected)
-        if (selectElement.disabled) {
-            typingElement.style.display = 'none';
-            if (timeoutId) {
-                clearTimeout(timeoutId);
-                timeoutId = null;
-            }
-            return;
-        }
-        
-        if (selectElement.value && selectElement.value !== '') {
-            typingElement.style.display = 'none';
-            if (timeoutId) {
-                clearTimeout(timeoutId);
-                timeoutId = null;
-            }
-        } else {
-            // Only show and start animation if not focused
-            if (document.activeElement !== selectElement) {
-                typingElement.style.display = 'block';
-                if (!timeoutId) {
-                    // Reset animation state when restarting
-                    currentText = '';
-                    isDeleting = false;
-                    typingElement.textContent = '|';
-                    typeCharacter();
-                }
-            }
-        }
-    }
-    
-    // Initial check
-    checkSelection();
-    
-    // Listen for changes
-    selectElement.addEventListener('change', checkSelection);
-    selectElement.addEventListener('focus', () => {
-        // Always hide when focused
-        typingElement.style.display = 'none';
-        if (timeoutId) {
-            clearTimeout(timeoutId);
-            timeoutId = null;
-        }
-    });
-    selectElement.addEventListener('blur', () => {
-        // Small delay to ensure focus is lost
-        setTimeout(() => {
-            checkSelection();
-        }, 100);
-    });
-    
-    // Start typing animation after a short delay
-    setTimeout(() => {
-        if (!selectElement.value || selectElement.value === '') {
-            if (document.activeElement !== selectElement) {
-                typingElement.style.display = 'block';
-                typingElement.textContent = '|';
-                typeCharacter();
-            }
-        }
-    }, 500);
+    geographyTypingAnimation = new TypingAnimation('geographyTypingAnimation', 'geographySelect', 'geographyNames');
 }
 
-// Update geography select enabled/disabled state based on pathogen selection
 function updateGeographySelectState() {
     const pathogenSelect = document.getElementById('pathogenSelect');
     const geographySelect = document.getElementById('geographySelect');
     
-    if (!pathogenSelect || !geographySelect) {
-        return;
-    }
+    if (!pathogenSelect || !geographySelect) return;
     
     const hasPathogen = pathogenSelect.value && pathogenSelect.value !== '';
-    
-    // Enable or disable geography select based on pathogen selection
     geographySelect.disabled = !hasPathogen;
     
-    // If pathogen is cleared, also clear geography selection
     if (!hasPathogen && geographySelect.value) {
         geographySelect.value = '';
     }
 }
 
-// Initialize dashboard when DOM is loaded
+// Initialize dashboard
 let dashboard;
 document.addEventListener('DOMContentLoaded', function() {
     dashboard = new AlterDashboard();
     initPathogenTypingAnimation();
     initGeographyTypingAnimation();
-    // Initialize geography select state based on pathogen selection
     updateGeographySelectState();
 });
 
-// Handle pathogen change - reset geography select and submit form
-function handlePathogenChange() {
-    // Stop typing animation
+// Handle pathogen change
+async function handlePathogenChange() {
     const typingElement = document.getElementById('pathogenTypingAnimation');
     if (typingElement) {
         typingElement.style.display = 'none';
     }
     
+    const pathogenSelect = document.getElementById('pathogenSelect');
     const geographySelect = document.getElementById('geographySelect');
-    if (geographySelect) {
-        geographySelect.value = '';
+    
+    if (!pathogenSelect || !geographySelect) return;
+    
+    const selectedPathogen = pathogenSelect.value;
+    
+    const geographyTypingElement = document.getElementById('geographyTypingAnimation');
+    if (geographyTypingElement) {
+        geographyTypingElement.style.display = 'none';
+    }
+    if (geographyTypingAnimation) {
+        geographyTypingAnimation.cleanup();
     }
     
-    // Update geography select state before submitting
-    updateGeographySelectState();
+    geographySelect.value = '';
     
-    // Show loader before submitting form
-    const loader = document.getElementById('pageLoader');
-    if (loader) {
-        loader.style.display = 'flex';
+    if (!selectedPathogen) {
+        geographySelect.innerHTML = '<option value=""></option>';
+        geographySelect.disabled = true;
+        window.geographyNames = [];
+        initGeographyTypingAnimation();
+        return;
     }
-    document.getElementById('filterForm').submit();
+    
+    geographySelect.disabled = true;
+    
+    const geographyLoader = document.getElementById('geographyLoader');
+    if (geographyLoader) {
+        geographyLoader.style.display = 'block';
+    }
+    
+    try {
+        const url = window.getAvailableGeosUrl || '/api/get_available_geos';
+        const response = await fetch(`${url}?pathogen=${encodeURIComponent(selectedPathogen)}`, {
+            method: 'GET',
+            headers: {
+                'X-CSRFToken': window.csrfToken || '',
+            },
+        });
+        
+        if (!response.ok) {
+            throw new Error(`HTTP error! status: ${response.status}`);
+        }
+        
+        const data = await response.json();
+        geographySelect.innerHTML = '<option value=""></option>';
+        
+        if (data.available_geos && Array.isArray(data.available_geos)) {
+            data.available_geos.forEach(group => {
+                if (group.children && Array.isArray(group.children)) {
+                    const optgroup = document.createElement('optgroup');
+                    optgroup.label = group.text;
+                    
+                    group.children.forEach(child => {
+                        const option = document.createElement('option');
+                        option.value = child.id;
+                        option.textContent = child.text;
+                        optgroup.appendChild(option);
+                    });
+                    
+                    geographySelect.appendChild(optgroup);
+                }
+            });
+        }
+        
+        window.geographyNames = [];
+        if (data.available_geos && Array.isArray(data.available_geos)) {
+            data.available_geos.forEach(group => {
+                if (group.children && Array.isArray(group.children)) {
+                    group.children.forEach(child => {
+                        window.geographyNames.push(child.text);
+                    });
+                }
+            });
+        }
+        
+        if (window.geographyNames.length > MAX_GEOGRAPHY_NAMES) {
+            window.geographyNames = window.geographyNames.slice(0, MAX_GEOGRAPHY_NAMES);
+        }
+        
+        geographySelect.disabled = !selectedPathogen;
+        
+        setTimeout(() => {
+            initGeographyTypingAnimation();
+        }, INITIAL_ZOOM_DELAY);
+        
+    } catch (error) {
+        console.error('Error fetching available geos:', error);
+        geographySelect.disabled = !selectedPathogen;
+    } finally {
+        if (geographyLoader) {
+            geographyLoader.style.display = 'none';
+        }
+    }
 }
 
-// Handle geography change - show loader and submit form
-function handleGeographyChange() {
-    // Stop typing animation
+// Handle geography change
+async function handleGeographyChange() {
     const typingElement = document.getElementById('geographyTypingAnimation');
     if (typingElement) {
         typingElement.style.display = 'none';
     }
     
-    // Show loader before submitting form
-    const loader = document.getElementById('pageLoader');
-    if (loader) {
-        loader.style.display = 'flex';
+    const pathogenSelect = document.getElementById('pathogenSelect');
+    const geographySelect = document.getElementById('geographySelect');
+    
+    if (!pathogenSelect || !geographySelect) return;
+    
+    const selectedPathogen = pathogenSelect.value;
+    const selectedGeography = geographySelect.value;
+    
+    if (!selectedGeography) {
+        if (dashboard?.chart) {
+            dashboard.chart.data.datasets = [];
+            dashboard.chart.data.labels = [];
+            dashboard.chart.update();
+        }
+        return;
     }
-    document.getElementById('filterForm').submit();
+    
+    const chartLoader = document.getElementById('chartLoader');
+    if (chartLoader) {
+        chartLoader.style.display = 'block';
+    }
+    
+    try {
+        const url = window.getChartDataUrl || '/api/get_chart_data';
+        const response = await fetch(`${url}?pathogen=${encodeURIComponent(selectedPathogen)}&geography=${encodeURIComponent(selectedGeography)}`, {
+            method: 'GET',
+            headers: {
+                'X-CSRFToken': window.csrfToken || '',
+            },
+        });
+        
+        if (!response.ok) {
+            throw new Error(`HTTP error! status: ${response.status}`);
+        }
+        
+        const data = await response.json();
+        
+        if (data.chart_data && dashboard) {
+            dashboard.updateChart(data.chart_data);
+        }
+        
+    } catch (error) {
+        console.error('Error fetching chart data:', error);
+    } finally {
+        if (chartLoader) {
+            chartLoader.style.display = 'none';
+        }
+    }
 }
 
 // Export for use in other scripts
