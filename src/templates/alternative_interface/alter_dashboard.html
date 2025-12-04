@@ -189,17 +189,6 @@
             {% endfor %}
         ];
 
-        // Pass geography names for typing animation (limited to 25)
-        window.geographyNames = [];
-        {% for geography in available_geos %}
-            {% for child in geography.children %}
-                window.geographyNames.push("{{ child.text }}");
-            {% endfor %}
-        {% endfor %}
-        // Limit to 25 total
-        if (window.geographyNames.length > 25) {
-            window.geographyNames = window.geographyNames.slice(0, 25);
-        }
     </script>
     
     <!-- Custom JavaScript -->

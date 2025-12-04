@@ -1069,7 +1069,7 @@ async function handlePathogenChange() {
         if (data.available_geos && Array.isArray(data.available_geos)) {
             data.available_geos.forEach(group => {
                 if (group.children && Array.isArray(group.children)) {
-                    group.children.forEach(child => {
+                    group.children.slice(0, parseInt(MAX_GEOGRAPHY_NAMES / data.available_geos.length)).forEach(child => {
                         window.geographyNames.push(child.text);
                     });
                 }
