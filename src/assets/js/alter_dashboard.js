@@ -653,7 +653,7 @@ class AlterDashboard {
                             if (value === null || value === undefined || Number.isNaN(value)) {
                                 return `${label}: n/a`;
                             }
-                            return `${label}: ${value.toFixed(1)}%`;
+                            return `${label}: ${value.toFixed(1)}`;
                         }
                     }
                 },
@@ -722,11 +722,11 @@ class AlterDashboard {
                     ticks: {
                         font: { size: 11 },
                         color: '#64748b',
-                        callback: (value) => `${value.toFixed(0)}%`
+                        callback: (value) => `${value.toFixed(0)}`
                     },
                     title: {
                         display: true,
-                        text: 'Scaled value (%)',
+                        text: 'Scaled value',
                         font: { size: 12, weight: '500' },
                         color: '#64748b',
                         padding: { top: 5, bottom: 5 }
@@ -1069,7 +1069,7 @@ async function handlePathogenChange() {
         if (data.available_geos && Array.isArray(data.available_geos)) {
             data.available_geos.forEach(group => {
                 if (group.children && Array.isArray(group.children)) {
-                    group.children.forEach(child => {
+                    group.children.slice(0, parseInt(MAX_GEOGRAPHY_NAMES / data.available_geos.length)).forEach(child => {
                         window.geographyNames.push(child.text);
                     });
                 }
@@ -1142,6 +1142,9 @@ async function handleGeographyChange() {
         
         if (data.chart_data && dashboard) {
             dashboard.updateChart(data.chart_data);
+            document.getElementById('chartTitle').textContent = `${selectedPathogen} in ${geographySelect.options[geographySelect.selectedIndex].text}`;
+        } else {
+            document.getElementById('chartTitle').textContent = '';
         }
         
     } catch (error) {
