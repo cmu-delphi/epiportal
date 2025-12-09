@@ -376,17 +376,56 @@ def prepare_chart_series_multi(
     }
 
 
-def normalize_dataset(data):
+def normalize_dataset(data, day_labels=None, initial_view_start=None, initial_view_end=None):
     """
-    Normalize a dataset to 0-100% range based on its min/max.
+    Scale a dataset so that its highest value during the displayed 2 years is set to 100.
+    Multiplies each value by a constant (100 / max_value_in_range).
     Preserves None values for missing data.
     """
-    # Filter out None values for min/max calculation
+    if not data:
+        return data
+
+    # If we have the initial view range, scale based on max value in that range
+    if day_labels and initial_view_start and initial_view_end and len(day_labels) == len(data):
+        # Find indices that fall within the initial view range (2 years)
+        view_indices = []
+        for i, day_label in enumerate(day_labels):
+            if initial_view_start <= day_label <= initial_view_end:
+                view_indices.append(i)
+
+        # Find max value only in the view range
+        view_values = [
+            data[i]
+            for i in view_indices
+            if i < len(data) and data[i] is not None and not (
+                isinstance(data[i], float) and (data[i] != data[i] or data[i] in (float("inf"), float("-inf")))
+            )
+        ]
+
+        if view_values:
+            max_val_in_range = max(view_values)
+            if max_val_in_range > 0:
+                # Scale factor: multiply by (100 / max_value_in_range)
+                scale_factor = 100.0 / max_val_in_range
+
+                # Scale all values in the dataset
+                normalized = []
+                for value in data:
+                    if value is None:
+                        normalized.append(None)
+                    elif isinstance(value, float) and (
+                        value != value or value in (float("inf"), float("-inf"))
+                    ):
+                        normalized.append(None)
+                    else:
+                        normalized.append(value * scale_factor)
+                return normalized
+
+    # Fallback: if no view range provided, scale based on max value in entire dataset
     numeric_values = [
         v
         for v in data
-        if v is not None
-        and not (
+        if v is not None and not (
             isinstance(v, float) and (v != v or v in (float("inf"), float("-inf")))
         )
     ]
@@ -394,11 +433,14 @@ def normalize_dataset(data):
     if not numeric_values:
         return data  # Return as-is if no valid numeric values
 
-    min_val = min(numeric_values)
     max_val = max(numeric_values)
-    range_val = (max_val - min_val) or 1  # Avoid division by zero
+    if max_val <= 0:
+        return data  # Return as-is if max is 0 or negative
 
-    # Normalize each value
+    # Scale so max value = 100
+    scale_factor = 100.0 / max_val
+
+    # Scale each value
     normalized = []
     for value in data:
         if value is None:
@@ -408,7 +450,7 @@ def normalize_dataset(data):
         ):
             normalized.append(None)
         else:
-            normalized.append(((value - min_val) / range_val) * 100)
+            normalized.append(value * scale_factor)
 
     return normalized
 
@@ -420,19 +462,20 @@ def get_chart_data(indicators, geography):
         geo_level__name=geo_type, geo_id=geo_value
     ).display_name
 
-    # Calculate date range: last 12 months from today, but fetch data from 2020
+    # Calculate date range: last 2 years from today for initial view
     today = datetime.now().date()
     two_years_ago = today - timedelta(days=730)
     # Format dates as strings
     end_date = today.strftime("%Y-%m-%d")
     start_date = two_years_ago.strftime("%Y-%m-%d")
 
-    # Store the initial view range (last 12 months)
+    # Store the initial view range (last 2 years)
     chart_data["initialViewStart"] = start_date
     chart_data["initialViewEnd"] = end_date
 
-    # Fetch data from a wider range (2020 to today) for scrolling
-    data_start_date = "1990-01-01"
+    # Fetch data from a wider range (10 years) for scrolling
+    ten_years_ago = today - timedelta(days=3650)  # ~10 years
+    data_start_date = ten_years_ago.strftime("%Y-%m-%d")
     data_end_date = today.strftime("%Y-%m-%d")
 
     for indicator in indicators:
@@ -465,18 +508,24 @@ def get_chart_data(indicators, geography):
                 series_by="signal",  # label per indicator (adjust to ("signal","geo_value") if needed)
                 time_type=indicator_time_type,
             )
-            # Apply readable label, color, and normalize data for each dataset
-            for ds in series["datasets"]:
-                ds["label"] = title
-                ds["borderColor"] = color
-                ds["backgroundColor"] = f"{color}33"
-                # Normalize data to 0-100% range
-                if ds.get("data"):
-                    ds["data"] = normalize_dataset(ds["data"])
             # Initialize labels once; assume same date range for all
             if not chart_data["labels"]:
                 chart_data["labels"] = series["labels"]
                 chart_data["dayLabels"] = series["dayLabels"]
                 chart_data["timePositions"] = series["timePositions"]
+
+            # Apply readable label, color, and normalize data for each dataset
+            for ds in series["datasets"]:
+                ds["label"] = title
+                ds["borderColor"] = color
+                ds["backgroundColor"] = f"{color}33"
+                # Scale data so max value in displayed 2 years = 100
+                if ds.get("data"):
+                    ds["data"] = normalize_dataset(
+                        ds["data"],
+                        day_labels=chart_data["dayLabels"],
+                        initial_view_start=chart_data["initialViewStart"],
+                        initial_view_end=chart_data["initialViewEnd"]
+                    )
             chart_data["datasets"].extend(series["datasets"])
     return chart_data

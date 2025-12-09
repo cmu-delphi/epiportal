@@ -192,43 +192,5 @@
     
     <!-- Custom JavaScript -->
     <script src="{% static 'js/alter_dashboard.js' %}"></script>
-    
-    <!-- Chart Hint Dismissal -->
-    <script>
-        function dismissChartHint() {
-            const hint = document.getElementById('chartHint');
-            if (hint) {
-                hint.style.animation = 'slideUp 0.3s ease-out';
-                setTimeout(() => {
-                    hint.classList.add('hidden');
-                    // Store dismissal in localStorage
-                    localStorage.setItem('chartHintDismissed', 'true');
-                }, 300);
-            }
-        }
-        
-        // Check if hint was previously dismissed
-        window.addEventListener('DOMContentLoaded', function() {
-            if (localStorage.getItem('chartHintDismissed') === 'true') {
-                const hint = document.getElementById('chartHint');
-                if (hint) {
-                    hint.classList.add('hidden');
-                }
-            }
-        });
-    </script>
-    
-    <style>
-        @keyframes slideUp {
-            from {
-                opacity: 1;
-                transform: translateY(0);
-            }
-            to {
-                opacity: 0;
-                transform: translateY(-10px);
-            }
-        }
-    </style>
 </body>
 </html>
