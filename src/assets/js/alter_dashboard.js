@@ -16,7 +16,7 @@ const CHART_REDRAW_DELAY = 100;
 const CHART_RESIZE_DELAY = 10;
 const TYPING_ANIMATION_DELAY = 500;
 const BLUR_DELAY = 100;
-const HINT_AUTO_HIDE_DELAY = 10000;
+const CHART_UPDATE_THROTTLE = 16; // ~60fps for smooth interactions
 
 // Utility functions
 const ChartUtils = {
@@ -82,6 +82,7 @@ const ChartUtils = {
     createDataset(ds, i, dayLabelsLength) {
         const timeType = ds.timeType || 'week';
         const isWeekly = timeType === 'week';
+        const isLargeDataset = dayLabelsLength > 1000;
         // Always use palette color based on index for consistency between chart and legend
         const color = CHART_PALETTE[i % CHART_PALETTE.length];
         
@@ -91,16 +92,19 @@ const ChartUtils = {
             // Use palette color to ensure consistency with legend
             borderColor: color,
             backgroundColor: color + '33',
-            borderWidth: 2,
+            borderWidth: isLargeDataset ? 1.5 : 2, // Thinner lines for large datasets
             fill: true,
             tension: 0,
-            pointRadius: isWeekly ? 3 : 0,
-            pointHoverRadius: isWeekly ? 6 : 4,
-            pointBackgroundColor: isWeekly ? color : undefined,
-            pointBorderColor: isWeekly ? '#fff' : undefined,
-            pointBorderWidth: isWeekly ? 1.5 : 0,
+            pointRadius: isLargeDataset ? 0 : (isWeekly ? 3 : 0), // No points for large datasets
+            pointHoverRadius: isLargeDataset ? 3 : (isWeekly ? 6 : 4),
+            pointBackgroundColor: isLargeDataset ? undefined : (isWeekly ? color : undefined),
+            pointBorderColor: isLargeDataset ? undefined : (isWeekly ? '#fff' : undefined),
+            pointBorderWidth: isLargeDataset ? 0 : (isWeekly ? 1.5 : 0),
             spanGaps: isWeekly,
-            timeType: timeType
+            timeType: timeType,
+            // Performance optimizations for large datasets
+            pointHitRadius: isLargeDataset ? 5 : undefined, // Smaller hit radius for large datasets
+            pointHoverBorderWidth: isLargeDataset ? 0 : undefined
         };
     }
 };
@@ -287,6 +291,7 @@ class AlterDashboard {
     constructor() {
         this.originalDatasets = [];
         this.normalized = true;
+        this.updateThrottleTimer = null;
         this.init();
     }
 
@@ -298,14 +303,12 @@ class AlterDashboard {
     }
     
     initChartHint() {
-        if (localStorage.getItem('chartHintDismissed') === 'true') {
-            const hint = document.getElementById('chartHint');
-            if (hint) {
-                hint.style.display = 'none';
-            }
-        } else {
-            autoHideChartHint();
-        }
+        const hint = document.getElementById('chartHint');
+        if (!hint) return;
+        
+        // Ensure hint is visible on every page load
+        hint.style.display = 'flex';
+        hint.classList.remove('hidden');
     }
 
     initChart() {
@@ -329,6 +332,11 @@ class AlterDashboard {
         const datasets = (window.chartData.datasets || []).map((ds, i) => 
             ChartUtils.createDataset(ds, i, dayLabels.length)
         );
+
+        // Ensure all datasets are visible by default
+        datasets.forEach((ds) => {
+            ds.hidden = false;
+        });
 
         this.originalDatasets = datasets.map(d => ({
             ...d,
@@ -594,11 +602,25 @@ class AlterDashboard {
     }
 
     getChartOptions(dayLabels) {
+        const isLargeDataset = dayLabels.length > 1000;
+        
         return {
             responsive: true,
             maintainAspectRatio: false,
+            animation: false, // Disable animations for better performance
+            transitions: {
+                active: {
+                    animation: {
+                        duration: 0 // Disable transitions during updates
+                    }
+                }
+            },
             layout: {
                 padding: { top: 30 }
+            },
+            interaction: {
+                intersect: false,
+                mode: 'index'
             },
             plugins: {
                 legend: { display: false },
@@ -614,6 +636,7 @@ class AlterDashboard {
                     borderColor: 'rgba(255, 255, 255, 0.1)',
                     borderWidth: 1,
                     cornerRadius: 8,
+                    position: isLargeDataset ? 'nearest' : 'average',
                     enabled: function(context) {
                         const chart = context.chart;
                         return !chart._isPanning && !chart._isZooming;
@@ -690,10 +713,11 @@ class AlterDashboard {
                     ticks: {
                         font: { size: 10 },
                         color: '#64748b',
-                        maxTicksLimit: 20,
+                        maxTicksLimit: isLargeDataset ? 15 : 20, // Reduce ticks for large datasets
                         autoSkip: true,
                         autoSkipPadding: 5,
                         display: true,
+                        sampleSize: isLargeDataset ? 100 : undefined, // Sample ticks for performance
                         callback: function(value) {
                             const chart = this.chart;
                             if (!chart?.data?.labels) return '';
@@ -737,24 +761,24 @@ class AlterDashboard {
                 mode: 'nearest',
                 axis: 'x',
                 intersect: false,
-                includeInvisible: true
-            },
-            animation: {
-                duration: 1000,
-                easing: 'easeInOutQuart'
+                includeInvisible: false // Exclude invisible datasets for performance
             },
             elements: {
                 point: {
-                    radius: 0,
-                    hoverRadius: 4
+                    radius: isLargeDataset ? 0 : 0, // No points for large datasets
+                    hoverRadius: isLargeDataset ? 3 : 4,
+                    hitRadius: isLargeDataset ? 5 : 10 // Smaller hit radius for performance
                 },
                 line: {
-                    borderWidth: 2,
-                    tension: 0
+                    borderWidth: isLargeDataset ? 1.5 : 2, // Thinner lines for large datasets
+                    tension: 0,
+                    cubicInterpolationMode: 'default' // Use default interpolation for performance
                 }
             },
             hover: {
-                animationDuration: 0
+                animationDuration: 0,
+                mode: 'index',
+                intersect: false
             },
             transitions: {
                 active: {
@@ -864,6 +888,11 @@ class AlterDashboard {
             originalData: Array.isArray(d.data) ? [...d.data] : []
         }));
 
+        // Ensure all datasets are visible
+        datasets.forEach((ds, index) => {
+            ds.hidden = false;
+        });
+
         this.chart.data.labels = dayLabels;
         this.chart.data.datasets = datasets;
 
@@ -878,9 +907,23 @@ class AlterDashboard {
 
         this.updateZoomLimits(dayLabels);
         this.updateScaleConfiguration(dayLabels);
-        this.chart.update('none');
-        this.forceRedraw();
-        this.setInitialZoom(dayLabels);
+        
+        // Optimize: use requestAnimationFrame for smoother updates with large datasets
+        const isLargeDataset = dayLabels.length > 1000;
+        if (isLargeDataset) {
+            requestAnimationFrame(() => {
+                this.chart.update('none');
+                setTimeout(() => {
+                    this.setInitialZoom(dayLabels);
+                }, INITIAL_ZOOM_DELAY);
+            });
+        } else {
+            // Single update with animation disabled, then set zoom
+            this.chart.update('none');
+            setTimeout(() => {
+                this.setInitialZoom(dayLabels);
+            }, INITIAL_ZOOM_DELAY);
+        }
     }
 
     updateZoomLimits(dayLabels) {
@@ -935,24 +978,18 @@ class AlterDashboard {
 function dismissChartHint() {
     const hint = document.getElementById('chartHint');
     if (hint) {
+        // Add animation
         hint.style.animation = 'fadeOut 0.3s ease-out';
+        // Hide after animation completes
         setTimeout(() => {
             hint.style.display = 'none';
+            hint.classList.add('hidden');
         }, 300);
-        localStorage.setItem('chartHintDismissed', 'true');
     }
 }
 
-function autoHideChartHint() {
-    const hint = document.getElementById('chartHint');
-    if (hint && !localStorage.getItem('chartHintDismissed')) {
-        setTimeout(() => {
-            if (hint && hint.style.display !== 'none') {
-                dismissChartHint();
-            }
-        }, HINT_AUTO_HIDE_DELAY);
-    }
-}
+// Make function globally accessible
+window.dismissChartHint = dismissChartHint;
 
 // Initialize typing animations
 function initPathogenTypingAnimation() {

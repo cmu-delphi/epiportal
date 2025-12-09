@@ -385,8 +385,7 @@ def normalize_dataset(data):
     numeric_values = [
         v
         for v in data
-        if v is not None
-        and not (
+        if v is not None and not (
             isinstance(v, float) and (v != v or v in (float("inf"), float("-inf")))
         )
     ]
@@ -420,19 +419,20 @@ def get_chart_data(indicators, geography):
         geo_level__name=geo_type, geo_id=geo_value
     ).display_name
 
-    # Calculate date range: last 12 months from today, but fetch data from 2020
+    # Calculate date range: last 2 years from today for initial view
     today = datetime.now().date()
     two_years_ago = today - timedelta(days=730)
     # Format dates as strings
     end_date = today.strftime("%Y-%m-%d")
     start_date = two_years_ago.strftime("%Y-%m-%d")
 
-    # Store the initial view range (last 12 months)
+    # Store the initial view range (last 2 years)
     chart_data["initialViewStart"] = start_date
     chart_data["initialViewEnd"] = end_date
 
-    # Fetch data from a wider range (2020 to today) for scrolling
-    data_start_date = "1990-01-01"
+    # Fetch data from a wider range (10 years) for scrolling
+    ten_years_ago = today - timedelta(days=3650)  # ~10 years
+    data_start_date = ten_years_ago.strftime("%Y-%m-%d")
     data_end_date = today.strftime("%Y-%m-%d")
 
     for indicator in indicators:
