@@ -699,7 +699,7 @@ class NonDelphiIndicatorResource(resources.ModelResource):
             "indicator_set",
             "use_in_express_interface",
         ]
-        import_id_fields: list[str] = ["name"]
+        import_id_fields: list[str] = ["name", "indicator_set"]
         skip_unchanged = True
 
     def before_import_row(self, row, **kwargs) -> None:
