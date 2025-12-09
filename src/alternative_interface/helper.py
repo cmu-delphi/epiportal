@@ -61,6 +61,16 @@ COVIDCAST_FLUVIEW_LOCATIONS_MAPPING = {
     "state:WI": "WI",
     "state:WV": "WV",
     "state:WY": "WY",
+    # fluview (ILINET) specific locations
+    "ny_minus_jfk:ny_minus_jfk": "NY (minus NYC)",
+    "us-territory:as": "American Samoa",
+    "us-territory:mp": "Mariana Islands",
+    "us-territory:gu": "Guam",
+    "us-territory:pr": "Puerto Rico",
+    "us-territory:vi": "Virgin Islands",
+    "us-city:ord": "Chicago",
+    "us-city:lax": "Los Angeles",
+    "us-city:jfk": "New York City",
 }
 
 EXPRESS_VIEW_LABELS_MAPPING = {
