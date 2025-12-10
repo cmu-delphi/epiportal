@@ -1,4 +1,5 @@
 import logging
+from datetime import datetime
 
 from django.db.models import Case, When, Value, IntegerField
 from django.http import JsonResponse
@@ -98,6 +99,7 @@ def alternative_interface_view(request):
                 else []
             ),
         }
+        ctx["current_year"] = datetime.now().year
 
         return render(
             request, "alternative_interface/alter_dashboard.html", context=ctx
