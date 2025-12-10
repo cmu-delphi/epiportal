@@ -167,6 +167,7 @@ class TypingAnimation {
         this.selectElement = null;
         this.namesKey = namesKey;
         this.timeoutId = null;
+        this.initTimeoutId = null;
         this.changeHandler = null;
         this.focusHandler = null;
         this.blurHandler = null;
@@ -189,7 +190,7 @@ class TypingAnimation {
         this.setupHandlers();
         this.checkSelection();
         
-        setTimeout(() => {
+        this.initTimeoutId = setTimeout(() => {
             if (!this.selectElement.value && document.activeElement !== this.selectElement && !this.selectElement.disabled) {
                 this.typingElement.style.display = 'block';
                 this.typingElement.textContent = '|';
@@ -202,6 +203,11 @@ class TypingAnimation {
         if (this.timeoutId) {
             clearTimeout(this.timeoutId);
             this.timeoutId = null;
+        }
+
+        if (this.initTimeoutId) {
+            clearTimeout(this.initTimeoutId);
+            this.initTimeoutId = null;
         }
         
         if (this.selectElement) {
@@ -1102,6 +1108,33 @@ async function loadAvailableGeographies(pathogen = '') {
         const data = await response.json();
         geographySelect.innerHTML = '<option value=""></option>';
         
+        if (data && data.available_geos) {
+            const geos = data.available_geos;
+            let allGeoNames = [];
+            
+            geos.forEach(group => {
+                const optgroup = document.createElement('optgroup');
+                optgroup.label = group.text;
+                
+                if (group.children && Array.isArray(group.children)) {
+                    group.children.forEach(child => {
+                        const option = document.createElement('option');
+                        option.value = child.id;
+                        option.textContent = child.text;
+                        optgroup.appendChild(option);
+                        
+                        allGeoNames.push(child.text);
+                    });
+                }
+                
+                geographySelect.appendChild(optgroup);
+            });
+            
+            if (allGeoNames.length > 0) {
+                // Randomize names for typing animation
+                window.geographyNames = allGeoNames.sort(() => Math.random() - 0.5);
+            }
+        }
         
         setTimeout(() => {
             initGeographyTypingAnimation();
