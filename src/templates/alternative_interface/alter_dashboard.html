@@ -91,7 +91,7 @@
                     </div>
                     <span class="filter-label">in</span>
                     <div style="position: relative; display: inline-block; width: 100%;">
-                        <select class="form-select filter-select" id="geographySelect" name="geography" onchange="handleGeographyChange()" style="position: relative;" {% if not selected_pathogen %}disabled{% endif %}>
+                        <select class="form-select filter-select" id="geographySelect" name="geography" onchange="handleGeographyChange()" style="position: relative;">
                             <option value=""></option>
                             {% for geography in available_geos %}
                                 <optgroup label="{{ geography.text }}">
@@ -148,7 +148,7 @@
         <div class="container">
             <div class="row">
                 <div class="col-md-6">
-                    <p class="text-muted mb-0">© 2025 Delphi EpiPortal. All rights reserved.</p>
+                    <p class="text-muted mb-0">© {{ current_year }} Delphi Group. All rights reserved.</p>
                 </div>
                 <div class="col-md-6 text-end">
                     <a href="#" class="text-muted me-3">Privacy Policy</a>
