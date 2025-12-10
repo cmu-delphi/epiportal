@@ -1006,28 +1006,91 @@ function initGeographyTypingAnimation() {
     geographyTypingAnimation = new TypingAnimation('geographyTypingAnimation', 'geographySelect', 'geographyNames');
 }
 
-function updateGeographySelectState() {
-    const pathogenSelect = document.getElementById('pathogenSelect');
-    const geographySelect = document.getElementById('geographySelect');
-    
-    if (!pathogenSelect || !geographySelect) return;
-    
-    const hasPathogen = pathogenSelect.value && pathogenSelect.value !== '';
-    geographySelect.disabled = !hasPathogen;
-    
-    if (!hasPathogen && geographySelect.value) {
-        geographySelect.value = '';
-    }
-}
-
 // Initialize dashboard
 let dashboard;
 document.addEventListener('DOMContentLoaded', function() {
     dashboard = new AlterDashboard();
     initPathogenTypingAnimation();
     initGeographyTypingAnimation();
-    updateGeographySelectState();
+    // Load all available geographies on page load
+    loadAvailableGeographies('');
 });
+
+// Load available geographies
+async function loadAvailableGeographies(pathogen = '') {
+    const geographySelect = document.getElementById('geographySelect');
+    
+    if (!geographySelect) return;
+    
+    const geographyTypingElement = document.getElementById('geographyTypingAnimation');
+    if (geographyTypingElement) {
+        geographyTypingElement.style.display = 'none';
+    }
+    if (geographyTypingAnimation) {
+        geographyTypingAnimation.cleanup();
+    }
+    
+    const geographyLoader = document.getElementById('geographyLoader');
+    if (geographyLoader) {
+        geographyLoader.style.display = 'block';
+    }
+    
+    try {
+        const url = window.getAvailableGeosUrl || '/api/get_available_geos';
+        const response = await fetch(`${url}?pathogen=${encodeURIComponent(pathogen)}`, {
+            method: 'GET',
+            headers: {
+                'X-CSRFToken': window.csrfToken || '',
+            },
+        });
+        
+        if (!response.ok) {
+            throw new Error(`HTTP error! status: ${response.status}`);
+        }
+        
+        const data = await response.json();
+        geographySelect.innerHTML = '<option value=""></option>';
+        
+        window.geographyNames = [];
+        if (data.available_geos && Array.isArray(data.available_geos)) {
+            data.available_geos.forEach(group => {
+                if (group.children && Array.isArray(group.children)) {
+                    const optgroup = document.createElement('optgroup');
+                    optgroup.label = group.text;
+                    
+                    group.children.forEach(child => {
+                        const option = document.createElement('option');
+                        option.value = child.id;
+                        option.textContent = child.text;
+                        optgroup.appendChild(option);
+                    });
+                    
+                    geographySelect.appendChild(optgroup);
+                    
+                    // Build geography names array for typing animation
+                    group.children.slice(0, parseInt(MAX_GEOGRAPHY_NAMES / data.available_geos.length)).forEach(child => {
+                        window.geographyNames.push(child.text);
+                    });
+                }
+            });
+        }
+        
+        if (window.geographyNames.length > MAX_GEOGRAPHY_NAMES) {
+            window.geographyNames = window.geographyNames.slice(0, MAX_GEOGRAPHY_NAMES);
+        }
+        
+        setTimeout(() => {
+            initGeographyTypingAnimation();
+        }, INITIAL_ZOOM_DELAY);
+        
+    } catch (error) {
+        console.error('Error fetching available geos:', error);
+    } finally {
+        if (geographyLoader) {
+            geographyLoader.style.display = 'none';
+        }
+    }
+}
 
 // Handle pathogen change
 async function handlePathogenChange() {
@@ -1043,94 +1106,10 @@ async function handlePathogenChange() {
     
     const selectedPathogen = pathogenSelect.value;
     
-    const geographyTypingElement = document.getElementById('geographyTypingAnimation');
-    if (geographyTypingElement) {
-        geographyTypingElement.style.display = 'none';
-    }
-    if (geographyTypingAnimation) {
-        geographyTypingAnimation.cleanup();
-    }
-    
     geographySelect.value = '';
     
-    if (!selectedPathogen) {
-        geographySelect.innerHTML = '<option value=""></option>';
-        geographySelect.disabled = true;
-        window.geographyNames = [];
-        initGeographyTypingAnimation();
-        return;
-    }
-    
-    geographySelect.disabled = true;
-    
-    const geographyLoader = document.getElementById('geographyLoader');
-    if (geographyLoader) {
-        geographyLoader.style.display = 'block';
-    }
-    
-    try {
-        const url = window.getAvailableGeosUrl || '/api/get_available_geos';
-        const response = await fetch(`${url}?pathogen=${encodeURIComponent(selectedPathogen)}`, {
-            method: 'GET',
-            headers: {
-                'X-CSRFToken': window.csrfToken || '',
-            },
-        });
-        
-        if (!response.ok) {
-            throw new Error(`HTTP error! status: ${response.status}`);
-        }
-        
-        const data = await response.json();
-        geographySelect.innerHTML = '<option value=""></option>';
-        
-        if (data.available_geos && Array.isArray(data.available_geos)) {
-            data.available_geos.forEach(group => {
-                if (group.children && Array.isArray(group.children)) {
-                    const optgroup = document.createElement('optgroup');
-                    optgroup.label = group.text;
-                    
-                    group.children.forEach(child => {
-                        const option = document.createElement('option');
-                        option.value = child.id;
-                        option.textContent = child.text;
-                        optgroup.appendChild(option);
-                    });
-                    
-                    geographySelect.appendChild(optgroup);
-                }
-            });
-        }
-        
-        window.geographyNames = [];
-        if (data.available_geos && Array.isArray(data.available_geos)) {
-            data.available_geos.forEach(group => {
-                if (group.children && Array.isArray(group.children)) {
-                    group.children.slice(0, parseInt(MAX_GEOGRAPHY_NAMES / data.available_geos.length)).forEach(child => {
-                        window.geographyNames.push(child.text);
-                    });
-                }
-            });
-        }
-        
-        if (window.geographyNames.length > MAX_GEOGRAPHY_NAMES) {
-            window.geographyNames = window.geographyNames.slice(0, MAX_GEOGRAPHY_NAMES);
-        }
-        
-        geographySelect.disabled = !selectedPathogen;
-        
-        setTimeout(() => {
-            initGeographyTypingAnimation();
-        }, INITIAL_ZOOM_DELAY);
-        
-    } catch (error) {
-        console.error('Error fetching available geos:', error);
-        geographySelect.disabled = !selectedPathogen;
-    } finally {
-        if (geographyLoader) {
-            geographyLoader.style.display = 'none';
-        }
-    }
+    // Load geographies for the selected pathogen (or all if none selected)
+    await loadAvailableGeographies(selectedPathogen);
 }
 
 // Handle geography change
@@ -1149,6 +1128,16 @@ async function handleGeographyChange() {
     const selectedGeography = geographySelect.value;
     
     if (!selectedGeography) {
+        if (dashboard?.chart) {
+            dashboard.chart.data.datasets = [];
+            dashboard.chart.data.labels = [];
+            dashboard.chart.update();
+        }
+        return;
+    }
+    
+    // Don't fetch chart data if no pathogen is selected
+    if (!selectedPathogen) {
         if (dashboard?.chart) {
             dashboard.chart.data.datasets = [];
             dashboard.chart.data.labels = [];

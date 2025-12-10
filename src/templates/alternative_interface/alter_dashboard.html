@@ -91,7 +91,7 @@
                     </div>
                     <span class="filter-label">in</span>
                     <div style="position: relative; display: inline-block; width: 100%;">
-                        <select class="form-select filter-select" id="geographySelect" name="geography" onchange="handleGeographyChange()" style="position: relative;" {% if not selected_pathogen %}disabled{% endif %}>
+                        <select class="form-select filter-select" id="geographySelect" name="geography" onchange="handleGeographyChange()" style="position: relative;">
                             <option value=""></option>
                             {% for geography in available_geos %}
                                 <optgroup label="{{ geography.text }}">

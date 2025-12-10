@@ -99,6 +99,7 @@ def alternative_interface_view(request):
                 else []
             ),
         }
+        print(ctx["available_geos"])
         ctx["current_year"] = datetime.now().year
 
         return render(
@@ -115,7 +116,9 @@ def get_available_geos_ajax(request):
         pathogen_filter = request.GET.get("pathogen", "")
 
         if not pathogen_filter:
-            return JsonResponse({"available_geos": []})
+            # Return all available geographies when no pathogen is selected
+            available_geos = get_available_geos([])
+            return JsonResponse({"available_geos": available_geos})
 
         indicators_qs = _get_indicators_queryset(pathogen_filter)
         indicators = _convert_indicators_to_dicts(indicators_qs)
