@@ -12,7 +12,10 @@ from indicatorsets.utils import (
     get_epiweek,
     group_by_property,
 )
-from alternative_interface.helper import COVIDCAST_FLUVIEW_LOCATIONS_MAPPING, EXPRESS_VIEW_LABELS_MAPPING
+from alternative_interface.helper import (
+    COVIDCAST_FLUVIEW_LOCATIONS_MAPPING,
+    EXPRESS_VIEW_LABELS_MAPPING,
+)
 
 
 def epiweeks_in_date_range(start_date_str: str, end_date_str: str):
@@ -71,56 +74,81 @@ def days_in_date_range(start_date_str: str, end_date_str: str):
 
 
 def get_available_geos(indicators):
-    geo_values = []
-    grouped_indicators = group_by_property(indicators, "data_source")
-    sources = grouped_indicators.keys()
-    for data_source, indicators in grouped_indicators.items():
-        indicators_str = ",".join(indicator["name"] for indicator in indicators)
-        response = requests.get(
-            f"{settings.EPIDATA_URL}covidcast/geo_indicator_coverage",
-            params={"data_source": data_source, "signals": indicators_str},
-            auth=("epidata", settings.EPIDATA_API_KEY),
+    if indicators:
+        geo_values = []
+        grouped_indicators = group_by_property(indicators, "data_source")
+        sources = grouped_indicators.keys()
+        for data_source, indicators in grouped_indicators.items():
+            indicators_str = ",".join(indicator["name"] for indicator in indicators)
+            response = requests.get(
+                f"{settings.EPIDATA_URL}covidcast/geo_indicator_coverage",
+                params={"data_source": data_source, "signals": indicators_str},
+                auth=("epidata", settings.EPIDATA_API_KEY),
+            )
+            if response.status_code == 200:
+                data = response.json()
+                if len(data["epidata"]):
+                    geo_values.extend(data["epidata"])
+        unique_values = set(geo_values)
+        geo_levels = set([el.split(":")[0] for el in unique_values])
+        geo_unit_ids = set([geo_value.split(":")[1] for geo_value in unique_values])
+        geographic_granularities = [
+            {
+                "id": f"{geo_unit.geo_level.name}:{geo_unit.geo_id}",
+                "geoType": geo_unit.geo_level.name,
+                "text": geo_unit.display_name,
+                "geoTypeDisplayName": geo_unit.geo_level.display_name,
+            }
+            for geo_unit in GeographyUnit.objects.filter(geo_level__name__in=geo_levels)
+            .filter(geo_id__in=geo_unit_ids)
+            .prefetch_related("geo_level")
+            .order_by("level")
+        ]
+        if "fluview" in sources:
+            geographic_granularities.extend(
+                [
+                    {
+                        "id": f"{geo_unit.geo_level.name}:{geo_unit.geo_id}",
+                        "geoType": geo_unit.geo_level.name,
+                        "text": geo_unit.display_name,
+                        "geoTypeDisplayName": geo_unit.geo_level.display_name,
+                    }
+                    for geo_unit in GeographyUnit.objects.filter(
+                        geo_level__name__in=[
+                            "census-region",
+                            "us-territory",
+                            "us-city",
+                            "ny_minus_jfk",
+                        ]
+                    )
+                    .prefetch_related("geo_level")
+                    .order_by("level")
+                ]
+            )
+        grouped_geographic_granularities = group_by_property(
+            geographic_granularities, "geoTypeDisplayName"
         )
-        if response.status_code == 200:
-            data = response.json()
-            if len(data["epidata"]):
-                geo_values.extend(data["epidata"])
-    unique_values = set(geo_values)
-    geo_levels = set([el.split(":")[0] for el in unique_values])
-    geo_unit_ids = set([geo_value.split(":")[1] for geo_value in unique_values])
-    geographic_granularities = [
-        {
-            "id": f"{geo_unit.geo_level.name}:{geo_unit.geo_id}",
-            "geoType": geo_unit.geo_level.name,
-            "text": geo_unit.display_name,
-            "geoTypeDisplayName": geo_unit.geo_level.display_name,
-        }
-        for geo_unit in GeographyUnit.objects.filter(geo_level__name__in=geo_levels)
-        .filter(geo_id__in=geo_unit_ids)
-        .prefetch_related("geo_level")
-        .order_by("level")
-    ]
-    if "fluview" in sources:
-        geographic_granularities.extend(
-            [
+        geographic_granularities = []
+        for key, value in grouped_geographic_granularities.items():
+            geographic_granularities.append(
                 {
-                    "id": f"{geo_unit.geo_level.name}:{geo_unit.geo_id}",
-                    "geoType": geo_unit.geo_level.name,
-                    "text": geo_unit.display_name,
-                    "geoTypeDisplayName": geo_unit.geo_level.display_name,
+                    "text": key,
+                    "children": value,
                 }
-                for geo_unit in GeographyUnit.objects.filter(
-                    geo_level__name__in=[
-                        "census-region",
-                        "us-territory",
-                        "us-city",
-                        "ny_minus_jfk",
-                    ]
-                )
-                .prefetch_related("geo_level")
-                .order_by("level")
-            ]
-        )
+            )
+    else:
+        geographic_granularities = [
+            {
+                "id": f"{geo_unit.geo_level.name}:{geo_unit.geo_id}",
+                "geoType": geo_unit.geo_level.name,
+                "text": geo_unit.display_name,
+                "geoTypeDisplayName": geo_unit.geo_level.display_name,
+            }
+            for geo_unit in GeographyUnit.objects.all()
+            .prefetch_related("geo_level")
+            .order_by("level")
+        ]
+        # Group by geoTypeDisplayName to match the expected format
     grouped_geographic_granularities = group_by_property(
         geographic_granularities, "geoTypeDisplayName"
     )
@@ -173,7 +201,9 @@ def get_fluview_data(indicator, geo, start_date, end_date, api_key):
         "epiweeks": time_values,
         "api_key": api_key if api_key else settings.EPIDATA_API_KEY,
     }
-    response = requests.get(f"{settings.EPIDATA_URL}{indicator['data_source']}", params=params)
+    response = requests.get(
+        f"{settings.EPIDATA_URL}{indicator['data_source']}", params=params
+    )
     if response.status_code == 200:
         data = response.json()
         if len(data["epidata"]):
@@ -376,7 +406,9 @@ def prepare_chart_series_multi(
     }
 
 
-def normalize_dataset(data, day_labels=None, initial_view_start=None, initial_view_end=None):
+def normalize_dataset(
+    data, day_labels=None, initial_view_start=None, initial_view_end=None
+):
     """
     Scale a dataset so that its highest value during the displayed 2 years is set to 100.
     Multiplies each value by a constant (100 / max_value_in_range).
@@ -386,7 +418,12 @@ def normalize_dataset(data, day_labels=None, initial_view_start=None, initial_vi
         return data
 
     # If we have the initial view range, scale based on max value in that range
-    if day_labels and initial_view_start and initial_view_end and len(day_labels) == len(data):
+    if (
+        day_labels
+        and initial_view_start
+        and initial_view_end
+        and len(day_labels) == len(data)
+    ):
         # Find indices that fall within the initial view range (2 years)
         view_indices = []
         for i, day_label in enumerate(day_labels):
@@ -397,8 +434,11 @@ def normalize_dataset(data, day_labels=None, initial_view_start=None, initial_vi
         view_values = [
             data[i]
             for i in view_indices
-            if i < len(data) and data[i] is not None and not (
-                isinstance(data[i], float) and (data[i] != data[i] or data[i] in (float("inf"), float("-inf")))
+            if i < len(data)
+            and data[i] is not None
+            and not (
+                isinstance(data[i], float)
+                and (data[i] != data[i] or data[i] in (float("inf"), float("-inf")))
             )
         ]
 
@@ -425,7 +465,8 @@ def normalize_dataset(data, day_labels=None, initial_view_start=None, initial_vi
     numeric_values = [
         v
         for v in data
-        if v is not None and not (
+        if v is not None
+        and not (
             isinstance(v, float) and (v != v or v in (float("inf"), float("-inf")))
         )
     ]
@@ -479,7 +520,9 @@ def get_chart_data(indicators, geography):
     data_end_date = today.strftime("%Y-%m-%d")
 
     for indicator in indicators:
-        title = EXPRESS_VIEW_LABELS_MAPPING.get(indicator["name"], generate_epivis_custom_title(indicator, geo_display_name))
+        title = EXPRESS_VIEW_LABELS_MAPPING.get(
+            indicator["name"], generate_epivis_custom_title(indicator, geo_display_name)
+        )
         color = generate_random_color()
         indicator_time_type = indicator.get("time_type", "week")
         data = None
@@ -525,7 +568,7 @@ def get_chart_data(indicators, geography):
                         ds["data"],
                         day_labels=chart_data["dayLabels"],
                         initial_view_start=chart_data["initialViewStart"],
-                        initial_view_end=chart_data["initialViewEnd"]
+                        initial_view_end=chart_data["initialViewEnd"],
                     )
             chart_data["datasets"].extend(series["datasets"])
     return chart_data
