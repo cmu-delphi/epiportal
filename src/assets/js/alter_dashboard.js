@@ -9,7 +9,6 @@ const TYPING_SPEED = 300;
 const DELETE_SPEED = 50;
 const PAUSE_BEFORE_DELETE = 2000;
 const PAUSE_AFTER_DELETE = 500;
-const MAX_GEOGRAPHY_NAMES = 25;
 const MAX_DUAL_AXIS_LABELS = 50;
 const INITIAL_ZOOM_DELAY = 100;
 const CHART_REDRAW_DELAY = 100;
@@ -17,6 +16,58 @@ const CHART_RESIZE_DELAY = 10;
 const TYPING_ANIMATION_DELAY = 500;
 const BLUR_DELAY = 100;
 const CHART_UPDATE_THROTTLE = 16; // ~60fps for smooth interactions
+window.geographyNames = [
+    "Cochise County, AZ",
+    "Toledo, OH Metro Area",
+    "Oregon",
+    "HHS Region 1",
+    "United States",
+    "Garland County, AR",
+    "Dallas-Fort Worth-Arlington, TX Metro Area",
+    "Vermont",
+    "HHS Region 2",
+    "United States",
+    "Yukon-Koyukuk County, AK",
+    "Lansing-East Lansing, MI Metro Area",
+    "Tennessee",
+    "HHS Region 3",
+    "United States",
+    "Cleburne County, AR",
+    "New York-Newark-Jersey City, NY-NJ-PA Metro Area",
+    "Wyoming",
+    "HHS Region 4",
+    "United States",
+    "Santa Cruz County, AZ",
+    "Iowa City, IA Metro Area",
+    "California",
+    "HHS Region 5",
+    "United States",
+    "Hot Spring County, AR",
+    "Gainesville, GA Metro Area",
+    "New York",
+    "HHS Region 6",
+    "United States",
+    "Mohave County, AZ",
+    "Battle Creek, MI Metro Area",
+    "Florida",
+    "HHS Region 7",
+    "United States",
+    "Jackson County, AR",
+    "Sacramento--Roseville--Arden-Arcade, CA Metro Area",
+    "Texas",
+    "HHS Region 8",
+    "United States",
+    "La Paz County, AZ",
+    "Atlantic City-Hammonton, NJ Metro Area",
+    "Minnesota",
+    "HHS Region 9",
+    "United States",
+    "Wrangell County, AK",
+    "Portland-South Portland, ME Metro Area",
+    "Hawaii",
+    "HHS Region 10",
+    "United States"
+];
 
 // Utility functions
 const ChartUtils = {
@@ -1051,33 +1102,6 @@ async function loadAvailableGeographies(pathogen = '') {
         const data = await response.json();
         geographySelect.innerHTML = '<option value=""></option>';
         
-        window.geographyNames = [];
-        if (data.available_geos && Array.isArray(data.available_geos)) {
-            data.available_geos.forEach(group => {
-                if (group.children && Array.isArray(group.children)) {
-                    const optgroup = document.createElement('optgroup');
-                    optgroup.label = group.text;
-                    
-                    group.children.forEach(child => {
-                        const option = document.createElement('option');
-                        option.value = child.id;
-                        option.textContent = child.text;
-                        optgroup.appendChild(option);
-                    });
-                    
-                    geographySelect.appendChild(optgroup);
-                    
-                    // Build geography names array for typing animation
-                    group.children.slice(0, parseInt(MAX_GEOGRAPHY_NAMES / data.available_geos.length)).forEach(child => {
-                        window.geographyNames.push(child.text);
-                    });
-                }
-            });
-        }
-        
-        if (window.geographyNames.length > MAX_GEOGRAPHY_NAMES) {
-            window.geographyNames = window.geographyNames.slice(0, MAX_GEOGRAPHY_NAMES);
-        }
         
         setTimeout(() => {
             initGeographyTypingAnimation();
