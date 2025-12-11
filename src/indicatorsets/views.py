@@ -39,6 +39,7 @@ from indicatorsets.utils import (
     log_form_data,
     log_form_stats,
     get_grouped_original_data_provider_choices,
+    get_num_locations_from_meta,
 )
 
 from delphi_utils import get_structured_logger
@@ -156,7 +157,10 @@ class IndicatorSetListView(ListView):
                 else ""
             ),
             "hosted_by_delphi": (
-                str(self.request.GET.get("hosted_by_delphi") in ["True", "true", "on", "1"]).lower()
+                str(
+                    self.request.GET.get("hosted_by_delphi")
+                    in ["True", "true", "on", "1"]
+                ).lower()
                 if self.request.GET.get("hosted_by_delphi")
                 else "false"
             ),
@@ -212,7 +216,9 @@ class IndicatorSetListView(ListView):
         # Convert hosted_by_delphi string back to boolean for form initialization
         form_initial = url_params_dict.copy()
         if "hosted_by_delphi" in form_initial:
-            form_initial["hosted_by_delphi"] = form_initial["hosted_by_delphi"] == "true"
+            form_initial["hosted_by_delphi"] = (
+                form_initial["hosted_by_delphi"] == "true"
+            )
         context["form"] = IndicatorSetFilterForm(initial=form_initial)
         context["filter"] = filter
         context["APP_VERSION"] = settings.APP_VERSION
@@ -244,11 +250,16 @@ class IndicatorSetListView(ListView):
                 output_field=IntegerField(),
             ),
         ).order_by("beta_last", "-is_ongoing", "-is_dua_required", "name")
-        context["related_indicators"] = json.dumps(
-            self.get_related_indicators(
-                filter.indicators_qs, filter.qs.values_list("id", flat=True)
-            )
+        related_indicators = self.get_related_indicators(
+            filter.indicators_qs, filter.qs.values_list("id", flat=True)
         )
+        context["related_indicators"] = json.dumps(related_indicators)
+        context["num_of_timeseries"] = get_num_locations_from_meta(
+            related_indicators
+        )
+        print(get_num_locations_from_meta(
+            related_indicators
+        ))
         context["filters_descriptions"] = (
             FilterDescription.get_all_descriptions_as_dict()
         )
