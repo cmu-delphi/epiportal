@@ -99,7 +99,6 @@ def alternative_interface_view(request):
                 else []
             ),
         }
-        print(ctx["available_geos"])
         ctx["current_year"] = datetime.now().year
 
         return render(

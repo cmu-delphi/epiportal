@@ -346,12 +346,14 @@
 <script src="{% static 'js/pluralize_word.js' %}"></script>
 <script>
     var relatedIndicators = JSON.parse(JSON.stringify({{ related_indicators|safe }}));
+    var numOfTimeseries = {{ num_of_timeseries }};
 
 
     $(document).ready(function() {
         table.columns.adjust();
         const totalRowsSpan = document.createElement("span");
-        totalRowsSpan.textContent = `Showing ${table.page.info().recordsTotal} indicator ${pluralize(table.page.info().recordsTotal, 'set')} containing ${relatedIndicators.length} individual ${pluralize(relatedIndicators.length, 'indicator')}`;
+        totalRowsSpan.classList.add("table-stats-info");
+        totalRowsSpan.innerHTML = `Showing <b>${table.page.info().recordsTotal}</b> indicator ${pluralize(table.page.info().recordsTotal, 'set')} containing <b>${relatedIndicators.length}</b> individual ${pluralize(relatedIndicators.length, 'indicator')} for total of <b>${numOfTimeseries}</b> time series across numerous locations.`;
         const refElement = document.getElementById("indicatorSetsTable_wrapper");
         refElement.before(totalRowsSpan);
     });
