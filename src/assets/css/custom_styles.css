@@ -258,3 +258,8 @@ tr:not(.odd-row) > .dtfc-fixed-end {
     margin-right: 0.4em;
     margin-bottom: 0.25em;
 }
+
+.table-stats-info {
+    font-size: 20px;
+    margin-bottom: 10px;
+}

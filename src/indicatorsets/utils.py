@@ -692,7 +692,7 @@ def get_real_ip_addr(req):  # `req` should be a Flask.request object
         # a negative proxy depth is a special case to trust the whole chain -- not generally recommended unless the
         # most-external proxy is configured to disregard "X-Forwarded-For" from outside.
         # really, ONLY trust the following headers if reverse proxied!!!
-        x_forwarded_for = req.META.get('HTTP_X_FORWARDED_FOR')
+        x_forwarded_for = req.META.get("HTTP_X_FORWARDED_FOR")
 
         if x_forwarded_for:
             full_proxy_chain = x_forwarded_for.split(",")
@@ -707,12 +707,12 @@ def get_real_ip_addr(req):  # `req` should be a Flask.request object
             return trusted_proxy_chain[0].strip()
 
         # fall back to "X-Real-Ip" if "X-Forwarded-For" isnt present
-        x_real_ip = req.META.get('HTTP_X_REAL_IP')
+        x_real_ip = req.META.get("HTTP_X_REAL_IP")
         if x_real_ip:
             return x_real_ip
 
     # if we are not proxied (or we are proxied but the headers werent present and we fell through to here), just use the remote ip addr as the true client address
-    return req.META.get('REMOTE_ADDR')
+    return req.META.get("REMOTE_ADDR")
 
 
 def log_form_stats(request, data, form_mode):
@@ -813,3 +813,17 @@ def log_form_data(request, data, form_mode):
         "user_ga_id": data.get("clientId", "Not available"),
     }
     form_data_logger.info("form_data", **log_data)
+
+
+def get_num_locations_from_meta(indicators):
+    timeseries_count = 0
+    indicators = set(
+        (indicator["source"], indicator["name"]) for indicator in indicators
+    )
+    metadata = requests.get(
+        "https://api.delphi.cmu.edu/epidata/covidcast_meta/"
+    ).json()["epidata"]
+    for r in metadata:
+        if (r["data_source"], r["signal"]) in indicators:
+            timeseries_count += r["num_locations"]
+    return timeseries_count
