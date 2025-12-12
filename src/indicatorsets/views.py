@@ -249,7 +249,7 @@ class IndicatorSetListView(ListView):
                 default=Value(0),
                 output_field=IntegerField(),
             ),
-        ).order_by("beta_last", "-is_ongoing", "-is_dua_required", "name")
+        ).order_by("beta_last", "-is_ongoing", "-is_dua_required", "-delphi_hosted", "name")
         related_indicators = self.get_related_indicators(
             filter.indicators_qs, filter.qs.values_list("id", flat=True)
         )

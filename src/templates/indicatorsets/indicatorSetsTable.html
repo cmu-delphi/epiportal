@@ -348,12 +348,20 @@
     var relatedIndicators = JSON.parse(JSON.stringify({{ related_indicators|safe }}));
     var numOfTimeseries = {{ num_of_timeseries }};
 
+    function numberWithCommas(x) {
+        return x.toString().replace(/\B(?=(\d{3})+(?!\d))/g, ",");
+    }
+
 
     $(document).ready(function() {
         table.columns.adjust();
         const totalRowsSpan = document.createElement("span");
         totalRowsSpan.classList.add("table-stats-info");
-        totalRowsSpan.innerHTML = `Showing <b>${table.page.info().recordsTotal}</b> indicator ${pluralize(table.page.info().recordsTotal, 'set')} containing <b>${relatedIndicators.length}</b> individual ${pluralize(relatedIndicators.length, 'indicator')} for total of <b>${numOfTimeseries}</b> time series across numerous locations.`;
+        if (numOfTimeseries > 0) {
+            totalRowsSpan.innerHTML = `Showing <b>${table.page.info().recordsTotal}</b> indicator ${pluralize(table.page.info().recordsTotal, 'set')} containing <b>${relatedIndicators.length}</b> individual ${pluralize(relatedIndicators.length, 'indicator')} including <b>${numberWithCommas(numOfTimeseries)}</b> Delphi-hosted time series across numerous locations.`;
+        } else {
+            totalRowsSpan.innerHTML = `Showing <b>${table.page.info().recordsTotal}</b> indicator ${pluralize(table.page.info().recordsTotal, 'set')} containing <b>${relatedIndicators.length}</b> individual ${pluralize(relatedIndicators.length, 'indicator')}.`;
+        }
         const refElement = document.getElementById("indicatorSetsTable_wrapper");
         refElement.before(totalRowsSpan);
     });
