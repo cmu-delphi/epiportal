@@ -223,17 +223,11 @@ class IndicatorSetListView(ListView):
         context["filter"] = filter
         context["APP_VERSION"] = settings.APP_VERSION
         context["indicator_sets"] = filter.qs.annotate(
-            is_ongoing=Case(
+            is_top_priority=Case(
                 When(
                     temporal_scope_end="Ongoing",
-                    then=Value(1),
-                ),
-                default=Value(0),
-                output_field=IntegerField(),
-            ),
-            is_dua_required=Case(
-                When(
-                    dua_required="No",
+                    dua_required__in=["No", "Unknown", "Sensor-dependent", ""],
+                    source_type__in=["covidcast", "other_endpoint"],
                     then=Value(1),
                 ),
                 default=Value(0),
@@ -249,7 +243,7 @@ class IndicatorSetListView(ListView):
                 default=Value(0),
                 output_field=IntegerField(),
             ),
-        ).order_by("beta_last", "-is_ongoing", "-is_dua_required", "name")
+        ).order_by("beta_last", "-is_top_priority", "-delphi_hosted", "name")
         related_indicators = self.get_related_indicators(
             filter.indicators_qs, filter.qs.values_list("id", flat=True)
         )
@@ -257,9 +251,6 @@ class IndicatorSetListView(ListView):
         context["num_of_timeseries"] = get_num_locations_from_meta(
             related_indicators
         )
-        print(get_num_locations_from_meta(
-            related_indicators
-        ))
         context["filters_descriptions"] = (
             FilterDescription.get_all_descriptions_as_dict()
         )
