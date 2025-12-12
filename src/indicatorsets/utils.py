@@ -820,10 +820,14 @@ def get_num_locations_from_meta(indicators):
     indicators = set(
         (indicator["source"], indicator["name"]) for indicator in indicators
     )
-    metadata = requests.get(
-        "https://api.delphi.cmu.edu/epidata/covidcast_meta/"
-    ).json()["epidata"]
-    for r in metadata:
-        if (r["data_source"], r["signal"]) in indicators:
-            timeseries_count += r["num_locations"]
+    try:
+        metadata = requests.get(
+            f"{settings.EPIDATA_URL}covidcast_meta/", timeout=5
+        ).json()["epidata"]
+        for r in metadata:
+            if (r["data_source"], r["signal"]) in indicators:
+                timeseries_count += r["num_locations"]
+    except Exception as e:
+        print(f"Error fetching covidcast metadata: {e}")
+        return 0
     return timeseries_count
