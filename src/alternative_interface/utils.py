@@ -125,17 +125,6 @@ def get_available_geos(indicators):
                     .order_by("level")
                 ]
             )
-        grouped_geographic_granularities = group_by_property(
-            geographic_granularities, "geoTypeDisplayName"
-        )
-        geographic_granularities = []
-        for key, value in grouped_geographic_granularities.items():
-            geographic_granularities.append(
-                {
-                    "text": key,
-                    "children": value,
-                }
-            )
     else:
         geographic_granularities = [
             {
