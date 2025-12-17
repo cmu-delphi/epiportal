@@ -24,7 +24,7 @@ import sentry_sdk
 from sentry_sdk.integrations.django import DjangoIntegration
 from sentry_sdk.integrations.redis import RedisIntegration
 
-APP_VERSION = "1.0.18"
+APP_VERSION = "1.0.19"
 ALTERNATIVE_INTERFACE_VERSION = "1.0.7"
 
 
