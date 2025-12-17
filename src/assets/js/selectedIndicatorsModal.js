@@ -422,3 +422,71 @@ window.addEventListener('DOMContentLoaded', () => {
         }
     });
 });
+
+window.addEventListener('load', function() {
+    const stored = sessionStorage.getItem('checkedIndicatorMembers');
+    if (stored) {
+        try {
+            const parsed = JSON.parse(stored);
+            if (Array.isArray(parsed) && parsed.length > 0) {
+                 if (typeof relatedIndicators !== 'undefined') {
+                     const validIndicators = parsed.filter(storedInd => {
+                         return relatedIndicators.some(relInd => 
+                            relInd.source === storedInd.data_source && 
+                            relInd.name === storedInd.indicator
+                         );
+                     });
+                     
+                     validIndicators.forEach(ind => {
+                         checkedIndicatorMembers.push(ind);
+                         updateSelectedIndicators(
+                            ind.data_source,
+                            ind.display_name,
+                            ind.indicator_set,
+                            ind.indicator
+                         );
+                         
+                         if (ind._endpoint !== "covidcast" && !indicatorHandler.nonCovidcastIndicatorSets.includes(ind.indicator_set)) {
+                            indicatorHandler.nonCovidcastIndicatorSets.push(ind.indicator_set);
+                         }
+                     });
+                     
+                     indicatorHandler.indicators = checkedIndicatorMembers;
+                     
+                     if (checkedIndicatorMembers.length > 0) {
+                        $("#showSelectedIndicatorsButton").show();
+
+                         if (typeof table !== 'undefined' && typeof relatedIndicators !== 'undefined') {
+                            const selectedSetIds = new Set();
+                            
+                            // Map selected indicators (which store set NAME) to set IDs using relatedIndicators
+                            checkedIndicatorMembers.forEach(member => {
+                                const match = relatedIndicators.find(ri => 
+                                    ri.source === member.data_source && 
+                                    ri.name === member.indicator
+                                );
+                                if (match) {
+                                    selectedSetIds.add(String(match.indicator_set));
+                                }
+                            });
+                            
+                            table.rows().every(function() {
+                                const tr = $(this.node());
+                                const rowId = String(tr.data('id'));
+                                
+                                if (selectedSetIds.has(rowId)) {
+                                    if (!this.child.isShown()) {
+                                        tr.find('td.dt-control').trigger('click');
+                                    }
+                                }
+                            });
+                         }
+                     }
+                 }
+            }
+        } catch (e) {
+            console.error("Error restoring selected indicators", e);
+        }
+        sessionStorage.removeItem('checkedIndicatorMembers');
+    }
+});

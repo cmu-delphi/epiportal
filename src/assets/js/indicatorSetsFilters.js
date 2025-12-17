@@ -207,6 +207,7 @@ document.addEventListener('change', function(event) {
         
         // Trigger form submission once after all checkboxes are updated
         if (event.target.form) {
+            persistCheckedIndicators();
             showLoader();
             event.target.form.submit();
         }
@@ -251,6 +252,12 @@ document.addEventListener('change', function(event) {
     }
 });
 
+function persistCheckedIndicators() {
+    if (typeof checkedIndicatorMembers !== 'undefined') {
+        sessionStorage.setItem('checkedIndicatorMembers', JSON.stringify(checkedIndicatorMembers));
+    }
+}
+
 function showLoader() {
     document.getElementById('loaderOverlay').style.display = 'flex';
     document.querySelector('.table-container').classList.add('faded');
@@ -258,6 +265,7 @@ function showLoader() {
 
 $("#filterIndicatorSetsForm").find("input[type='checkbox']").on("change", function (e) {
     // Show loader and fade table
+    persistCheckedIndicators();
     showLoader();
     this.form.submit();
 });
@@ -265,6 +273,7 @@ $("#filterIndicatorSetsForm").find("input[type='checkbox']").on("change", functi
 $("#location_search").on({
     "change": function (e) {
         // Show loader and fade table
+        persistCheckedIndicators();
         showLoader();
         this.form.submit();
     }
