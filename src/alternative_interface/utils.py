@@ -7,15 +7,15 @@ from epiweeks import Week
 
 from base.models import GeographyUnit
 from indicatorsets.utils import (
-    generate_epivis_custom_title,
     generate_random_color,
     get_epiweek,
     group_by_property,
 )
 from alternative_interface.helper import (
     COVIDCAST_FLUVIEW_LOCATIONS_MAPPING,
-    EXPRESS_VIEW_LABELS_MAPPING,
 )
+
+from alternative_interface.models import ExpressViewIndicator
 
 
 def epiweeks_in_date_range(start_date_str: str, end_date_str: str):
@@ -487,10 +487,6 @@ def normalize_dataset(
 
 def get_chart_data(indicators, geography):
     chart_data = {"labels": [], "dayLabels": [], "timePositions": [], "datasets": []}
-    geo_type, geo_value = geography.split(":")
-    geo_display_name = GeographyUnit.objects.get(
-        geo_level__name=geo_type, geo_id=geo_value
-    ).display_name
 
     # Calculate date range: last 2 years from today for initial view
     today = datetime.now().date()
@@ -508,10 +504,10 @@ def get_chart_data(indicators, geography):
     data_start_date = ten_years_ago.strftime("%Y-%m-%d")
     data_end_date = today.strftime("%Y-%m-%d")
 
+    express_view_indicators_qs = ExpressViewIndicator.objects.all().prefetch_related("indicator", "indicator__source")
+
     for indicator in indicators:
-        title = EXPRESS_VIEW_LABELS_MAPPING.get(
-            indicator["name"], generate_epivis_custom_title(indicator, geo_display_name)
-        )
+        title = express_view_indicators_qs.get(indicator__name=indicator["name"], indicator__source__name=indicator["data_source"]).display_name
         color = generate_random_color()
         indicator_time_type = indicator.get("time_type", "week")
         data = None
