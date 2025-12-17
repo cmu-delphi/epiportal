@@ -73,22 +73,3 @@ COVIDCAST_FLUVIEW_LOCATIONS_MAPPING = {
     "us-city:jfk": "New York City",
 }
 
-EXPRESS_VIEW_LABELS_MAPPING = {
-    "smoothed_pct_ed_visits_influenza": "Influenza emergency department visits (NSSP)",
-    "confirmed_admissions_flu_ew": "Influenza hospital admissions (NHSN)",
-    "percent_positive": "Test positivity for influenza (ILINet)",
-    "percent_a": "Test positivity for influenza A (ILINet)",
-    "percent_b": "Test positivity for influenza B (ILINet)",
-    "smoothed_flu_from_claims": "Influenza hospital admissions (from claims)",
-    "deaths_flu_incidence_num": "Influenza deaths (NCHS)",
-    "smoothed_cli": "Covid related doctor visits (from claims)",
-    "smoothed_pct_ed_visits_covid": "Covid emergency department visits (NSSP)",
-    "confirmed_admissions_covid_ew": "Covid hospital admissions (NHNS)",
-    "smoothed_covid19_from_claims": "Covid hospital admissions (from claims)",
-    "deaths_covid_incidence_num": "Covid deaths (NCHS)",
-    "pct_ed_visits_rsv": "RSV emergency department visits (NSSP)",
-    "confirmed_admissions_rsv_ew": "RSV hospital admissions (NHSN)",
-    "pct_ed_visits_combined": "Combined emergency department visits (NSSP)",
-    "wili": "ILI related doctor visits (ILINet)",
-    "deaths_pneumonia_or_flu_or_covid_incidence_num": "Deaths from flu, Covid or pneumonia (NCHS)",
-}

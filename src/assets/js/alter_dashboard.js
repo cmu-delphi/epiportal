@@ -1074,7 +1074,7 @@ document.addEventListener('DOMContentLoaded', function() {
 });
 
 // Load available geographies
-async function loadAvailableGeographies(pathogen = '') {
+async function loadAvailableGeographies(pathogen = '', preservedGeography = '') {
     const geographySelect = document.getElementById('geographySelect');
     
     if (!geographySelect) return;
@@ -1134,6 +1134,16 @@ async function loadAvailableGeographies(pathogen = '') {
                 // Randomize names for typing animation
                 window.geographyNames = allGeoNames.sort(() => Math.random() - 0.5);
             }
+
+            if (preservedGeography) {
+                const optionExists = Array.from(geographySelect.options).some(opt => opt.value === preservedGeography);
+                if (optionExists) {
+                    geographySelect.value = preservedGeography;
+                    if (typeof handleGeographyChange === 'function') {
+                        handleGeographyChange();
+                    }
+                }
+            }
         }
         
         setTimeout(() => {
@@ -1162,11 +1172,12 @@ async function handlePathogenChange() {
     if (!pathogenSelect || !geographySelect) return;
     
     const selectedPathogen = pathogenSelect.value;
+    const currentGeography = geographySelect.value;
     
     geographySelect.value = '';
     
     // Load geographies for the selected pathogen (or all if none selected)
-    await loadAvailableGeographies(selectedPathogen);
+    await loadAvailableGeographies(selectedPathogen, currentGeography);
 }
 
 // Handle geography change
