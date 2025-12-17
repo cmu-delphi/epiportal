@@ -107,12 +107,18 @@ function format(indicatorSetId, relatedIndicators, indicatorSetDescription) {
         });
         tableMarkup += "</tbody></table>";
         if (disabled === "disabled" || restricted) {
-            if (sourceType === "non_delphi") {
+            if (sourceType === "non_delphi" && sourceType != "us_state") {
                 data +=
                     `<div class="alert alert-warning" data-mdb-alert-init role="alert">` +
                     `   <div>This indicator set is not available via Delphi.  It is included here for general discoverability only, and may or may not be available from the Original Data Provider.</div>` +
                     "</div>";
-            } else {
+            } else if (sourceType === "us_state") {
+                data +=
+                    `<div class="alert alert-warning" data-mdb-alert-init role="alert">` +
+                    `   <div>This indicator set is not hosted by Delphi and is listed here for discoverability.  It can be found on the website listed under "Documentation".</div>` +
+                    "</div>";
+            }
+            else {
                 data +=
                     `<div class="alert alert-warning" data-mdb-alert-init role="alert">` +
                     `   <div>This indicator set is available via the <a href="https://cmu-delphi.github.io/delphi-epidata/">Epidata API</a>, and directly via <a href="https://delphi.cmu.edu/epivis/">Epivis</a>, but is not yet available via this interface.</div>` +
