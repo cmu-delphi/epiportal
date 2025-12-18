@@ -82,17 +82,11 @@ def get_grouped_original_data_provider_choices():
     Returns grouped choices with U.S. States providers in a sublist.
     """
     # Define U.S. States providers that should be grouped under "U.S. States"
-    US_STATES_PROVIDERS = [
-        "California Department of Public Health",
-        "Florida Department of Health",
-        "Illinois Department of Public Health",
-        "Massachusetts Department of Public Health",
-        "New York State Department of Health",
-        "Pennsylvania Department of Health",
-        "Texas Department of State Health Services",
-        "State of Alaska Department of Health",
-        "Vermont Department of Health",
-    ]
+    US_STATES_PROVIDERS = list(
+        IndicatorSet.objects.filter(source_type="us_state")
+        .values_list("original_data_provider", flat=True)
+        .distinct()
+    )
 
     all_providers = list(
         IndicatorSet.objects.values_list("original_data_provider", flat=True)
