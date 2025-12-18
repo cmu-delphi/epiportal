@@ -278,3 +278,17 @@ $("#location_search").on({
         this.form.submit();
     }
 });
+
+// Mobile filter toggle
+$('#mobile-filter-toggle').on('click', function() {
+    $('#filterIndicatorSetsForm').addClass('show');
+    $('#mobile-filter-overlay').addClass('show');
+    $('body').css('overflow', 'hidden');
+});
+
+// Close filter menu
+$('#mobile-filter-close, #mobile-filter-overlay').on('click', function() {
+    $('#filterIndicatorSetsForm').removeClass('show');
+    $('#mobile-filter-overlay').removeClass('show');
+    $('body').css('overflow', '');
+});
