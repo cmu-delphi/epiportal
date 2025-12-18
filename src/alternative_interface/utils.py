@@ -547,13 +547,87 @@ def get_chart_data(indicators, geography):
                 ds["label"] = title
                 ds["borderColor"] = color
                 ds["backgroundColor"] = f"{color}33"
-                # Scale data so max value in displayed 2 years = 100
-                if ds.get("data"):
-                    ds["data"] = normalize_dataset(
-                        ds["data"],
-                        day_labels=chart_data["dayLabels"],
-                        initial_view_start=chart_data["initialViewStart"],
-                        initial_view_end=chart_data["initialViewEnd"],
-                    )
+                grouping_key = indicator.get("grouping_key")
+                if grouping_key:
+                    ds["groupingKey"] = grouping_key
+                else:
+                    # Assign a unique key to ensure individual normalization
+                    ds["groupingKey"] = f"individual_{id(ds)}"
             chart_data["datasets"].extend(series["datasets"])
+
+    # Group datasets and normalize together
+    grouped_datasets = {}
+    for ds in chart_data["datasets"]:
+        key = ds.get("groupingKey")
+        if key not in grouped_datasets:
+            grouped_datasets[key] = []
+        grouped_datasets[key].append(ds)
+
+    for key, group in grouped_datasets.items():
+        # Calculate global max for the group in the initial view range
+        global_max = 0
+        has_data = False
+        
+        # Helper to get numeric values in view range
+        for ds in group:
+            data = ds.get("data", [])
+            day_labels = chart_data["dayLabels"]
+            initial_view_start = chart_data["initialViewStart"]
+            initial_view_end = chart_data["initialViewEnd"]
+            
+            if not data or not day_labels or len(data) != len(day_labels):
+                continue
+
+            view_indices = []
+            for i, day_label in enumerate(day_labels):
+                if initial_view_start <= day_label <= initial_view_end:
+                    view_indices.append(i)
+            
+            view_values = [
+                data[i]
+                for i in view_indices
+                if i < len(data)
+                and data[i] is not None
+                and not (isinstance(data[i], float) and (data[i] != data[i] or data[i] in (float("inf"), float("-inf"))))
+            ]
+            
+            if view_values:
+                current_max = max(view_values)
+                if current_max > global_max:
+                    global_max = current_max
+                    has_data = True
+        
+        # If no data in view range, try overall max
+        if not has_data:
+            for ds in group:
+                data = ds.get("data", [])
+                numeric_values = [
+                    v for v in data
+                    if v is not None
+                    and not (isinstance(v, float) and (v != v or v in (float("inf"), float("-inf"))))
+                ]
+                if numeric_values:
+                    current_max = max(numeric_values)
+                    if current_max > global_max:
+                        global_max = current_max
+                        has_data = True
+
+        # Apply normalization
+        scale_factor = 100.0 / global_max if has_data and global_max > 0 else 1.0
+
+        for ds in group:
+            if ds.get("data"):
+                normalized = []
+                for value in ds["data"]:
+                    if value is None:
+                        normalized.append(None)
+                    elif isinstance(value, float) and (value != value or value in (float("inf"), float("-inf"))):
+                        normalized.append(None)
+                    else:
+                        normalized.append(value * scale_factor)
+                ds["data"] = normalized
+            # Remove temporary key
+            if "groupingKey" in ds:
+                del ds["groupingKey"]
+
     return chart_data

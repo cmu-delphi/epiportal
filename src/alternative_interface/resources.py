@@ -33,6 +33,9 @@ class ExpressViewIndicatorResource(resources.ModelResource):
     display_name = Field(
         attribute="display_name", column_name="text for display legend"
     )
+    grouping_key = Field(
+        attribute="grouping_key", column_name="tie together for scaling"
+    )
 
     def before_import_row(self, row, **kwargs):
         process_indicator(row)
