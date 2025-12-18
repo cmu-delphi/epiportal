@@ -5,7 +5,7 @@
 
 // Constants
 const CHART_PALETTE = ['#2563eb','#16a34a','#dc2626','#a855f7','#f59e0b','#0ea5e9','#ef4444','#10b981'];
-const TYPING_SPEED = 300;
+const TYPING_SPEED = 200;
 const DELETE_SPEED = 50;
 const PAUSE_BEFORE_DELETE = 2000;
 const PAUSE_AFTER_DELETE = 500;
@@ -226,8 +226,7 @@ class TypingAnimation {
             this.typingElement.style.display = 'none';
         }
         
-        this.currentText = '';
-        this.isDeleting = false;
+        this.currentText = '';        this.isDeleting = false;
         this.currentIndex = 0;
     }
 
