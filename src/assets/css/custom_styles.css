@@ -263,3 +263,39 @@ tr:not(.odd-row) > .dtfc-fixed-end {
     font-size: 20px;
     margin-bottom: 10px;
 }
+
+/* Mobile Filter Sidebar */
+@media (max-width: 1199.98px) {
+    .filter-sidebar {
+        position: fixed;
+        top: 0;
+        left: -280px;
+        width: 280px;
+        height: 100vh;
+        background-color: white;
+        z-index: 1050;
+        overflow-y: auto;
+        transition: left 0.3s ease-in-out;
+        box-shadow: 2px 0 5px rgba(0,0,0,0.5);
+        padding: 15px;
+    }
+
+    .filter-sidebar.show {
+        left: 0;
+    }
+
+    #mobile-filter-overlay {
+        position: fixed;
+        top: 0;
+        left: 0;
+        width: 100vw;
+        height: 100vh;
+        background-color: rgba(0,0,0,0.5);
+        z-index: 1040;
+        display: none;
+    }
+
+    #mobile-filter-overlay.show {
+        display: block;
+    }
+}
