@@ -16,6 +16,13 @@ class ExpressViewIndicator(models.Model):
         max_length=255,
     )
 
+    grouping_key: models.CharField = models.CharField(
+        verbose_name="Grouping Key",
+        max_length=255,
+        blank=True,
+        help_text="Key to group indicators for scaling",
+    )
+
     class Meta:
         verbose_name = "Express View Indicator"
         verbose_name_plural = "Express View Indicators"

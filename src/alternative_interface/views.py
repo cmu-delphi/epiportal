@@ -45,6 +45,7 @@ def _convert_indicators_to_dicts(indicators_qs):
                 if indicator.indicator.member_short_name
                 else "Unknown"
             ),
+            "grouping_key": indicator.grouping_key,
         }
         for indicator in indicators_qs
     ]
