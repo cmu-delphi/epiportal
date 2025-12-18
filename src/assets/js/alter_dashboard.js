@@ -1134,6 +1134,9 @@ document.addEventListener('DOMContentLoaded', function() {
     dashboard = new AlterDashboard();
     initPathogenTypingAnimation();
     initGeographyTypingAnimation();
+    
+    // Listeners are already attached in HTML via onchange attributes
+
     // Load all available geographies on page load
     loadAvailableGeographies('');
 });
@@ -1197,7 +1200,13 @@ async function loadAvailableGeographies(pathogen = '', preservedGeography = '') 
             
             if (allGeoNames.length > 0) {
                 // Randomize names for typing animation
-                window.geographyNames = allGeoNames.sort(() => Math.random() - 0.5);
+                // Optimized: Partial shuffle to get just 50 random items
+                const count = Math.min(50, allGeoNames.length);
+                for (let i = 0; i < count; i++) {
+                    const j = i + Math.floor(Math.random() * (allGeoNames.length - i));
+                    [allGeoNames[i], allGeoNames[j]] = [allGeoNames[j], allGeoNames[i]];
+                }
+                window.geographyNames = allGeoNames.slice(0, count);
             }
 
             if (preservedGeography) {
