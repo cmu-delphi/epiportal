@@ -180,7 +180,7 @@ class IndicatorSet(models.Model):
     )
     documentation_link: models.CharField = models.CharField(
         verbose_name="Documentation Link",
-        max_length=255,
+        max_length=500,
         blank=True,
         help_text="Link to the documentation for the Indicator Set",
     )
