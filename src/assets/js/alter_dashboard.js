@@ -897,7 +897,7 @@ class AlterDashboard {
             meta.hidden = false;
         });
         
-        this.chart.update();
+        this.handleAutoScaleChange();
     }
 
     initControls() {
@@ -910,7 +910,11 @@ class AlterDashboard {
                 controls.id = 'chartControls';
                 controls.className = 'chart-controls';
                 controls.innerHTML = `
-                    <div class="controls-group">
+                    <div class="controls-group" style="display: flex; align-items: center; gap: 15px;">
+                        <div class="form-check form-switch" style="margin: 0; padding-left: 2.5em;">
+                            <input class="form-check-input" type="checkbox" id="autoScaleToggle" checked style="cursor: pointer;">
+                            <label class="form-check-label" for="autoScaleToggle" style="cursor: pointer; margin-left: 0.5em;">Auto-scale</label>
+                        </div>
                         <button id="showAllBtn" class="btn-control" title="Show all indicators">
                             <span class="control-icon">👁️</span>
                             <span class="control-text">Show All</span>
@@ -921,9 +925,70 @@ class AlterDashboard {
             }
         }
 
+        const autoScaleToggle = document.getElementById('autoScaleToggle');
+        if (autoScaleToggle) {
+            autoScaleToggle.addEventListener('change', () => this.handleAutoScaleChange());
+        }
+
         const showAllBtn = document.getElementById('showAllBtn');
         if (showAllBtn) {
             showAllBtn.addEventListener('click', () => this.showAllDatasets());
+        }
+    }
+
+    handleAutoScaleChange(skipUpdate = false) {
+        const autoScaleToggle = document.getElementById('autoScaleToggle');
+        const isAutoScale = autoScaleToggle ? autoScaleToggle.checked : true;
+        
+        if (!this.chart || !this.chart.options || !this.chart.options.scales || !this.chart.options.scales.y) return;
+
+        if (isAutoScale) {
+            this.chart.options.scales.y.min = undefined;
+            this.chart.options.scales.y.max = undefined;
+            if (this.chart.scales && this.chart.scales.y) {
+                 this.chart.scales.y.options.min = undefined;
+                 this.chart.scales.y.options.max = undefined;
+            }
+        } else {
+            this.applyFixedScale();
+        }
+        
+        if (!skipUpdate) {
+            this.chart.update('none');
+        }
+    }
+
+    applyFixedScale() {
+        if (!this.chart || !this.chart.data || !this.chart.data.datasets) return;
+        
+        let maxVal = -Infinity;
+        let minVal = Infinity;
+        let hasData = false;
+        
+        this.chart.data.datasets.forEach((ds, index) => {
+            if (this.chart.isDatasetVisible(index)) {
+                const data = ds.data;
+                if (Array.isArray(data)) {
+                    data.forEach(v => {
+                        if (v !== null && typeof v === 'number' && !isNaN(v)) {
+                            hasData = true;
+                            if (v > maxVal) maxVal = v;
+                            if (v < minVal) minVal = v;
+                        }
+                    });
+                }
+            }
+        });
+        
+        if (hasData) {
+            const padding = Math.max((maxVal - (minVal > 0 ? 0 : minVal)) * 0.05, 0);
+            this.chart.options.scales.y.max = maxVal + padding;
+            
+            if (minVal < 0) {
+                this.chart.options.scales.y.min = minVal - padding;
+            } else {
+                this.chart.options.scales.y.min = 0;
+            }
         }
     }
 
@@ -963,6 +1028,7 @@ class AlterDashboard {
 
         this.updateZoomLimits(dayLabels);
         this.updateScaleConfiguration(dayLabels);
+        this.handleAutoScaleChange(true);
         
         // Optimize: use requestAnimationFrame for smoother updates with large datasets
         const isLargeDataset = dayLabels.length > 1000;
