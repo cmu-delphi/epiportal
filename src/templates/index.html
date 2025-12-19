@@ -43,58 +43,45 @@
         <link rel="stylesheet" href="{% static 'css/custom_styles.css' %}" />
         <script src="https://ajax.googleapis.com/ajax/libs/jquery/3.5.1/jquery.min.js"></script>
         <script src=" https://cdn.jsdelivr.net/npm/js-cookie@3.0.5/dist/js.cookie.min.js "></script>
+        <style>
+            body {
+                overflow: hidden; /* Prevent body scroll, let flex container handle it */
+            }
+        </style>
     </head>
     <body>
         <!-- Google Tag Manager (noscript) -->
         <noscript><iframe src="https://www.googletagmanager.com/ns.html?id=GTM-5QTWVG5K"
         height="0" width="0" style="display:none;visibility:hidden"></iframe></noscript>
         <!-- End Google Tag Manager (noscript) -->
-        <nav class="navbar navbar-expand-lg navbar-light bg-body-tertiary">
-            <div class="container-fluid">
-                <a href="{% url 'indicatorsets' %}"
-                   class="d-flex align-items-center navbar-logo">
-                    <img src="{% static 'img/CMU-wordmark.svg' %}"
-                         alt=""
-                         height="74"
-                         width="242" />
-                </a>
-                <button data-mdb-collapse-init
-                        class="navbar-toggler"
-                        type="button"
-                        data-mdb-target="#navbarNav"
-                        aria-controls="navbarNav"
-                        aria-expanded="false"
-                        aria-label="Toggle navigation">
-                    <i class="fas fa-bars"></i>
+
+        <div class="d-flex w-100 vh-100">
+            <!-- Sidebar (Blue Band) -->
+            <div class="d-flex flex-column align-items-center justify-content-center py-3" style="width: 50px; min-width: 50px; background-color: #012970; z-index: 1040;">
+                <!-- Filter Toggle Button (Global) -->
+                <button class="btn btn-link text-white p-2" id="global-filter-toggle" title="Toggle Filters">
+                    <i class="fas fa-filter fa-lg"></i>
                 </button>
-                <div class="collapse navbar-collapse" id="navbarNav">
-                    <ul class="navbar-nav">
-                        <li class="nav-item">
-                            <span style="font-size: 1.5rem">Delphi EpiPortal : One Stop Shop for Real Time
-                            Infectious Disease Indicators</span>
-                            <a tabindex="0"
-                               style="margin-left: 10px"
-                               type="button"
-                               class="info-button filter-description-popover"
-                               data-mdb-container="body"
-                               data-mdb-ripple-init
-                               data-mdb-popover-init
-                               data-mdb-trigger="hover"
-                               data-mdb-placement="right"
-                               data-mdb-content="{{ header_description }}">
-                                <i class="far fa-circle-question"></i>
-                            </a>
-                        </li>
-                    </ul>
+            </div>
+
+            <!-- Main Content Area -->
+            <div class="flex-grow-1 d-flex flex-column h-100" style="overflow: hidden; background-color: #f6f9ff;">
+                <!-- Top Header for Title -->
+                <div class="bg-white border-bottom px-4 py-3 d-flex align-items-center shadow-sm" style="flex-shrink: 0; min-height: 74px;">
+                    <img src="{% static 'img/CMU-wordmark.svg' %}" alt="Carnegie Mellon University" height="40" class="me-3">
+                    <span style="font-size: 1.25rem; font-weight: 600; color: #012970;">Delphi EpiPortal : One Stop Shop for Real Time Infectious Disease Indicators</span>
+                </div>
+
+                <!-- Page Content -->
+                <div class="flex-grow-1" style="overflow-y: auto; position: relative;">
+                    <div class="container-fluid p-3 h-100">
+                        {% block content %}
+                        {% endblock content %}
+                    </div>
                 </div>
             </div>
-        </nav>
-        <div id="main">
-            <div class="container-fluid">
-                {% block content %}
-                {% endblock content %}
-            </div>
         </div>
+
         <!-- MDB -->
         <script type="text/javascript"
                 src="https://cdnjs.cloudflare.com/ajax/libs/mdb-ui-kit/7.3.2/mdb.umd.min.js"></script>

@@ -5,7 +5,7 @@
 
 // Constants
 const CHART_PALETTE = ['#2563eb','#16a34a','#dc2626','#a855f7','#f59e0b','#0ea5e9','#ef4444','#10b981'];
-const TYPING_SPEED = 300;
+const TYPING_SPEED = 200;
 const DELETE_SPEED = 50;
 const PAUSE_BEFORE_DELETE = 2000;
 const PAUSE_AFTER_DELETE = 500;
@@ -226,8 +226,7 @@ class TypingAnimation {
             this.typingElement.style.display = 'none';
         }
         
-        this.currentText = '';
-        this.isDeleting = false;
+        this.currentText = '';        this.isDeleting = false;
         this.currentIndex = 0;
     }
 
@@ -395,10 +394,15 @@ class AlterDashboard {
             ds.hidden = false;
         });
 
-        this.originalDatasets = datasets.map(d => ({
-            ...d,
-            originalData: Array.isArray(d.data) ? [...d.data] : []
-        }));
+        this.originalDatasets = datasets.map((d, i) => {
+            const rawDs = (window.chartData.datasets || [])[i];
+            return {
+                ...d,
+                originalData: (rawDs && Array.isArray(rawDs.original_data)) 
+                    ? ChartUtils.alignData(rawDs.original_data, dayLabels.length)
+                    : (Array.isArray(d.data) ? [...d.data] : [])
+            };
+        });
 
         this.createLegendContainer();
         const htmlLegendPlugin = this.createHtmlLegendPlugin();
@@ -730,10 +734,28 @@ class AlterDashboard {
                         label: function(context) {
                             const label = context.dataset.label || '';
                             const value = context.parsed.y;
-                            if (value === null || value === undefined || Number.isNaN(value)) {
+                            
+                            // Find the original value if available
+                            let originalValue = value;
+                            if (dashboard && dashboard.originalDatasets) {
+                                const datasetIndex = context.datasetIndex;
+                                const dataIndex = context.dataIndex;
+                                const originalDataset = dashboard.originalDatasets[datasetIndex];
+                                
+                                if (originalDataset && originalDataset.originalData && originalDataset.originalData[dataIndex] !== undefined) {
+                                    originalValue = originalDataset.originalData[dataIndex];
+                                }
+                            }
+                            
+                            if (originalValue === null || originalValue === undefined || Number.isNaN(originalValue)) {
                                 return `${label}: n/a`;
                             }
-                            return `${label}: ${value.toFixed(1)}`;
+                            
+                            // Check if originalValue is an integer
+                            if (Number.isInteger(originalValue)) {
+                                return `${label}: ${originalValue}`;
+                            }
+                            return `${label}: ${originalValue.toFixed(2)}`;
                         }
                     }
                 },
@@ -803,7 +825,7 @@ class AlterDashboard {
                     ticks: {
                         font: { size: 11 },
                         color: '#64748b',
-                        callback: (value) => `${value.toFixed(0)}`
+                        callback: function(value) { return ''; } // Hide tick labels
                     },
                     title: {
                         display: true,
@@ -898,7 +920,7 @@ class AlterDashboard {
             meta.hidden = false;
         });
         
-        this.chart.update();
+        this.handleAutoScaleChange();
     }
 
     initControls() {
@@ -911,7 +933,11 @@ class AlterDashboard {
                 controls.id = 'chartControls';
                 controls.className = 'chart-controls';
                 controls.innerHTML = `
-                    <div class="controls-group">
+                    <div class="controls-group" style="display: flex; align-items: center; gap: 15px;">
+                        <div class="form-check form-switch" style="margin: 0; padding-left: 2.5em;">
+                            <input class="form-check-input" type="checkbox" id="autoScaleToggle" checked style="cursor: pointer;">
+                            <label class="form-check-label" for="autoScaleToggle" style="cursor: pointer; margin-left: 0.5em;">Auto-scale</label>
+                        </div>
                         <button id="showAllBtn" class="btn-control" title="Show all indicators">
                             <span class="control-icon">👁️</span>
                             <span class="control-text">Show All</span>
@@ -922,9 +948,70 @@ class AlterDashboard {
             }
         }
 
+        const autoScaleToggle = document.getElementById('autoScaleToggle');
+        if (autoScaleToggle) {
+            autoScaleToggle.addEventListener('change', () => this.handleAutoScaleChange());
+        }
+
         const showAllBtn = document.getElementById('showAllBtn');
         if (showAllBtn) {
             showAllBtn.addEventListener('click', () => this.showAllDatasets());
+        }
+    }
+
+    handleAutoScaleChange(skipUpdate = false) {
+        const autoScaleToggle = document.getElementById('autoScaleToggle');
+        const isAutoScale = autoScaleToggle ? autoScaleToggle.checked : true;
+        
+        if (!this.chart || !this.chart.options || !this.chart.options.scales || !this.chart.options.scales.y) return;
+
+        if (isAutoScale) {
+            this.chart.options.scales.y.min = undefined;
+            this.chart.options.scales.y.max = undefined;
+            if (this.chart.scales && this.chart.scales.y) {
+                 this.chart.scales.y.options.min = undefined;
+                 this.chart.scales.y.options.max = undefined;
+            }
+        } else {
+            this.applyFixedScale();
+        }
+        
+        if (!skipUpdate) {
+            this.chart.update('none');
+        }
+    }
+
+    applyFixedScale() {
+        if (!this.chart || !this.chart.data || !this.chart.data.datasets) return;
+        
+        let maxVal = -Infinity;
+        let minVal = Infinity;
+        let hasData = false;
+        
+        this.chart.data.datasets.forEach((ds, index) => {
+            if (this.chart.isDatasetVisible(index)) {
+                const data = ds.data;
+                if (Array.isArray(data)) {
+                    data.forEach(v => {
+                        if (v !== null && typeof v === 'number' && !isNaN(v)) {
+                            hasData = true;
+                            if (v > maxVal) maxVal = v;
+                            if (v < minVal) minVal = v;
+                        }
+                    });
+                }
+            }
+        });
+        
+        if (hasData) {
+            const padding = Math.max((maxVal - (minVal > 0 ? 0 : minVal)) * 0.05, 0);
+            this.chart.options.scales.y.max = maxVal + padding;
+            
+            if (minVal < 0) {
+                this.chart.options.scales.y.min = minVal - padding;
+            } else {
+                this.chart.options.scales.y.min = 0;
+            }
         }
     }
 
@@ -940,10 +1027,15 @@ class AlterDashboard {
             ChartUtils.createDataset(ds, i, dayLabels.length)
         );
 
-        this.originalDatasets = datasets.map(d => ({
-            ...d,
-            originalData: Array.isArray(d.data) ? [...d.data] : []
-        }));
+        this.originalDatasets = datasets.map((d, i) => {
+            const rawDs = chartData.datasets[i];
+            return {
+                ...d,
+                originalData: (rawDs && Array.isArray(rawDs.original_data))
+                    ? ChartUtils.alignData(rawDs.original_data, dayLabels.length)
+                    : (Array.isArray(d.data) ? [...d.data] : [])
+            };
+        });
 
         // Ensure all datasets are visible
         datasets.forEach((ds, index) => {
@@ -964,6 +1056,7 @@ class AlterDashboard {
 
         this.updateZoomLimits(dayLabels);
         this.updateScaleConfiguration(dayLabels);
+        this.handleAutoScaleChange(true);
         
         // Optimize: use requestAnimationFrame for smoother updates with large datasets
         const isLargeDataset = dayLabels.length > 1000;
@@ -1069,6 +1162,9 @@ document.addEventListener('DOMContentLoaded', function() {
     dashboard = new AlterDashboard();
     initPathogenTypingAnimation();
     initGeographyTypingAnimation();
+    
+    // Listeners are already attached in HTML via onchange attributes
+
     // Load all available geographies on page load
     loadAvailableGeographies('');
 });
@@ -1132,7 +1228,13 @@ async function loadAvailableGeographies(pathogen = '', preservedGeography = '') 
             
             if (allGeoNames.length > 0) {
                 // Randomize names for typing animation
-                window.geographyNames = allGeoNames.sort(() => Math.random() - 0.5);
+                // Optimized: Partial shuffle to get just 50 random items
+                const count = Math.min(50, allGeoNames.length);
+                for (let i = 0; i < count; i++) {
+                    const j = i + Math.floor(Math.random() * (allGeoNames.length - i));
+                    [allGeoNames[i], allGeoNames[j]] = [allGeoNames[j], allGeoNames[i]];
+                }
+                window.geographyNames = allGeoNames.slice(0, count);
             }
 
             if (preservedGeography) {
