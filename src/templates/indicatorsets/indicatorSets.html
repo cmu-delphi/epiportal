@@ -6,11 +6,57 @@
     Indicator Sets
 {% endblock title %}
 {% block content %}
-    <div class="row">
-        {% include "indicatorsets/indicatorSetsFilters.html" %}
-        {% include "indicatorsets/indicatorSetsTable.html" %}
+    <div class="d-flex h-100 align-items-stretch">
+        <!-- Filter Panel Wrapper -->
+        <div id="filter-panel-wrapper" class="bg-white border-end shadow-sm" style="width: 350px; min-width: 350px; transition: all 0.3s ease; overflow-y: auto; overflow-x: hidden; flex-shrink: 0; margin-right: 1rem;">
+            {% include "indicatorsets/indicatorSetsFilters.html" %}
+        </div>
+        
+        <!-- Table Content -->
+        <div class="flex-grow-1" style="overflow-y: auto; min-width: 0;">
+            {% include "indicatorsets/indicatorSetsTable.html" %}
+        </div>
     </div>
+    
     <div class="row">
         {% include "indicatorsets/selectedIndicatorsModal.html" %}
     </div>
+
+    <script>
+        document.addEventListener('DOMContentLoaded', function() {
+            const toggleBtn = document.getElementById('global-filter-toggle');
+            const filterPanel = document.getElementById('filter-panel-wrapper');
+            
+            // Check if we should preserve state (optional, but good UX)
+            // const isCollapsed = localStorage.getItem('filterPanelCollapsed') === 'true';
+            // if (isCollapsed) { ... } 
+            
+            if (toggleBtn && filterPanel) {
+                toggleBtn.addEventListener('click', function() {
+                    if (filterPanel.classList.contains('collapsed')) {
+                        // Expand
+                        filterPanel.style.width = '350px';
+                        filterPanel.style.minWidth = '350px';
+                        filterPanel.style.marginRight = '1rem';
+                        filterPanel.style.opacity = '1';
+                        filterPanel.classList.remove('collapsed');
+                    } else {
+                        // Collapse
+                        filterPanel.style.width = '0px';
+                        filterPanel.style.minWidth = '0px';
+                        filterPanel.style.marginRight = '0';
+                        filterPanel.style.opacity = '0';
+                        filterPanel.classList.add('collapsed');
+                    }
+                    
+                    // Trigger resize event for DataTables or Charts
+                    setTimeout(() => {
+                        window.dispatchEvent(new Event('resize'));
+                        // Also trigger custom event if needed
+                        $(window).trigger('resize'); 
+                    }, 350);
+                });
+            }
+        });
+    </script>
 {% endblock content %}
