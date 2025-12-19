@@ -617,6 +617,9 @@ def get_chart_data(indicators, geography):
 
         for ds in group:
             if ds.get("data"):
+                # Preserve original data before normalization
+                ds["original_data"] = list(ds["data"])
+                
                 normalized = []
                 for value in ds["data"]:
                     if value is None:

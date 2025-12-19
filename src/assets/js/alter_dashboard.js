@@ -394,10 +394,15 @@ class AlterDashboard {
             ds.hidden = false;
         });
 
-        this.originalDatasets = datasets.map(d => ({
-            ...d,
-            originalData: Array.isArray(d.data) ? [...d.data] : []
-        }));
+        this.originalDatasets = datasets.map((d, i) => {
+            const rawDs = (window.chartData.datasets || [])[i];
+            return {
+                ...d,
+                originalData: (rawDs && Array.isArray(rawDs.original_data)) 
+                    ? ChartUtils.alignData(rawDs.original_data, dayLabels.length)
+                    : (Array.isArray(d.data) ? [...d.data] : [])
+            };
+        });
 
         this.createLegendContainer();
         const htmlLegendPlugin = this.createHtmlLegendPlugin();
@@ -729,10 +734,28 @@ class AlterDashboard {
                         label: function(context) {
                             const label = context.dataset.label || '';
                             const value = context.parsed.y;
-                            if (value === null || value === undefined || Number.isNaN(value)) {
+                            
+                            // Find the original value if available
+                            let originalValue = value;
+                            if (dashboard && dashboard.originalDatasets) {
+                                const datasetIndex = context.datasetIndex;
+                                const dataIndex = context.dataIndex;
+                                const originalDataset = dashboard.originalDatasets[datasetIndex];
+                                
+                                if (originalDataset && originalDataset.originalData && originalDataset.originalData[dataIndex] !== undefined) {
+                                    originalValue = originalDataset.originalData[dataIndex];
+                                }
+                            }
+                            
+                            if (originalValue === null || originalValue === undefined || Number.isNaN(originalValue)) {
                                 return `${label}: n/a`;
                             }
-                            return `${label}: ${value.toFixed(1)}`;
+                            
+                            // Check if originalValue is an integer
+                            if (Number.isInteger(originalValue)) {
+                                return `${label}: ${originalValue}`;
+                            }
+                            return `${label}: ${originalValue.toFixed(2)}`;
                         }
                     }
                 },
@@ -802,7 +825,7 @@ class AlterDashboard {
                     ticks: {
                         font: { size: 11 },
                         color: '#64748b',
-                        callback: (value) => `${value.toFixed(0)}`
+                        callback: function(value) { return ''; } // Hide tick labels
                     },
                     title: {
                         display: true,
@@ -1004,10 +1027,15 @@ class AlterDashboard {
             ChartUtils.createDataset(ds, i, dayLabels.length)
         );
 
-        this.originalDatasets = datasets.map(d => ({
-            ...d,
-            originalData: Array.isArray(d.data) ? [...d.data] : []
-        }));
+        this.originalDatasets = datasets.map((d, i) => {
+            const rawDs = chartData.datasets[i];
+            return {
+                ...d,
+                originalData: (rawDs && Array.isArray(rawDs.original_data))
+                    ? ChartUtils.alignData(rawDs.original_data, dayLabels.length)
+                    : (Array.isArray(d.data) ? [...d.data] : [])
+            };
+        });
 
         // Ensure all datasets are visible
         datasets.forEach((ds, index) => {
