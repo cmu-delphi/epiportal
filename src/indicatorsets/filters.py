@@ -70,7 +70,7 @@ class IndicatorSetFilter(django_filters.FilterSet):
             ("Other", "Other"),
         ],
         widget=QueryArrayWidget,
-        lookup_expr="exact",
+        lookup_expr="contains",
         required=False,
     )
 
