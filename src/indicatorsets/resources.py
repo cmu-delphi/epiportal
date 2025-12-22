@@ -10,6 +10,7 @@ from indicatorsets.models import (
     NonDelphiIndicatorSet,
     USStateIndicatorSet,
     ColumnDescription,
+    FilterDescription,
 )
 
 
@@ -537,7 +538,10 @@ class USStateIndicatorSetResource(resources.ModelResource):
 
 class ColumnDescriptionResource(resources.ModelResource):
     name = Field(attribute="name", column_name="Field Name")
-    description = Field(attribute="description", column_name="Hover over the indicator's name to see a brief description")
+    description = Field(
+        attribute="description",
+        column_name="Hover over the indicator's name to see a brief description",
+    )
 
     class Meta:
         model = ColumnDescription
@@ -548,3 +552,26 @@ class ColumnDescriptionResource(resources.ModelResource):
             "name",
             "description",
         )
+
+    def skip_row(self, instance, original, row, import_validation_errors=None):
+        if not row["Field Name"]:
+            return True
+
+
+class FilterDescriptionResource(resources.ModelResource):
+    name = Field(attribute="name", column_name="Field Name")
+    description = Field(attribute="description", column_name="Tooltip Text")
+
+    class Meta:
+        model = FilterDescription
+        import_id_fields = ("name",)
+        skip_unchanged = True
+        report_skipped = False
+        fields = (
+            "name",
+            "description",
+        )
+
+    def skip_row(self, instance, original, row, import_validation_errors=None):
+        if not row["Field Name"]:
+            return True

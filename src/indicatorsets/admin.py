@@ -17,6 +17,7 @@ from indicatorsets.resources import (
     NonDelphiIndicatorSetResource,
     USStateIndicatorSetResource,
     ColumnDescriptionResource,
+    FilterDescriptionResource,
 )
 
 
@@ -227,16 +228,50 @@ class USStateIndicatorSetAdmin(BaseIndicatorSetAdmin):
 
 
 @admin.register(FilterDescription)
-class FilterDescriptionAdmin(admin.ModelAdmin):
+class FilterDescriptionAdmin(ImportExportModelAdmin):
     """
     Admin interface for the FilterDescription model.
     """
+
+    resource_class = FilterDescriptionResource
 
     list_display = ("name", "description")
     search_fields = ("name", "description")
     ordering = ["name"]
     list_filter = ["name"]
     list_editable = ("description",)
+
+    change_list_template = "admin/indicatorsets/filter_description_changelist.html"
+
+    def get_urls(self):
+        urls = super().get_urls()
+        custom_urls = [
+            path(
+                "import-from-spreadsheet",
+                self.admin_site.admin_view(self.import_from_spreadsheet),
+                name="import_filter_descriptions",
+            ),
+            path(
+                "download-source-file",
+                self.admin_site.admin_view(self.download_filter_descriptions),
+                name="download_filter_descriptions",
+            ),
+        ]
+        return custom_urls + urls
+
+    def import_from_spreadsheet(self, request):
+        return import_data(
+            self,
+            request,
+            FilterDescriptionResource,
+            settings.SPREADSHEET_URLS["filter_descriptions"],
+        )
+
+    def download_filter_descriptions(self, request):
+        return download_source_file(
+            settings.SPREADSHEET_URLS["filter_descriptions"],
+            "Indicator_Sets_Table_Filter_Descriptions.csv",
+        )
 
 
 @admin.register(ColumnDescription)
