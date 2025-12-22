@@ -1,1 +1,154 @@
-[{"model": "indicatorsets.columndescription", "pk": 18, "fields": {"name": "name", "description": "Hover over the indicator's name to see a brief description."}}, {"model": "indicatorsets.columndescription", "pk": 19, "fields": {"name": "geographic_coverage", "description": "The countries or world regions covered by this indicator.  These are typically covered at finer geographic levels / jurisdictions."}}, {"model": "indicatorsets.columndescription", "pk": 20, "fields": {"name": "geographic_levels", "description": "All the geographic levels at which this indicator is available.  Larger jurisdictions are often based on aggregation of data from constituent jurisdictions."}}, {"model": "indicatorsets.columndescription", "pk": 21, "fields": {"name": "temporal_scope_start", "description": "The earliest date for which this indicator is available."}}, {"model": "indicatorsets.columndescription", "pk": 22, "fields": {"name": "temporal_scope_end", "description": "The latest date for which this indicator is available."}}, {"model": "indicatorsets.columndescription", "pk": 23, "fields": {"name": "temporal_granularity", "description": "The temporal resolution of this indicator (not of the reporting).  Might not be the same as Reporting Cadence (e.g. a daily indicator may be reported only once a week)."}}, {"model": "indicatorsets.columndescription", "pk": 24, "fields": {"name": "reporting_cadence", "description": "The frequency with which this indicator is reported.  This may be different from the temporal granularity."}}, {"model": "indicatorsets.columndescription", "pk": 25, "fields": {"name": "reporting_lag", "description": "The number of days from the last day of a reported period until the first reported value for that period is usually available in Delphi Epidata.  E.g. if reporting U.S. epiweeks (Sunday through Saturday), and the first report is usually available in Delphi Epidata on the following Friday, The Reporting Lag is 6. By \"usually available\" we mean when it\\'s \"supposed to be\" available based on our current understanding of the data provider\\'s operations and Delphi\\'s ingestion pipeline.  That is the date on which we think of the data as showing up \"on time\", and relative to which we track unusual delays."}}, {"model": "indicatorsets.columndescription", "pk": 26, "fields": {"name": "revision_cadende", "description": "How frequently are revised values (e.g. \"backfill\") usually reported (if any)?"}}, {"model": "indicatorsets.columndescription", "pk": 27, "fields": {"name": "population", "description": "The population or demographic group reflected by the indicator (\"All\" means the entire population)"}}, {"model": "indicatorsets.columndescription", "pk": 28, "fields": {"name": "population_stratifiers", "description": "What population or demographic stratifiers are available, if any?"}}, {"model": "indicatorsets.columndescription", "pk": 29, "fields": {"name": "surveillance_categories", "description": "Which surveillance categories or rungs in the Severity Pyramid does this indicator attempt to track?  Some indicators may approximately track multiple categories."}}, {"model": "indicatorsets.columndescription", "pk": 30, "fields": {"name": "original_data_provider", "description": "The owner or supplier of the original or raw data used to create this indicator."}}, {"model": "indicatorsets.columndescription", "pk": 31, "fields": {"name": "pre_processing", "description": "Brief description of main data processing used in creating this set of indicators, including smoothing and aggregation.  For more details, see the documentation."}}, {"model": "indicatorsets.columndescription", "pk": 32, "fields": {"name": "censoring", "description": "Is any of the data being censored (e.g. small counts)?  If so how, and how much impact does it have (e.g. approximate fraction of values affected)."}}, {"model": "indicatorsets.columndescription", "pk": 33, "fields": {"name": "dua_required", "description": "Applicable data use terms (may apply even to publicly accessible indicators)."}}]
+[
+    {
+        "model": "indicatorsets.columndescription",
+        "pk": 18,
+        "fields": {
+            "name": "name",
+            "description": "Hover over the indicator's name to see a brief description."
+        }
+    },
+    {
+        "model": "indicatorsets.columndescription",
+        "pk": 19,
+        "fields": {
+            "name": "geographic_coverage",
+            "description": "The countries or world regions covered by this indicator.  These are typically covered at finer geographic levels / jurisdictions."
+        }
+    },
+    {
+        "model": "indicatorsets.columndescription",
+        "pk": 20,
+        "fields": {
+            "name": "geographic_levels",
+            "description": "All the geographic levels at which this indicator is available.  Larger jurisdictions are often based on aggregation of data from constituent jurisdictions."
+        }
+    },
+    {
+        "model": "indicatorsets.columndescription",
+        "pk": 21,
+        "fields": {
+            "name": "temporal_scope_start",
+            "description": "The earliest date for which this indicator is available."
+        }
+    },
+    {
+        "model": "indicatorsets.columndescription",
+        "pk": 22,
+        "fields": {
+            "name": "temporal_scope_end",
+            "description": "The latest date for which this indicator is available."
+        }
+    },
+    {
+        "model": "indicatorsets.columndescription",
+        "pk": 23,
+        "fields": {
+            "name": "temporal_granularity",
+            "description": "The temporal resolution of this indicator (not of the reporting).  Might not be the same as Reporting Cadence (e.g. a daily indicator may be reported only once a week)."
+        }
+    },
+    {
+        "model": "indicatorsets.columndescription",
+        "pk": 24,
+        "fields": {
+            "name": "reporting_cadence",
+            "description": "The frequency with which this indicator is reported.  This may be different from the temporal granularity."
+        }
+    },
+    {
+        "model": "indicatorsets.columndescription",
+        "pk": 25,
+        "fields": {
+            "name": "reporting_lag",
+            "description": "The number of days from the last day of a reported period until the first reported value for that period is usually available in Delphi Epidata.  E.g. if reporting U.S. epiweeks (Sunday through Saturday), and the first report is usually available in Delphi Epidata on the following Friday, The Reporting Lag is 6. By \"usually available\" we mean when it\\'s \"supposed to be\" available based on our current understanding of the data provider\\'s operations and Delphi\\'s ingestion pipeline.  That is the date on which we think of the data as showing up \"on time\", and relative to which we track unusual delays."
+        }
+    },
+    {
+        "model": "indicatorsets.columndescription",
+        "pk": 26,
+        "fields": {
+            "name": "revision_cadence",
+            "description": "How frequently are revised values (e.g. \"backfill\") usually reported (if any)?"
+        }
+    },
+    {
+        "model": "indicatorsets.columndescription",
+        "pk": 27,
+        "fields": {
+            "name": "population",
+            "description": "The population or demographic group reflected by the indicator (\"All\" means the entire population)"
+        }
+    },
+    {
+        "model": "indicatorsets.columndescription",
+        "pk": 28,
+        "fields": {
+            "name": "population_stratifiers",
+            "description": "What population or demographic stratifiers are available, if any?"
+        }
+    },
+    {
+        "model": "indicatorsets.columndescription",
+        "pk": 29,
+        "fields": {
+            "name": "surveillance_categories",
+            "description": "Which surveillance categories or rungs in the Severity Pyramid does this indicator attempt to track?  Some indicators may approximately track multiple categories."
+        }
+    },
+    {
+        "model": "indicatorsets.columndescription",
+        "pk": 30,
+        "fields": {
+            "name": "original_data_provider",
+            "description": "The owner or supplier of the original or raw data used to create this indicator."
+        }
+    },
+    {
+        "model": "indicatorsets.columndescription",
+        "pk": 31,
+        "fields": {
+            "name": "pre_processing",
+            "description": "Brief description of main data processing used in creating this set of indicators, including smoothing and aggregation.  For more details, see the documentation."
+        }
+    },
+    {
+        "model": "indicatorsets.columndescription",
+        "pk": 32,
+        "fields": {
+            "name": "censoring",
+            "description": "Is any of the data being censored (e.g. small counts)?  If so how, and how much impact does it have (e.g. approximate fraction of values affected)."
+        }
+    },
+    {
+        "model": "indicatorsets.columndescription",
+        "pk": 33,
+        "fields": {
+            "name": "dua_required",
+            "description": "Applicable data use terms (may apply even to publicly accessible indicators)."
+        }
+    },
+    {
+        "model": "indicatorsets.columndescription",
+        "pk": 34,
+        "fields": {
+            "name": "missingness",
+            "description": "How much missingness is there, and for what reasons?  Is a missing value distinguished from a true zero?"
+        }
+    },
+    {
+        "model": "indicatorsets.columndescription",
+        "pk": 35,
+        "fields": {
+            "name": "data_use_terms",
+            "description": "Applicable data use terms (may apply even to publicly accessible indicators)."
+        }
+    },
+    {
+        "model": "indicatorsets.columndescription",
+        "pk": 36,
+        "name": "documentation",
+        "fields": {
+            "description": ""
+        }
+    }
+]

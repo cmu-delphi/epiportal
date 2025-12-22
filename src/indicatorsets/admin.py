@@ -12,8 +12,12 @@ from indicatorsets.models import (
     NonDelphiIndicatorSet,
     USStateIndicatorSet,
 )
-from indicatorsets.resources import IndicatorSetResource, NonDelphiIndicatorSetResource
-from indicatorsets.resources import USStateIndicatorSetResource
+from indicatorsets.resources import (
+    IndicatorSetResource,
+    NonDelphiIndicatorSetResource,
+    USStateIndicatorSetResource,
+    ColumnDescriptionResource,
+)
 
 
 class BaseIndicatorSetAdmin(ImportExportModelAdmin):
@@ -236,13 +240,47 @@ class FilterDescriptionAdmin(admin.ModelAdmin):
 
 
 @admin.register(ColumnDescription)
-class ColumnDescriptionAdmin(admin.ModelAdmin):
+class ColumnDescriptionAdmin(ImportExportModelAdmin):
     """
     Admin interface for the ColumnDescription model.
     """
+
+    resource_class = ColumnDescriptionResource
 
     list_display = ("name", "description")
     search_fields = ("name", "description")
     ordering = ["name"]
     list_filter = ["name"]
     list_editable = ("description",)
+
+    change_list_template = "admin/indicatorsets/column_description_changelist.html"
+
+    def get_urls(self):
+        urls = super().get_urls()
+        custom_urls = [
+            path(
+                "import-from-spreadsheet",
+                self.admin_site.admin_view(self.import_from_spreadsheet),
+                name="import_column_descriptions",
+            ),
+            path(
+                "download-source-file",
+                self.admin_site.admin_view(self.download_column_descriptions),
+                name="download_column_descriptions",
+            ),
+        ]
+        return custom_urls + urls
+
+    def import_from_spreadsheet(self, request):
+        return import_data(
+            self,
+            request,
+            ColumnDescriptionResource,
+            settings.SPREADSHEET_URLS["column_descriptions"],
+        )
+
+    def download_column_descriptions(self, request):
+        return download_source_file(
+            settings.SPREADSHEET_URLS["column_descriptions"],
+            "Indicator_Sets_Table_Column_Descriptions.csv",
+        )

@@ -238,7 +238,7 @@
                            data-mdb-popover-init
                            data-mdb-trigger="hover"
                            data-mdb-placement="right"
-                           data-mdb-content="">
+                           data-mdb-content="{{ columns_descriptions|dict_get:'missingness' }}">
                             <i class="far fa-circle-question"></i>
                         </a>
                     </th>
@@ -254,11 +254,23 @@
                            data-mdb-popover-init
                            data-mdb-trigger="hover"
                            data-mdb-placement="right"
-                           data-mdb-content="{{ columns_descriptions|dict_get:'dua_required' }}">
+                           data-mdb-content="{{ columns_descriptions|dict_get:'data_use_terms' }}">
                             <i class="far fa-circle-question"></i>
                         </a>
                     </th>
-                    <th class="text-center">Documentation</th>
+                    <th class="text-center">Documentation
+                        <a tabindex="0"
+                           type="button"
+                           class="info-button filter-description-popover"
+                           data-mdb-container="body"
+                           data-mdb-ripple-init
+                           data-mdb-popover-init
+                           data-mdb-trigger="hover"
+                           data-mdb-placement="right"
+                           data-mdb-content="{{ columns_descriptions|dict_get:'documentation' }}">
+                            <i class="far fa-circle-question"></i>
+                        </a>
+                    </th>
                 </tr>
             </thead>
             <tbody>
