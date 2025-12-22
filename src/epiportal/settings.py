@@ -41,7 +41,9 @@ SPREADSHEET_URLS = {
     "other_endpoint_indicators": "https://docs.google.com/spreadsheets/d/1zb7ItJzY5oq1n-2xtvnPBiJu2L3AqmCKubrLkKJZVHs/export?format=csv&gid=1364181703",
     "non_delphi_indicators": "https://docs.google.com/spreadsheets/d/1zb7ItJzY5oq1n-2xtvnPBiJu2L3AqmCKubrLkKJZVHs/export?format=csv&gid=493612863",
     "us_state_indicator_sets": "https://docs.google.com/spreadsheets/d/1zb7ItJzY5oq1n-2xtvnPBiJu2L3AqmCKubrLkKJZVHs/export?format=csv&gid=232438393",
-    "us_state_indicators": "https://docs.google.com/spreadsheets/d/1zb7ItJzY5oq1n-2xtvnPBiJu2L3AqmCKubrLkKJZVHs/export?format=csv&gid=1158629578"
+    "us_state_indicators": "https://docs.google.com/spreadsheets/d/1zb7ItJzY5oq1n-2xtvnPBiJu2L3AqmCKubrLkKJZVHs/export?format=csv&gid=1158629578",
+    "column_descriptions": "https://docs.google.com/spreadsheets/d/10BxyiLN7l9PWQuWbDeVmtzte-G9YNSuj2PzjDIy_OEc/export?format=csv&gid=1361858243#gid=1361858243",
+    "filter_descriptions": "https://docs.google.com/spreadsheets/d/10BxyiLN7l9PWQuWbDeVmtzte-G9YNSuj2PzjDIy_OEc/export?format=csv&gid=502883488#gid=502883488",
 }
 
 SENTRY_DSN = os.environ.get('SENTRY_DSN')

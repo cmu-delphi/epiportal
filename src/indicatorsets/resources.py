@@ -9,6 +9,8 @@ from indicatorsets.models import (
     IndicatorSet,
     NonDelphiIndicatorSet,
     USStateIndicatorSet,
+    ColumnDescription,
+    FilterDescription,
 )
 
 
@@ -476,7 +478,6 @@ class USStateIndicatorSetResource(resources.ModelResource):
     )
     license = Field(attribute="license", column_name="Data Use Terms")
 
-
     class Meta:
         model = USStateIndicatorSet
         import_id_fields = ("name", "state", "original_data_provider")
@@ -533,3 +534,44 @@ class USStateIndicatorSetResource(resources.ModelResource):
     def after_save_instance(self, instance, row, **kwargs):
         instance.source_type = "us_state"
         instance.save()
+
+
+class ColumnDescriptionResource(resources.ModelResource):
+    name = Field(attribute="name", column_name="Field Name")
+    description = Field(
+        attribute="description",
+        column_name="Hover over the indicator's name to see a brief description",
+    )
+
+    class Meta:
+        model = ColumnDescription
+        import_id_fields = ("name",)
+        skip_unchanged = True
+        report_skipped = False
+        fields = (
+            "name",
+            "description",
+        )
+
+    def skip_row(self, instance, original, row, import_validation_errors=None):
+        if not row["Field Name"]:
+            return True
+
+
+class FilterDescriptionResource(resources.ModelResource):
+    name = Field(attribute="name", column_name="Field Name")
+    description = Field(attribute="description", column_name="Tooltip Text")
+
+    class Meta:
+        model = FilterDescription
+        import_id_fields = ("name",)
+        skip_unchanged = True
+        report_skipped = False
+        fields = (
+            "name",
+            "description",
+        )
+
+    def skip_row(self, instance, original, row, import_validation_errors=None):
+        if not row["Field Name"]:
+            return True
