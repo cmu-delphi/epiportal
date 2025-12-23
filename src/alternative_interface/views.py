@@ -56,6 +56,7 @@ def _get_indicators_queryset(pathogen_filter):
     return (
         ExpressViewIndicator.objects.filter(menu_item=pathogen_filter)
         .select_related("indicator__indicator_set", "indicator__source")
+        .order_by("display_order")
     )
 
 

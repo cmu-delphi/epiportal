@@ -521,6 +521,44 @@ class AlterDashboard {
                     button.appendChild(text);
                     list.appendChild(button);
                 });
+
+                // Add "Show All" button as part of the list
+                const showAllButton = document.createElement('button');
+                showAllButton.type = 'button';
+                Object.assign(showAllButton.style, {
+                    display: 'inline-flex',
+                    alignItems: 'center',
+                    gap: '6px',
+                    border: '1px solid #cbd5e1',
+                    borderRadius: '12px',
+                    padding: '4px 8px',
+                    background: '#f1f5f9',
+                    cursor: 'pointer',
+                    fontSize: '11px',
+                    lineHeight: '1.2',
+                    maxWidth: '100%',
+                    color: '#334155',
+                    fontWeight: '500'
+                });
+                showAllButton.title = "Show all indicators";
+                
+                const icon = document.createElement('span');
+                icon.textContent = '👁️';
+                icon.style.fontSize = '10px';
+                
+                const showAllText = document.createElement('span');
+                showAllText.textContent = 'Show All';
+                
+                showAllButton.onclick = () => {
+                   if (dashboard) {
+                       dashboard.showAllDatasets();
+                   }
+                };
+                
+                showAllButton.appendChild(icon);
+                showAllButton.appendChild(showAllText);
+                list.appendChild(showAllButton);
+                
                 container.appendChild(list);
             }
         };
@@ -927,35 +965,28 @@ class AlterDashboard {
         let controlsContainer = document.getElementById('chartControls');
         if (!controlsContainer) {
             const chartSection = document.querySelector('.chart-section');
-            const cardHeader = chartSection?.querySelector('.card-header');
-            if (cardHeader) {
+            const wrapper = chartSection?.querySelector('.chart-container-wrapper');
+            if (wrapper) {
                 const controls = document.createElement('div');
                 controls.id = 'chartControls';
                 controls.className = 'chart-controls';
+                controls.style.padding = '0 1.5rem 1rem 1.5rem'; // Match wrapper padding
+                controls.style.borderTop = 'none'; // Remove top border if present
                 controls.innerHTML = `
                     <div class="controls-group" style="display: flex; align-items: center; gap: 15px;">
-                        <div class="form-check form-switch" style="margin: 0; padding-left: 2.5em;">
+                        <div class="form-check form-switch" style="margin: 0;">
                             <input class="form-check-input" type="checkbox" id="autoScaleToggle" checked style="cursor: pointer;">
                             <label class="form-check-label" for="autoScaleToggle" style="cursor: pointer; margin-left: 0.5em;">Auto-scale</label>
                         </div>
-                        <button id="showAllBtn" class="btn-control" title="Show all indicators">
-                            <span class="control-icon">👁️</span>
-                            <span class="control-text">Show All</span>
-                        </button>
                     </div>
                 `;
-                cardHeader.appendChild(controls);
+                wrapper.after(controls);
             }
         }
 
         const autoScaleToggle = document.getElementById('autoScaleToggle');
         if (autoScaleToggle) {
             autoScaleToggle.addEventListener('change', () => this.handleAutoScaleChange());
-        }
-
-        const showAllBtn = document.getElementById('showAllBtn');
-        if (showAllBtn) {
-            showAllBtn.addEventListener('click', () => this.showAllDatasets());
         }
     }
 

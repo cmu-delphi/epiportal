@@ -36,6 +36,9 @@ class ExpressViewIndicatorResource(resources.ModelResource):
     grouping_key = Field(
         attribute="grouping_key", column_name="tie together for scaling"
     )
+    display_order = Field(
+        attribute="display_order", column_name="Display Order"
+    )
 
     def before_import_row(self, row, **kwargs):
         process_indicator(row)
@@ -50,6 +53,8 @@ class ExpressViewIndicatorResource(resources.ModelResource):
             "menu_item",
             "indicator",
             "display_name",
+            "grouping_key",
+            "display_order",
         )
         import_id_fields = ("menu_item", "indicator")
         skip_unchanged = True
