@@ -368,9 +368,9 @@
         const totalRowsSpan = document.createElement("span");
         totalRowsSpan.classList.add("table-stats-info");
         if (numOfTimeseries > 0) {
-            totalRowsSpan.innerHTML = `Showing <b>${table.page.info().recordsTotal}</b> indicator ${pluralize(table.page.info().recordsTotal, 'set')} containing <b>${relatedIndicators.length}</b> individual ${pluralize(relatedIndicators.length, 'indicator')} including <b>${numberWithCommas(numOfTimeseries)}</b> Delphi-hosted time series across numerous locations.`;
+            totalRowsSpan.innerHTML = `Showing <b>${relatedIndicators.length}</b> distinct ${pluralize(relatedIndicators.length, 'indicator')} (arranged in <b>${table.page.info().recordsTotal}</b> ${pluralize(table.page.info().recordsTotal, 'set')}), including <b>${numberWithCommas(numOfTimeseries)}</b> Delphi-hosted time series across numerous locations.`;
         } else {
-            totalRowsSpan.innerHTML = `Showing <b>${table.page.info().recordsTotal}</b> indicator ${pluralize(table.page.info().recordsTotal, 'set')} containing <b>${relatedIndicators.length}</b> individual ${pluralize(relatedIndicators.length, 'indicator')}.`;
+            totalRowsSpan.innerHTML = `Showing <b>${relatedIndicators.length}</b> distinct ${pluralize(relatedIndicators.length, 'indicator')} (arranged in <b>${table.page.info().recordsTotal}</b> ${pluralize(table.page.info().recordsTotal, 'set')}).`;
         }
         const refElement = document.getElementById("indicatorSetsTable_wrapper");
         refElement.before(totalRowsSpan);
