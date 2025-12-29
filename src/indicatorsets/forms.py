@@ -10,7 +10,7 @@ class IndicatorSetFilterForm(forms.ModelForm):
 
     pathogens = forms.ModelMultipleChoiceField(
         queryset=Pathogen.objects.filter(
-            id__in=IndicatorSet.objects.values_list("pathogens", flat=True)
+            indicator_sets__isnull=False
         ).annotate(
             sort_priority=Case(
                 When(name__iexact="pathogen independent", then=1),
@@ -23,14 +23,14 @@ class IndicatorSetFilterForm(forms.ModelForm):
 
     geographic_levels = forms.ModelMultipleChoiceField(
         queryset=Geography.objects.filter(
-            id__in=IndicatorSet.objects.values_list("geographic_levels", flat=True)
-        ).order_by("display_order_number"),
+            indicator_sets__isnull=False
+        ).distinct().order_by("display_order_number"),
         widget=forms.CheckboxSelectMultiple(),
     )
     severity_pyramid_rungs = forms.ModelMultipleChoiceField(
         queryset=SeverityPyramidRung.objects.filter(
-            id__in=IndicatorSet.objects.values_list("severity_pyramid_rungs", flat=True)
-        ).order_by("display_order_number"),
+            indicator_sets__isnull=False
+        ).distinct().order_by("display_order_number"),
         widget=forms.CheckboxSelectMultiple(),
     )
 
