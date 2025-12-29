@@ -245,7 +245,8 @@ class IndicatorSetListView(ListView):
             ),
         ).order_by("beta_last", "-is_top_priority", "-delphi_hosted", "name")
         related_indicators = self.get_related_indicators(
-            filter.indicators_qs, filter.qs.values_list("id", flat=True)
+            filter.indicators_qs.select_related("indicator_set", "source"),
+            filter.qs.values_list("id", flat=True),
         )
         context["related_indicators"] = json.dumps(related_indicators)
         context["num_of_timeseries"] = get_num_locations_from_meta(
