@@ -50,6 +50,61 @@ indicatorsets_logger = get_structured_logger("indicatorsets_logger")
 HEADER_DESCRIPTION = "Discover, display and download real-time infectious disease indicators (time series) that track a variety of pathogens, diseases and syndromes in a variety of locations (primarily within the USA). Browse the list, or filter it first by locations and pathogens of interest, by surveillance categories, and more. Expand any row to expose and select from a set of related indicators, then hit 'Show Selected Indicators' at bottom to plot or export your selected indicators, or to generate code snippets to retrieve them from the Delphi Epidata API. Most indicators are served from the Delphi Epidata real-time repository, but some may be available only from third parties or may require prior approval."
 
 
+def get_related_indicators(queryset, indicator_set_ids: list):
+    related_indicators = []
+    for indicator in queryset.filter(indicator_set__id__in=indicator_set_ids):
+        related_indicators.append(
+            {
+                "id": indicator.id,
+                "display_name": (
+                    indicator.get_display_name if indicator.get_display_name else ""
+                ),
+                "member_name": (
+                    indicator.member_name if indicator.member_name else ""
+                ),
+                "member_short_name": (
+                    indicator.member_short_name
+                    if indicator.member_short_name
+                    else ""
+                ),
+                "name": indicator.name if indicator.name else "",
+                "indicator_set": (
+                    indicator.indicator_set.id if indicator.indicator_set else ""
+                ),
+                "indicator_set_name": (
+                    indicator.indicator_set.name if indicator.indicator_set else ""
+                ),
+                "indicator_set_short_name": (
+                    indicator.indicator_set.short_name
+                    if indicator.indicator_set
+                    else ""
+                ),
+                "endpoint": (
+                    indicator.indicator_set.epidata_endpoint
+                    if indicator.indicator_set
+                    else ""
+                ),
+                "source": indicator.source.name if indicator.source else "",
+                "time_type": indicator.time_type if indicator.time_type else "",
+                "description": (
+                    indicator.description if indicator.description else ""
+                ),
+                "member_description": (
+                    indicator.member_description
+                    if indicator.member_description
+                    else indicator.description
+                ),
+                "restricted": (
+                    indicator.indicator_set.dua_required
+                    if indicator.indicator_set
+                    else ""
+                ),
+                "source_type": indicator.source_type,
+            }
+        )
+    return related_indicators
+
+
 class IndicatorSetListView(ListView):
     model = IndicatorSet
     template_name = "indicatorsets/indicatorSets.html"
@@ -66,60 +121,6 @@ class IndicatorSetListView(ListView):
         except Exception as e:
             indicatorsets_logger.error(f"Error fetching indicator sets: {e}")
             return IndicatorSet.objects.none()
-
-    def get_related_indicators(self, queryset, indicator_set_ids: list):
-        related_indicators = []
-        for indicator in queryset.filter(indicator_set__id__in=indicator_set_ids):
-            related_indicators.append(
-                {
-                    "id": indicator.id,
-                    "display_name": (
-                        indicator.get_display_name if indicator.get_display_name else ""
-                    ),
-                    "member_name": (
-                        indicator.member_name if indicator.member_name else ""
-                    ),
-                    "member_short_name": (
-                        indicator.member_short_name
-                        if indicator.member_short_name
-                        else ""
-                    ),
-                    "name": indicator.name if indicator.name else "",
-                    "indicator_set": (
-                        indicator.indicator_set.id if indicator.indicator_set else ""
-                    ),
-                    "indicator_set_name": (
-                        indicator.indicator_set.name if indicator.indicator_set else ""
-                    ),
-                    "indicator_set_short_name": (
-                        indicator.indicator_set.short_name
-                        if indicator.indicator_set
-                        else ""
-                    ),
-                    "endpoint": (
-                        indicator.indicator_set.epidata_endpoint
-                        if indicator.indicator_set
-                        else ""
-                    ),
-                    "source": indicator.source.name if indicator.source else "",
-                    "time_type": indicator.time_type if indicator.time_type else "",
-                    "description": (
-                        indicator.description if indicator.description else ""
-                    ),
-                    "member_description": (
-                        indicator.member_description
-                        if indicator.member_description
-                        else indicator.description
-                    ),
-                    "restricted": (
-                        indicator.indicator_set.dua_required
-                        if indicator.indicator_set
-                        else ""
-                    ),
-                    "source_type": indicator.source_type,
-                }
-            )
-        return related_indicators
 
     def get_url_params(self):
         url_params_dict = {
@@ -244,14 +245,6 @@ class IndicatorSetListView(ListView):
                 output_field=IntegerField(),
             ),
         ).order_by("beta_last", "-is_top_priority", "-delphi_hosted", "name")
-        related_indicators = self.get_related_indicators(
-            filter.indicators_qs.select_related("indicator_set", "source"),
-            filter.qs.values_list("id", flat=True),
-        )
-        context["related_indicators"] = json.dumps(related_indicators)
-        context["num_of_timeseries"] = get_num_locations_from_meta(
-            related_indicators
-        )
         context["filters_descriptions"] = (
             FilterDescription.get_all_descriptions_as_dict()
         )
@@ -540,3 +533,29 @@ def get_available_geos(request):
         return JsonResponse(
             {"geographic_granularities": geographic_granularities}, safe=False
         )
+
+
+def get_related_indicators_json(request):
+    try:
+        queryset = IndicatorSet.objects.all().prefetch_related(
+            "geographic_scope",
+            "pathogens",
+            "severity_pyramid_rungs",
+            "geographic_levels",
+        )
+    except Exception as e:
+        indicatorsets_logger.error(f"Error fetching indicator sets: {e}")
+        queryset = IndicatorSet.objects.none()
+
+    filter = IndicatorSetFilter(request.GET, queryset=queryset)
+    related_indicators = get_related_indicators(
+        filter.indicators_qs.select_related("indicator_set", "source"),
+        filter.qs.values_list("id", flat=True),
+    )
+    num_of_timeseries = get_num_locations_from_meta(related_indicators)
+    return JsonResponse(
+        {
+            "related_indicators": related_indicators,
+            "num_of_timeseries": num_of_timeseries,
+        }
+    )

@@ -6,7 +6,6 @@ from textwrap import dedent
 
 import requests
 from django.conf import settings
-from django.core.cache import cache
 from django.http import JsonResponse
 from epiweeks import Week
 from delphi_utils import get_structured_logger
@@ -815,18 +814,14 @@ def get_num_locations_from_meta(indicators):
     indicators = set(
         (indicator["source"], indicator["name"]) for indicator in indicators
     )
-    metadata = cache.get("covidcast_meta")
-    if metadata is None:
-        try:
-            metadata = requests.get(
-                f"{settings.EPIDATA_URL}covidcast_meta/", timeout=5
-            ).json()["epidata"]
-            # Cache for 24 hours
-            cache.set("covidcast_meta", metadata, 60 * 60 * 24)
-        except Exception as e:
-            print(f"Error fetching covidcast metadata: {e}")
-            return 0
-    for r in metadata:
-        if (r["data_source"], r["signal"]) in indicators:
-            timeseries_count += r["num_locations"]
+    try:
+        metadata = requests.get(
+            f"{settings.EPIDATA_URL}covidcast_meta/", timeout=5
+        ).json()["epidata"]
+        for r in metadata:
+            if (r["data_source"], r["signal"]) in indicators:
+                timeseries_count += r["num_locations"]
+    except Exception as e:
+        print(f"Error fetching covidcast metadata: {e}")
+        return 0
     return timeseries_count
