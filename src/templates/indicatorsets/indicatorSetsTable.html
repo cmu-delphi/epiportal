@@ -355,7 +355,7 @@
 <script src="{% static 'js/indicatorSetsTable.js' %}"></script>
 <script src="{% static 'js/pluralize_word.js' %}"></script>
 <script>
-    var relatedIndicators = [];
+    var relatedIndicators = null;
     var numOfTimeseries = 0;
 
     function numberWithCommas(x) {
@@ -378,6 +378,16 @@
                 relatedIndicators = response.related_indicators;
                 numOfTimeseries = response.num_of_timeseries;
 
+                // Refresh any open rows now that data is loaded
+                if (typeof table !== 'undefined') {
+                    table.rows().every(function() {
+                        if (this.child.isShown()) {
+                            var tr = $(this.node());
+                            this.child(format(tr.data('id'), relatedIndicators, tr.data("description"))).show();
+                        }
+                    });
+                }
+
                 if (numOfTimeseries > 0) {
                     totalRowsSpan.innerHTML = `Showing <b>${relatedIndicators.length}</b> distinct ${pluralize(relatedIndicators.length, 'indicator')} (arranged in <b>${table.page.info().recordsTotal}</b> ${pluralize(table.page.info().recordsTotal, 'set')}), including <b>${numberWithCommas(numOfTimeseries)}</b> Delphi-hosted time series across numerous locations.`;
                 } else {
@@ -391,17 +401,10 @@
         });
     });
 
-    // Add event listener for openizng and closing details
+    // Add event listener for opening and closing details
     $('#indicatorSetsTable tbody').on('click', 'td.dt-control', function () {
         var tr = $(this).closest('tr');
         var row = table.row(tr);
-
-        if (relatedIndicators.length === 0) {
-             // If data hasn't loaded yet, maybe wait or show alert?
-             // For now, let's assume it loads fast enough or just show empty/loading in child row if we wanted to be fancy.
-             // But existing behavior with empty array will just show "No available indicators yet." from format function.
-             // We can check if request is pending if needed, but let's stick to simple first.
-        }
 
         if (row.child.isShown()) {
             // This row is already open - close it
@@ -411,6 +414,5 @@
             // Open this row
             row.child(format(tr.data('id'), relatedIndicators, tr.data("description"))).show();
         }
-
     });
 </script>
