@@ -391,14 +391,7 @@
     $(document).ready(function() {
         const geoValues = {{ geographic_granularities|safe }};
         var urlParams = JSON.parse(JSON.stringify({{ url_params_dict|safe }}));
-        const locationSearchValues = geoValues.map(group => ({
-            ...group,
-            children: group.children.map(child => ({
-                ...child,
-                id: child.id
-            }))
-        }));
-        initSelect2('location_search', locationSearchValues);
+        initSelect2('location_search', geoValues);
         if (urlParams.location_search != "") {
             var locationSearch = urlParams.location_search; 
             $("#location_search").val(locationSearch).trigger("change.select2");
