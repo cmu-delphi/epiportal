@@ -299,3 +299,7 @@ tr:not(.odd-row) > .dtfc-fixed-end {
         display: block;
     }
 }
+
+#location_search {
+    height: 38px !important;
+}

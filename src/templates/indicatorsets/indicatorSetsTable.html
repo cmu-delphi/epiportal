@@ -387,6 +387,11 @@
                         }
                     });
                 }
+                
+                // Expand rows for selected indicators if any
+                if (typeof expandSelectedRows === 'function') {
+                    expandSelectedRows();
+                }
 
                 if (numOfTimeseries > 0) {
                     totalRowsSpan.innerHTML = `Showing <b>${relatedIndicators.length}</b> distinct ${pluralize(relatedIndicators.length, 'indicator')} (arranged in <b>${table.page.info().recordsTotal}</b> ${pluralize(table.page.info().recordsTotal, 'set')}), including <b>${numberWithCommas(numOfTimeseries)}</b> Delphi-hosted time series across numerous locations.`;
