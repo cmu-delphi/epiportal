@@ -177,6 +177,31 @@ if (document.readyState === 'loading') {
     initializeGroupSublistVisibility();
 }
 
+// Debounce function to delay execution
+function debounce(func, wait) {
+    let timeout;
+    return function() {
+        const context = this;
+        const args = arguments;
+        clearTimeout(timeout);
+        timeout = setTimeout(() => {
+            func.apply(context, args);
+        }, wait);
+    };
+}
+
+// Function to handle form submission with UI feedback
+function submitFilterForm(form) {
+    persistCheckedIndicators();
+    showLoader();
+    form.submit();
+}
+
+// Create debounced submission function
+const debouncedSubmit = debounce(function(form) {
+    submitFilterForm(form);
+}, 2000);
+
 // Handle group checkbox clicks (e.g., "U.S. States")
 document.addEventListener('change', function(event) {
     if (event.target.classList.contains('original-data-provider-group-checkbox')) {
@@ -205,11 +230,9 @@ document.addEventListener('change', function(event) {
             }
         }
         
-        // Trigger form submission once after all checkboxes are updated
+        // Trigger debounced form submission
         if (event.target.form) {
-            persistCheckedIndicators();
-            showLoader();
-            event.target.form.submit();
+            debouncedSubmit(event.target.form);
         }
     }
 });
@@ -264,18 +287,25 @@ function showLoader() {
 }
 
 $("#filterIndicatorSetsForm").find("input[type='checkbox']").on("change", function (e) {
-    // Show loader and fade table
-    persistCheckedIndicators();
-    showLoader();
-    this.form.submit();
+    // Skip if it's a group checkbox (handled by separate event listener)
+    if (this.classList.contains('original-data-provider-group-checkbox')) {
+        return;
+    }
+    
+    // Trigger debounced submission
+    debouncedSubmit(this.form);
 });
 
 $("#location_search").on({
     "change": function (e) {
-        // Show loader and fade table
-        persistCheckedIndicators();
-        showLoader();
-        this.form.submit();
+        // Trigger debounced submission
+        debouncedSubmit(this.form);
+    },
+    // Also debounce on keyup for better UX if needed, or just keep change
+    "keyup": function(e) {
+         if (e.key === 'Enter') {
+            debouncedSubmit(this.form);
+         }
     }
 });
 
