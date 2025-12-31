@@ -195,6 +195,23 @@ async function checkGeoCoverage(geoValue) {
     }
 }
 
+async function checkFluviewGeoCoverage(geoValue) {
+    try {
+        const result = await $.ajax({
+            url: "check_fluview_geo_coverage/",
+            type: "GET",
+            data: {
+                geo: geoValue,
+                indicators: JSON.stringify(checkedIndicatorMembers.filter((indicator) => indicator["_endpoint"] === "fluview" || indicator["_endpoint"] === "fluview_clinical")),
+            }
+        }); 
+        return result["not_covered_indicators"];
+    } catch (error) {
+        console.error("Error fetching fluview geo coverage:", error);
+        return [];
+    }
+}
+
 async function getAvailableGeos(indicators) {
     const csrftoken = Cookies.get("csrftoken");
     const submitData = { indicators: indicators };
@@ -218,6 +235,15 @@ async function getAvailableGeos(indicators) {
 $("#geographic_value").on("select2:select", function (e) {
     var geo = e.params.data;
     checkGeoCoverage(geo.id).then((notCoveredIndicators) => {
+        if (notCoveredIndicators.length > 0) {
+            showNotCoveredGeoWarningMessage(notCoveredIndicators, geo);
+        }
+    });
+});
+
+$("#otherEndpointLocations").on("select2:select", "#fluviewLocations", function (e) {
+    var geo = e.params.data;
+    checkFluviewGeoCoverage(geo.id).then((notCoveredIndicators) => {
         if (notCoveredIndicators.length > 0) {
             showNotCoveredGeoWarningMessage(notCoveredIndicators, geo);
         }
