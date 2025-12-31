@@ -1,48 +1,49 @@
-import sys
 import base64
 import json
-import requests
+import sys
+from datetime import datetime
 from textwrap import dedent
 
-
+import requests
+from delphi_utils import get_structured_logger
 from django.conf import settings
+from django.db.models import Case, IntegerField, Value, When
 from django.http import JsonResponse
 from django.views.generic import ListView
-from django.db.models import Case, When, Value, IntegerField
+from epiweeks import Week
 
+from alternative_interface.utils import get_fluview_data
 from base.models import Geography, GeographyUnit
 from indicatorsets.filters import IndicatorSetFilter
 from indicatorsets.forms import IndicatorSetFilterForm
-from indicatorsets.models import IndicatorSet, FilterDescription, ColumnDescription
+from indicatorsets.models import ColumnDescription, FilterDescription, IndicatorSet
 from indicatorsets.utils import (
-    group_by_property,
     generate_covidcast_dataset_epivis,
-    generate_fluview_dataset_epivis,
-    generate_nidss_flu_dataset_epivis,
-    generate_nidss_dengue_dataset_epivis,
-    generate_flusurv_dataset_epivis,
     generate_covidcast_indicators_export_url,
-    generate_fluview_indicators_export_url,
-    generate_nidss_flu_export_url,
-    generate_nidss_dengue_export_url,
+    generate_flusurv_dataset_epivis,
     generate_flusurv_export_url,
-    preview_covidcast_data,
-    preview_fluview_data,
-    preview_nidss_flu_data,
-    preview_nidss_dengue_data,
-    preview_flusurv_data,
+    generate_fluview_dataset_epivis,
+    generate_fluview_indicators_export_url,
+    generate_nidss_dengue_dataset_epivis,
+    generate_nidss_dengue_export_url,
+    generate_nidss_flu_dataset_epivis,
+    generate_nidss_flu_export_url,
     generate_query_code_covidcast,
-    generate_query_code_fluview,
-    generate_query_code_nidss_flu,
-    generate_query_code_nidss_dengue,
     generate_query_code_flusurv,
-    log_form_data,
-    log_form_stats,
+    generate_query_code_fluview,
+    generate_query_code_nidss_dengue,
+    generate_query_code_nidss_flu,
     get_grouped_original_data_provider_choices,
     get_num_locations_from_meta,
+    group_by_property,
+    log_form_data,
+    log_form_stats,
+    preview_covidcast_data,
+    preview_flusurv_data,
+    preview_fluview_data,
+    preview_nidss_dengue_data,
+    preview_nidss_flu_data,
 )
-
-from delphi_utils import get_structured_logger
 
 indicatorsets_logger = get_structured_logger("indicatorsets_logger")
 
@@ -59,13 +60,9 @@ def get_related_indicators(queryset, indicator_set_ids: list):
                 "display_name": (
                     indicator.get_display_name if indicator.get_display_name else ""
                 ),
-                "member_name": (
-                    indicator.member_name if indicator.member_name else ""
-                ),
+                "member_name": (indicator.member_name if indicator.member_name else ""),
                 "member_short_name": (
-                    indicator.member_short_name
-                    if indicator.member_short_name
-                    else ""
+                    indicator.member_short_name if indicator.member_short_name else ""
                 ),
                 "name": indicator.name if indicator.name else "",
                 "indicator_set": (
@@ -86,9 +83,7 @@ def get_related_indicators(queryset, indicator_set_ids: list):
                 ),
                 "source": indicator.source.name if indicator.source else "",
                 "time_type": indicator.time_type if indicator.time_type else "",
-                "description": (
-                    indicator.description if indicator.description else ""
-                ),
+                "description": (indicator.description if indicator.description else ""),
                 "member_description": (
                     indicator.member_description
                     if indicator.member_description
@@ -559,3 +554,56 @@ def get_related_indicators_json(request):
             "num_of_timeseries": num_of_timeseries,
         }
     )
+
+
+def check_fluview_geo_coverage(request):
+    null_data_indicators = []
+    if request.method == "GET":
+        geo_value = request.GET.get("geo")
+        indicators = request.GET.get("indicators")
+        start_date = 199740
+        end_date = Week.fromdate(datetime.today())
+        end_date = f"{end_date.year}{end_date.week if end_date.week >= 10 else '0' + str(end_date.week)}"
+        indicators = json.loads(indicators)
+
+        fluview_indicators = {}
+        fluview_clinical_indicators = {}
+        for indicator in indicators:
+            if indicator["data_source"] == "fluview":
+                fluview_indicators[indicator["indicator"]] = 0
+            elif indicator["data_source"] == "fluview_clinical":
+                fluview_clinical_indicators[indicator["indicator"]] = 0
+
+        params = {
+            "regions": geo_value,
+            "epiweeks": f"{start_date}-{end_date}",
+            "api_key": settings.EPIDATA_API_KEY,
+        }
+
+        if fluview_indicators:
+            response = requests.get(f"{settings.EPIDATA_URL}fluview", params=params)
+            if response.status_code == 200:
+                data = response.json()
+                if len(data["epidata"]):
+                    for el in data["epidata"]:
+                        for indicator in fluview_indicators.keys():
+                            fluview_indicators[indicator] += el[indicator] if el[indicator] else 0
+        if fluview_clinical_indicators:
+            response = requests.get(
+                f"{settings.EPIDATA_URL}fluview_clinical", params=params
+            )
+            if response.status_code == 200:
+                data = response.json()
+                if len(data["epidata"]):
+                    for el in data["epidata"]:
+                        for indicator in fluview_clinical_indicators.keys():
+                            fluview_clinical_indicators[indicator] += el[indicator]
+
+        for indicator in fluview_indicators.keys():
+            if fluview_indicators[indicator] == 0:
+                null_data_indicators.append(indicator)
+        for indicator in fluview_clinical_indicators.keys():
+            if fluview_clinical_indicators[indicator] == 0:
+                null_data_indicators.append(indicator)
+        not_covered_indicators = [indicator for indicator in indicators if indicator["indicator"] in null_data_indicators]
+        return JsonResponse({"not_covered_indicators": not_covered_indicators})
