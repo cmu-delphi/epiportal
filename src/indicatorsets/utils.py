@@ -166,25 +166,26 @@ def generate_covidcast_dataset_epivis(indicator, covidcast_geos):
 def generate_fluview_dataset_epivis(indicator, fluview_geos):
     datasets = []
     for geo in fluview_geos:
-        datasets.append(
-            {
-                "color": generate_random_color(),
-                "title": FLUVIEW_INDICATORS_MAPPING.get(
-                    indicator["indicator"], indicator["indicator"]
-                ),
-                "params": {
-                    "_endpoint": (
-                        indicator["_endpoint"]
-                        if indicator["data_source"] == "fluview"
-                        else "fluview_clinical"
+        if geo["id"] not in indicator.get("notCoveredGeos", []):
+            datasets.append(
+                {
+                    "color": generate_random_color(),
+                    "title": FLUVIEW_INDICATORS_MAPPING.get(
+                        indicator["indicator"], indicator["indicator"]
                     ),
-                    "regions": geo["id"],
-                    "custom_title": generate_epivis_custom_title(
-                        indicator, geo["text"]
-                    ),
-                },
-            }
-        )
+                    "params": {
+                        "_endpoint": (
+                            indicator["_endpoint"]
+                            if indicator["data_source"] == "fluview"
+                            else "fluview_clinical"
+                        ),
+                        "regions": geo["id"],
+                        "custom_title": generate_epivis_custom_title(
+                            indicator, geo["text"]
+                        ),
+                    },
+                }
+            )
     return datasets
 
 

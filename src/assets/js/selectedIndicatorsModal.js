@@ -205,6 +205,12 @@ async function checkFluviewGeoCoverage(geoValue) {
                 indicators: JSON.stringify(checkedIndicatorMembers.filter((indicator) => indicator["_endpoint"] === "fluview" || indicator["_endpoint"] === "fluview_clinical")),
             }
         }); 
+        for (const checkedIndicator of checkedIndicatorMembers.filter((indicator) => indicator["_endpoint"] === "fluview" || indicator["_endpoint"] === "fluview_clinical")) {
+            if (result["not_covered_indicators"].some((indicator) => indicator.indicator === checkedIndicator.indicator)) {
+                checkedIndicator["notCoveredGeos"] = [geoValue];
+            }
+        }
+        console.log(checkedIndicatorMembers);
         return result["not_covered_indicators"];
     } catch (error) {
         console.error("Error fetching fluview geo coverage:", error);
