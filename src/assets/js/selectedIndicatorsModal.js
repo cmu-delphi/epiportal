@@ -195,6 +195,29 @@ async function checkGeoCoverage(geoValue) {
     }
 }
 
+async function checkFluviewGeoCoverage(geoValue) {
+    try {
+        const result = await $.ajax({
+            url: "check_fluview_geo_coverage/",
+            type: "GET",
+            data: {
+                geo: geoValue,
+                indicators: JSON.stringify(checkedIndicatorMembers.filter((indicator) => indicator["_endpoint"] === "fluview" || indicator["_endpoint"] === "fluview_clinical")),
+            }
+        }); 
+        for (const checkedIndicator of checkedIndicatorMembers.filter((indicator) => indicator["_endpoint"] === "fluview" || indicator["_endpoint"] === "fluview_clinical")) {
+            if (result["not_covered_indicators"].some((indicator) => indicator.indicator === checkedIndicator.indicator)) {
+                checkedIndicator["notCoveredGeos"] = [geoValue];
+            }
+        }
+        console.log(checkedIndicatorMembers);
+        return result["not_covered_indicators"];
+    } catch (error) {
+        console.error("Error fetching fluview geo coverage:", error);
+        return [];
+    }
+}
+
 async function getAvailableGeos(indicators) {
     const csrftoken = Cookies.get("csrftoken");
     const submitData = { indicators: indicators };
@@ -218,6 +241,15 @@ async function getAvailableGeos(indicators) {
 $("#geographic_value").on("select2:select", function (e) {
     var geo = e.params.data;
     checkGeoCoverage(geo.id).then((notCoveredIndicators) => {
+        if (notCoveredIndicators.length > 0) {
+            showNotCoveredGeoWarningMessage(notCoveredIndicators, geo);
+        }
+    });
+});
+
+$("#otherEndpointLocations").on("select2:select", "#fluviewLocations", function (e) {
+    var geo = e.params.data;
+    checkFluviewGeoCoverage(geo.id).then((notCoveredIndicators) => {
         if (notCoveredIndicators.length > 0) {
             showNotCoveredGeoWarningMessage(notCoveredIndicators, geo);
         }
@@ -429,37 +461,32 @@ window.addEventListener('load', function() {
         try {
             const parsed = JSON.parse(stored);
             if (Array.isArray(parsed) && parsed.length > 0) {
-                 if (typeof relatedIndicators !== 'undefined') {
-                     const validIndicators = parsed.filter(storedInd => {
-                         return relatedIndicators.some(relInd => 
-                            relInd.source === storedInd.data_source && 
-                            relInd.name === storedInd.indicator
-                         );
-                     });
+                 parsed.forEach(ind => {
+                     checkedIndicatorMembers.push(ind);
+                     updateSelectedIndicators(
+                        ind.data_source,
+                        ind.display_name,
+                        ind.indicator_set,
+                        ind.indicator
+                     );
                      
-                     validIndicators.forEach(ind => {
-                         checkedIndicatorMembers.push(ind);
-                         updateSelectedIndicators(
-                            ind.data_source,
-                            ind.display_name,
-                            ind.indicator_set,
-                            ind.indicator
-                         );
-                         
-                         if (ind._endpoint !== "covidcast" && !indicatorHandler.nonCovidcastIndicatorSets.includes(ind.indicator_set)) {
-                            indicatorHandler.nonCovidcastIndicatorSets.push(ind.indicator_set);
-                         }
-                     });
-                     
-                     indicatorHandler.indicators = checkedIndicatorMembers;
-                     
-                     if (checkedIndicatorMembers.length > 0) {
-                        $("#showSelectedIndicatorsButton").show();
-
-                         if (typeof table !== 'undefined' && typeof relatedIndicators !== 'undefined') {
+                     if (ind._endpoint !== "covidcast" && !indicatorHandler.nonCovidcastIndicatorSets.includes(ind.indicator_set)) {
+                        indicatorHandler.nonCovidcastIndicatorSets.push(ind.indicator_set);
+                     }
+                 });
+                 
+                 indicatorHandler.indicators = checkedIndicatorMembers;
+                 
+                 if (checkedIndicatorMembers.length > 0) {
+                    $("#showSelectedIndicatorsButton").show();
+                    
+                    if (typeof expandSelectedRows === 'function') {
+                        expandSelectedRows();
+                    } else {
+                         // Fallback inline implementation if function not found (though we will define it below)
+                         if (typeof table !== 'undefined' && typeof relatedIndicators !== 'undefined' && relatedIndicators) {
                             const selectedSetIds = new Set();
                             
-                            // Map selected indicators (which store set NAME) to set IDs using relatedIndicators
                             checkedIndicatorMembers.forEach(member => {
                                 const match = relatedIndicators.find(ri => 
                                     ri.source === member.data_source && 
@@ -481,7 +508,7 @@ window.addEventListener('load', function() {
                                 }
                             });
                          }
-                     }
+                    }
                  }
             }
         } catch (e) {
@@ -490,3 +517,30 @@ window.addEventListener('load', function() {
         sessionStorage.removeItem('checkedIndicatorMembers');
     }
 });
+
+function expandSelectedRows() {
+     if (typeof table !== 'undefined' && typeof relatedIndicators !== 'undefined' && relatedIndicators && Array.isArray(relatedIndicators) && typeof checkedIndicatorMembers !== 'undefined') {
+        const selectedSetIds = new Set();
+        
+        checkedIndicatorMembers.forEach(member => {
+            const match = relatedIndicators.find(ri => 
+                ri.source === member.data_source && 
+                ri.name === member.indicator
+            );
+            if (match) {
+                selectedSetIds.add(String(match.indicator_set));
+            }
+        });
+        
+        table.rows().every(function() {
+            const tr = $(this.node());
+            const rowId = String(tr.data('id'));
+            
+            if (selectedSetIds.has(rowId)) {
+                if (!this.child.isShown()) {
+                    tr.find('td.dt-control').trigger('click');
+                }
+            }
+        });
+     }
+}

@@ -238,7 +238,7 @@
                            data-mdb-popover-init
                            data-mdb-trigger="hover"
                            data-mdb-placement="right"
-                           data-mdb-content="">
+                           data-mdb-content="{{ columns_descriptions|dict_get:'missingness' }}">
                             <i class="far fa-circle-question"></i>
                         </a>
                     </th>
@@ -254,11 +254,23 @@
                            data-mdb-popover-init
                            data-mdb-trigger="hover"
                            data-mdb-placement="right"
-                           data-mdb-content="{{ columns_descriptions|dict_get:'dua_required' }}">
+                           data-mdb-content="{{ columns_descriptions|dict_get:'data_use_terms' }}">
                             <i class="far fa-circle-question"></i>
                         </a>
                     </th>
-                    <th class="text-center">Documentation</th>
+                    <th class="text-center">Documentation
+                        <a tabindex="0"
+                           type="button"
+                           class="info-button filter-description-popover"
+                           data-mdb-container="body"
+                           data-mdb-ripple-init
+                           data-mdb-popover-init
+                           data-mdb-trigger="hover"
+                           data-mdb-placement="right"
+                           data-mdb-content="{{ columns_descriptions|dict_get:'documentation' }}">
+                            <i class="far fa-circle-question"></i>
+                        </a>
+                    </th>
                 </tr>
             </thead>
             <tbody>
@@ -343,32 +355,62 @@
 <script src="{% static 'js/indicatorSetsTable.js' %}"></script>
 <script src="{% static 'js/pluralize_word.js' %}"></script>
 <script>
-    var relatedIndicators = JSON.parse(JSON.stringify({{ related_indicators|safe }}));
-    var numOfTimeseries = {{ num_of_timeseries }};
+    var relatedIndicators = null;
+    var numOfTimeseries = 0;
 
     function numberWithCommas(x) {
         return x.toString().replace(/\B(?=(\d{3})+(?!\d))/g, ",");
     }
 
-
     $(document).ready(function() {
         table.columns.adjust();
         const totalRowsSpan = document.createElement("span");
         totalRowsSpan.classList.add("table-stats-info");
-        if (numOfTimeseries > 0) {
-            totalRowsSpan.innerHTML = `Showing <b>${table.page.info().recordsTotal}</b> indicator ${pluralize(table.page.info().recordsTotal, 'set')} containing <b>${relatedIndicators.length}</b> individual ${pluralize(relatedIndicators.length, 'indicator')} including <b>${numberWithCommas(numOfTimeseries)}</b> Delphi-hosted time series across numerous locations.`;
-        } else {
-            totalRowsSpan.innerHTML = `Showing <b>${table.page.info().recordsTotal}</b> indicator ${pluralize(table.page.info().recordsTotal, 'set')} containing <b>${relatedIndicators.length}</b> individual ${pluralize(relatedIndicators.length, 'indicator')}.`;
-        }
+        totalRowsSpan.innerHTML = "Loading indicators statistics...";
         const refElement = document.getElementById("indicatorSetsTable_wrapper");
         refElement.before(totalRowsSpan);
+
+        // Fetch related indicators asynchronously
+        $.ajax({
+            url: "{% url 'get_related_indicators' %}" + window.location.search,
+            method: "GET",
+            success: function(response) {
+                relatedIndicators = response.related_indicators;
+                numOfTimeseries = response.num_of_timeseries;
+
+                // Refresh any open rows now that data is loaded
+                if (typeof table !== 'undefined') {
+                    table.rows().every(function() {
+                        if (this.child.isShown()) {
+                            var tr = $(this.node());
+                            this.child(format(tr.data('id'), relatedIndicators, tr.data("description"))).show();
+                        }
+                    });
+                }
+                
+                // Expand rows for selected indicators if any
+                if (typeof expandSelectedRows === 'function') {
+                    expandSelectedRows();
+                }
+
+                if (numOfTimeseries > 0) {
+                    totalRowsSpan.innerHTML = `Showing <b>${relatedIndicators.length}</b> distinct ${pluralize(relatedIndicators.length, 'indicator')} (arranged in <b>${table.page.info().recordsTotal}</b> ${pluralize(table.page.info().recordsTotal, 'set')}), including <b>${numberWithCommas(numOfTimeseries)}</b> Delphi-hosted time series across numerous locations.`;
+                } else {
+                    totalRowsSpan.innerHTML = `Showing <b>${relatedIndicators.length}</b> distinct ${pluralize(relatedIndicators.length, 'indicator')} (arranged in <b>${table.page.info().recordsTotal}</b> ${pluralize(table.page.info().recordsTotal, 'set')}).`;
+                }
+            },
+            error: function(xhr, status, error) {
+                console.error("Error fetching related indicators:", error);
+                totalRowsSpan.innerHTML = "Error loading indicators statistics.";
+            }
+        });
     });
 
-    // Add event listener for openizng and closing details
+    // Add event listener for opening and closing details
     $('#indicatorSetsTable tbody').on('click', 'td.dt-control', function () {
         var tr = $(this).closest('tr');
         var row = table.row(tr);
-    
+
         if (row.child.isShown()) {
             // This row is already open - close it
             row.child.hide();
@@ -377,9 +419,5 @@
             // Open this row
             row.child(format(tr.data('id'), relatedIndicators, tr.data("description"))).show();
         }
-        
     });
-
-   
-
 </script>

@@ -455,7 +455,6 @@ class IndicatorHandler {
             data: JSON.stringify(submitData),
         }).done((data) => {
             const payload = this.prepareDataLayerPayload("epivis");
-            console.log(payload);
             dataLayerPush(payload);
             window.open(data["epivis_url"], '_blank').focus();
         });

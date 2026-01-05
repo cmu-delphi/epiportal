@@ -58,6 +58,10 @@ var table = new DataTable("#indicatorSetsTable", {
 // });
 
 function format(indicatorSetId, relatedIndicators, indicatorSetDescription) {
+    if (!relatedIndicators) {
+        return '<div class="d-flex justify-content-start my-3" style="padding-left: 20px;"><div class="spinner-border text-primary" role="status"><span class="visually-hidden">Loading...</span></div></div>';
+    }
+
     var indicators = relatedIndicators.filter(
         (indicator) => indicator.indicator_set === indicatorSetId
     );

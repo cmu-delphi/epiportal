@@ -27,8 +27,8 @@ class IndicatorSetFilter(django_filters.FilterSet):
     pathogens = django_filters.ModelMultipleChoiceFilter(
         field_name="pathogens",
         queryset=Pathogen.objects.filter(
-            id__in=IndicatorSet.objects.values_list("pathogens", flat=True)
-        ).order_by("display_order_number"),
+            indicator_sets__isnull=False
+        ).distinct().order_by("display_order_number"),
         widget=QueryArrayWidget,
         required=False,
     )
@@ -36,8 +36,8 @@ class IndicatorSetFilter(django_filters.FilterSet):
     geographic_levels = django_filters.ModelMultipleChoiceFilter(
         field_name="geographic_levels",
         queryset=Geography.objects.filter(
-            id__in=IndicatorSet.objects.values_list("geographic_levels", flat=True)
-        ).order_by("display_order_number"),
+            indicator_sets__isnull=False
+        ).distinct().order_by("display_order_number"),
         widget=QueryArrayWidget,
         required=False,
     )
@@ -45,8 +45,8 @@ class IndicatorSetFilter(django_filters.FilterSet):
     severity_pyramid_rungs = django_filters.ModelMultipleChoiceFilter(
         field_name="severity_pyramid_rungs",
         queryset=SeverityPyramidRung.objects.filter(
-            id__in=IndicatorSet.objects.values_list("severity_pyramid_rungs", flat=True)
-        ).order_by("display_order_number"),
+            indicator_sets__isnull=False
+        ).distinct().order_by("display_order_number"),
         widget=QueryArrayWidget,
         required=False,
     )
@@ -70,7 +70,7 @@ class IndicatorSetFilter(django_filters.FilterSet):
             ("Other", "Other"),
         ],
         widget=QueryArrayWidget,
-        lookup_expr="exact",
+        lookup_expr="contains",
         required=False,
     )
 

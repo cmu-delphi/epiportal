@@ -23,6 +23,12 @@ class ExpressViewIndicator(models.Model):
         help_text="Key to group indicators for scaling",
     )
 
+    display_order: models.IntegerField = models.IntegerField(
+        verbose_name="Display Order",
+        default=0,
+        help_text="Order to display the indicator in the legend",
+    )
+
     class Meta:
         verbose_name = "Express View Indicator"
         verbose_name_plural = "Express View Indicators"
