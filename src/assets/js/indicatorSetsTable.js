@@ -16,7 +16,6 @@ var table = new DataTable("#indicatorSetsTable", {
     scrollCollapse: true,
     scrollX: true,
     scrollY: calculate_table_height() + 75,
-    info: false,
     fixedColumns: {
         left: 2,
     },
@@ -25,46 +24,38 @@ var table = new DataTable("#indicatorSetsTable", {
 
     language: {
         emptyTable: "No indicators match your specified filters.  Try relaxing some filters, or clear all filters and try again.",
-        // buttons: {
-        //     colvis: "Toggle Columns",
-        // },
     },
-    search: {
-        smart: true,
-        highlight: true,
-    },
-    sDom: 'ltipr',
+    layout: {
+        topStart: function() {
+            let indicatorSetsInfo = document.createElement('span');
+            indicatorSetsInfo.className = 'table-stats-info';
+            indicatorSetsInfo.id = 'indicatorSetsInfo';
+            return indicatorSetsInfo;
+        },
+        topEnd:      null,
+        bottomStart: null,
+        bottomEnd:   null
+      },
     rowCallback: function(row, data, index) {
         if (index % 2 === 0) {
             $(row).addClass('odd-row');
         }
-    }
+    },
 });
-
-// new DataTable.Buttons(table, {
-//     buttons: [
-//         {
-//             extend: "colvis",
-//             columns: "th:nth-child(n+3)",
-//             prefixButtons: ["colvisRestore"],
-//         },
-//     ],
-// });
-
-// table.buttons(0, null).container().appendTo("#colvis");
-
-// $("#tableSearch").keyup(function () {
-//     table.search(this.value).draw();
-// });
 
 function format(indicatorSetId, relatedIndicators, indicatorSetDescription) {
     if (!relatedIndicators) {
         return '<div class="d-flex justify-content-start my-3" style="padding-left: 20px;"><div class="spinner-border text-primary" role="status"><span class="visually-hidden">Loading...</span></div></div>';
     }
 
-    var indicators = relatedIndicators.filter(
-        (indicator) => indicator.indicator_set === indicatorSetId
-    );
+    var indicators;
+    if (Array.isArray(relatedIndicators)) {
+        indicators = relatedIndicators.filter(
+            (indicator) => indicator.indicator_set === indicatorSetId
+        );
+    } else {
+        indicators = relatedIndicators[indicatorSetId] || [];
+    }
     var disabled, restricted, sourceType;
 
     if (indicators.length > 0) {

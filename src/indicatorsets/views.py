@@ -11,9 +11,9 @@ from django.db.models import Case, IntegerField, Value, When
 from django.http import JsonResponse
 from django.views.generic import ListView
 from epiweeks import Week
+from django.core.cache import cache
 
-from alternative_interface.utils import get_fluview_data
-from base.models import Geography, GeographyUnit
+from base.models import GeographyUnit
 from indicatorsets.filters import IndicatorSetFilter
 from indicatorsets.forms import IndicatorSetFilterForm
 from indicatorsets.models import ColumnDescription, FilterDescription, IndicatorSet
@@ -34,7 +34,6 @@ from indicatorsets.utils import (
     generate_query_code_nidss_dengue,
     generate_query_code_nidss_flu,
     get_grouped_original_data_provider_choices,
-    get_num_locations_from_meta,
     group_by_property,
     log_form_data,
     log_form_stats,
@@ -53,48 +52,69 @@ HEADER_DESCRIPTION = "Discover, display and download real-time infectious diseas
 
 def get_related_indicators(queryset, indicator_set_ids: list):
     related_indicators = []
-    for indicator in queryset.filter(indicator_set__id__in=indicator_set_ids):
+    indicators_data = queryset.filter(indicator_set__id__in=indicator_set_ids).values(
+        "id",
+        "display_name",
+        "member_name",
+        "member_short_name",
+        "name",
+        "indicator_set__id",
+        "indicator_set__name",
+        "indicator_set__short_name",
+        "indicator_set__epidata_endpoint",
+        "source__name",
+        "time_type",
+        "description",
+        "member_description",
+        "indicator_set__dua_required",
+        "source_type",
+    )
+
+    for item in indicators_data:
+        display_name = item["display_name"]
+        if not display_name:
+            if item["member_name"]:
+                display_name = item["member_name"]
+            else:
+                display_name = item["name"]
+
+        member_description = (
+            item["member_description"]
+            if item["member_description"]
+            else item["description"]
+        )
+
         related_indicators.append(
             {
-                "id": indicator.id,
-                "display_name": (
-                    indicator.get_display_name if indicator.get_display_name else ""
-                ),
-                "member_name": (indicator.member_name if indicator.member_name else ""),
+                "id": item["id"],
+                "display_name": display_name,
+                "member_name": item["member_name"] if item["member_name"] else "",
                 "member_short_name": (
-                    indicator.member_short_name if indicator.member_short_name else ""
+                    item["member_short_name"] if item["member_short_name"] else ""
                 ),
-                "name": indicator.name if indicator.name else "",
-                "indicator_set": (
-                    indicator.indicator_set.id if indicator.indicator_set else ""
-                ),
-                "indicator_set_name": (
-                    indicator.indicator_set.name if indicator.indicator_set else ""
-                ),
+                "name": item["name"] if item["name"] else "",
+                "indicator_set": item["indicator_set__id"],
+                "indicator_set_name": item["indicator_set__name"],
                 "indicator_set_short_name": (
-                    indicator.indicator_set.short_name
-                    if indicator.indicator_set
+                    item["indicator_set__short_name"]
+                    if item["indicator_set__short_name"]
                     else ""
                 ),
                 "endpoint": (
-                    indicator.indicator_set.epidata_endpoint
-                    if indicator.indicator_set
+                    item["indicator_set__epidata_endpoint"]
+                    if item["indicator_set__epidata_endpoint"]
                     else ""
                 ),
-                "source": indicator.source.name if indicator.source else "",
-                "time_type": indicator.time_type if indicator.time_type else "",
-                "description": (indicator.description if indicator.description else ""),
-                "member_description": (
-                    indicator.member_description
-                    if indicator.member_description
-                    else indicator.description
-                ),
+                "source": item["source__name"] if item["source__name"] else "",
+                "time_type": item["time_type"] if item["time_type"] else "",
+                "description": item["description"] if item["description"] else "",
+                "member_description": member_description,
                 "restricted": (
-                    indicator.indicator_set.dua_required
-                    if indicator.indicator_set
+                    item["indicator_set__dua_required"]
+                    if item["indicator_set__dua_required"]
                     else ""
                 ),
-                "source_type": indicator.source_type,
+                "source_type": item["source_type"],
             }
         )
     return related_indicators
@@ -247,12 +267,11 @@ class IndicatorSetListView(ListView):
             ColumnDescription.get_all_descriptions_as_dict()
         )
         context["header_description"] = HEADER_DESCRIPTION
-        context["available_geographies"] = Geography.objects.filter(
-            used_in="indicators"
-        )
-        context["geographic_granularities"] = (
-            self.get_grouped_geographic_granularities()
-        )
+        geographic_granularities = cache.get("geographic_granularities")
+        if not geographic_granularities:
+            geographic_granularities = self.get_grouped_geographic_granularities()
+            cache.set("geographic_granularities", geographic_granularities, 60 * 60 * 24)
+        context["geographic_granularities"] = geographic_granularities
         context["grouped_data_providers"] = get_grouped_original_data_provider_choices()
         return context
 
@@ -547,13 +566,7 @@ def get_related_indicators_json(request):
         filter.indicators_qs.select_related("indicator_set", "source"),
         filter.qs.values_list("id", flat=True),
     )
-    num_of_timeseries = get_num_locations_from_meta(related_indicators)
-    return JsonResponse(
-        {
-            "related_indicators": related_indicators,
-            "num_of_timeseries": num_of_timeseries,
-        }
-    )
+    return JsonResponse({"related_indicators": related_indicators})
 
 
 def check_fluview_geo_coverage(request):
@@ -587,7 +600,9 @@ def check_fluview_geo_coverage(request):
                 if len(data["epidata"]):
                     for el in data["epidata"]:
                         for indicator in fluview_indicators.keys():
-                            fluview_indicators[indicator] += el[indicator] if el[indicator] else 0
+                            fluview_indicators[indicator] += (
+                                el[indicator] if el[indicator] else 0
+                            )
         if fluview_clinical_indicators:
             response = requests.get(
                 f"{settings.EPIDATA_URL}fluview_clinical", params=params
@@ -605,5 +620,9 @@ def check_fluview_geo_coverage(request):
         for indicator in fluview_clinical_indicators.keys():
             if fluview_clinical_indicators[indicator] == 0:
                 null_data_indicators.append(indicator)
-        not_covered_indicators = [indicator for indicator in indicators if indicator["indicator"] in null_data_indicators]
+        not_covered_indicators = [
+            indicator
+            for indicator in indicators
+            if indicator["indicator"] in null_data_indicators
+        ]
         return JsonResponse({"not_covered_indicators": not_covered_indicators})

@@ -364,11 +364,6 @@
 
     $(document).ready(function() {
         table.columns.adjust();
-        const totalRowsSpan = document.createElement("span");
-        totalRowsSpan.classList.add("table-stats-info");
-        totalRowsSpan.innerHTML = "Loading indicators statistics...";
-        const refElement = document.getElementById("indicatorSetsTable_wrapper");
-        refElement.before(totalRowsSpan);
 
         // Fetch related indicators asynchronously
         $.ajax({
@@ -376,7 +371,12 @@
             method: "GET",
             success: function(response) {
                 relatedIndicators = response.related_indicators;
-                numOfTimeseries = response.num_of_timeseries;
+                /*numOfTimeseries = response.num_of_timeseries;
+                if (numOfTimeseries > 0) {
+                    $('#indicatorSetsInfo').innerHTML = `Showing <b>${relatedIndicators.length}</b> distinct ${pluralize(relatedIndicators.length, 'indicator')} (arranged in <b>${table.page.info().recordsTotal}</b> ${pluralize(table.page.info().recordsTotal, 'set')}), including <b>${numberWithCommas(numOfTimeseries)}</b> Delphi-hosted time series across numerous locations.`;
+                } else {
+                    $('#indicatorSetsInfo').innerHTML = `Showing <b>${relatedIndicators.length}</b> distinct ${pluralize(relatedIndicators.length, 'indicator')} (arranged in <b>${table.page.info().recordsTotal}</b> ${pluralize(table.page.info().recordsTotal, 'set')}).`;
+                }*/
 
                 // Refresh any open rows now that data is loaded
                 if (typeof table !== 'undefined') {
@@ -393,15 +393,10 @@
                     expandSelectedRows();
                 }
 
-                if (numOfTimeseries > 0) {
-                    totalRowsSpan.innerHTML = `Showing <b>${relatedIndicators.length}</b> distinct ${pluralize(relatedIndicators.length, 'indicator')} (arranged in <b>${table.page.info().recordsTotal}</b> ${pluralize(table.page.info().recordsTotal, 'set')}), including <b>${numberWithCommas(numOfTimeseries)}</b> Delphi-hosted time series across numerous locations.`;
-                } else {
-                    totalRowsSpan.innerHTML = `Showing <b>${relatedIndicators.length}</b> distinct ${pluralize(relatedIndicators.length, 'indicator')} (arranged in <b>${table.page.info().recordsTotal}</b> ${pluralize(table.page.info().recordsTotal, 'set')}).`;
-                }
+                
             },
             error: function(xhr, status, error) {
                 console.error("Error fetching related indicators:", error);
-                totalRowsSpan.innerHTML = "Error loading indicators statistics.";
             }
         });
     });
