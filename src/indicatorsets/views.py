@@ -197,16 +197,17 @@ class IndicatorSetListView(ListView):
         return url_params_dict, url_params_str
 
     def get_grouped_geographic_granularities(self):
+        geo_units = GeographyUnit.objects.prefetch_related("geo_level").values(
+            "geo_level__name", "id", "display_name", "geo_level__display_name"
+        )
         geographic_granularities = [
             {
-                "id": f"{geo_unit.geo_level.name}:{geo_unit.geo_id}",
-                "geoType": geo_unit.geo_level.name,
-                "text": geo_unit.display_name,
-                "geoTypeDisplayName": geo_unit.geo_level.display_name,
+                "id": f"{geo_unit['geo_level__name']}:{geo_unit['id']}",
+                "geoType": geo_unit["geo_level__name"],
+                "text": geo_unit["display_name"],
+                "geoTypeDisplayName": geo_unit["geo_level__display_name"],
             }
-            for geo_unit in GeographyUnit.objects.all()
-            .prefetch_related("geo_level")
-            .order_by("level")
+            for geo_unit in geo_units
         ]
         geographic_granularities = group_by_property(
             geographic_granularities, "geoTypeDisplayName"
@@ -270,7 +271,9 @@ class IndicatorSetListView(ListView):
         geographic_granularities = cache.get("geographic_granularities")
         if not geographic_granularities:
             geographic_granularities = self.get_grouped_geographic_granularities()
-            cache.set("geographic_granularities", geographic_granularities, 60 * 60 * 24)
+            cache.set(
+                "geographic_granularities", geographic_granularities, 60 * 60 * 24
+            )
         context["geographic_granularities"] = geographic_granularities
         context["grouped_data_providers"] = get_grouped_original_data_provider_choices()
         return context
