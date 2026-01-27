@@ -641,8 +641,9 @@ def get_table_stats_info(request):
         queryset = IndicatorSet.objects.none()
 
     filter = IndicatorSetFilter(request.GET, queryset=queryset)
-    num_locations = get_num_locations_from_meta(filter.indicators_qs.values("source__name", "name").distinct())
-    return JsonResponse({"num_of_indicator_sets": filter.qs.count(), "num_of_indicators": filter.indicators_qs.count(), "num_of_locations": num_locations})
+    related_indicators = filter.indicators_qs.filter(indicator_set__id__in=filter.qs.values_list("id", flat=True))
+    num_locations = get_num_locations_from_meta(related_indicators.values("source__name", "name").distinct())
+    return JsonResponse({"num_of_indicator_sets": filter.qs.count(), "num_of_indicators": related_indicators.count(), "num_of_locations": num_locations})
 
 
 def get_related_indicators_json(request):
