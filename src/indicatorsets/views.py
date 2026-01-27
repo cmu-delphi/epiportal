@@ -42,6 +42,7 @@ from indicatorsets.utils import (
     preview_fluview_data,
     preview_nidss_dengue_data,
     preview_nidss_flu_data,
+    get_num_locations_from_meta,
 )
 
 indicatorsets_logger = get_structured_logger("indicatorsets_logger")
@@ -221,6 +222,86 @@ class IndicatorSetListView(ListView):
                 }
             )
         return grouped_geographic_granularities
+
+    def render_to_response(self, context, **response_kwargs):
+        if self.request.GET.get("format") == "json":
+            return self.render_to_json_response(context, **response_kwargs)
+        return super().render_to_response(context, **response_kwargs)
+
+    def render_to_json_response(self, context, **response_kwargs):
+        data = []
+        for indicator_set in context["indicator_sets"]:
+            data.append(
+                {
+                    "DT_RowId": indicator_set.id,
+                    "name": indicator_set.name,
+                    "short_name": indicator_set.short_name,
+                    "description": indicator_set.description,
+                    "maintainer_name": indicator_set.maintainer_name,
+                    "maintainer_email": indicator_set.maintainer_email,
+                    "organization": indicator_set.organization,
+                    "original_data_provider": indicator_set.original_data_provider,
+                    "epidata_endpoint": indicator_set.epidata_endpoint,
+                    "language": indicator_set.language,
+                    "version_number": indicator_set.version_number,
+                    "origin_datasource": indicator_set.origin_datasource,
+                    "pathogens": [
+                        {
+                            "name": p.name,
+                            "display_name": p.display_name,
+                        }
+                        for p in indicator_set.pathogens.all()
+                    ],
+                    "data_type": indicator_set.data_type,
+                    "geographic_scope": (
+                        indicator_set.geographic_scope.name
+                        if indicator_set.geographic_scope
+                        else ""
+                    ),
+                    "geographic_levels": [
+                        {
+                            "name": g.name,
+                            "display_name": g.display_name,
+                            "short_name": g.short_name,
+                        }
+                        for g in indicator_set.geographic_levels.all()
+                    ],
+                    "preprocessing_description": indicator_set.preprocessing_description,
+                    "temporal_scope_start": indicator_set.temporal_scope_start,
+                    "temporal_scope_end": indicator_set.temporal_scope_end,
+                    "temporal_granularity": indicator_set.temporal_granularity,
+                    "reporting_cadence": indicator_set.reporting_cadence,
+                    "reporting_lag": indicator_set.reporting_lag,
+                    "revision_cadence": indicator_set.revision_cadence,
+                    "demographic_scope": indicator_set.demographic_scope,
+                    "demographic_granularity": indicator_set.demographic_granularity,
+                    "severity_pyramid_rungs": [
+                        {
+                            "name": s.name,
+                            "display_name": s.display_name,
+                        }
+                        for s in indicator_set.severity_pyramid_rungs.all()
+                    ],
+                    "censoring": indicator_set.censoring,
+                    "missingness": indicator_set.missingness,
+                    "dua_required": indicator_set.dua_required,
+                    "license": indicator_set.license,
+                    "dataset_location": indicator_set.dataset_location,
+                    "documentation_link": indicator_set.documentation_link,
+                    "source_type": indicator_set.source_type,
+                    "state": indicator_set.state,
+                    "is_top_priority": indicator_set.is_top_priority,
+                    "delphi_hosted": "Yes" if indicator_set.delphi_hosted else "No",
+                }
+            )
+        return JsonResponse(
+            {
+                "draw": 1,
+                "recordsTotal": len(data),
+                "recordsFiltered": len(data),
+                "data": data,
+            }
+        )
 
     def get_context_data(self, **kwargs):
         context = super().get_context_data(**kwargs)
@@ -550,6 +631,18 @@ def get_available_geos(request):
         return JsonResponse(
             {"geographic_granularities": geographic_granularities}, safe=False
         )
+
+
+def get_table_stats_info(request):
+    try:
+        queryset = IndicatorSet.objects.all()
+    except Exception as e:
+        indicatorsets_logger.error(f"Error fetching indicator sets: {e}")
+        queryset = IndicatorSet.objects.none()
+
+    filter = IndicatorSetFilter(request.GET, queryset=queryset)
+    num_locations = get_num_locations_from_meta(filter.indicators_qs.values("source__name", "name").distinct())
+    return JsonResponse({"num_of_indicator_sets": filter.qs.count(), "num_of_indicators": filter.indicators_qs.count(), "num_of_locations": num_locations})
 
 
 def get_related_indicators_json(request):

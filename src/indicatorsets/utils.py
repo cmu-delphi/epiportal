@@ -814,7 +814,7 @@ def log_form_data(request, data, form_mode):
 def get_num_locations_from_meta(indicators):
     timeseries_count = 0
     indicators = set(
-        (indicator["source"], indicator["name"]) for indicator in indicators
+        (indicator["source__name"], indicator["name"]) for indicator in indicators
     )
 
     metadata = cache.get("covidcast_meta")
@@ -831,4 +831,5 @@ def get_num_locations_from_meta(indicators):
     for r in metadata:
         if (r["data_source"], r["signal"]) in indicators:
             timeseries_count += r["num_locations"]
+    print(timeseries_count)
     return timeseries_count

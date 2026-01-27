@@ -4,352 +4,352 @@
 {% load dict_get %}
 {% load split_filter %}
 <!-- Data Table -->
-<link rel="stylesheet"
-      href="https://cdn.datatables.net/v/dt/dt-2.1.8/b-3.2.0/b-colvis-3.2.0/cr-2.0.4/fc-5.0.4/fh-4.0.1/kt-2.12.1/r-3.0.3/rg-1.5.1/rr-1.5.0/sc-2.4.3/sp-2.3.3/sl-2.1.0/datatables.min.css">
-<link rel="stylesheet"
-      href="https://cdn.datatables.net/plug-ins/1.10.13/features/mark.js/datatables.mark.min.css">
+<link
+    rel="stylesheet"
+    href="https://cdn.datatables.net/v/dt/dt-2.1.8/b-3.2.0/b-colvis-3.2.0/cr-2.0.4/fc-5.0.4/fh-4.0.1/kt-2.12.1/r-3.0.3/rg-1.5.1/rr-1.5.0/sc-2.4.3/sp-2.3.3/sl-2.1.0/datatables.min.css"
+/>
+<link
+    rel="stylesheet"
+    href="https://cdn.datatables.net/plug-ins/1.10.13/features/mark.js/datatables.mark.min.css"
+/>
 <div class="table-responsive table-container h-100">
-        <table id="indicatorSetsTable" class="display cell-border table-striped table-bordered" width="100%">
-            <thead>
-                <tr>
-                    <th></th>
-                    <th class="text-center">
-                        Name
-                        <a tabindex="0"
-                           type="button"
-                           class="info-button filter-description-popover"
-                           data-mdb-container="body"
-                           data-mdb-ripple-init
-                           data-mdb-popover-init
-                           data-mdb-trigger="hover"
-                           data-mdb-placement="right"
-                           data-mdb-content="{{ columns_descriptions|dict_get:'name' }}">
-                            <i class="far fa-circle-question"></i>
-                        </a>
-                    </th>
-                    <th class="text-center">
-                        Pathogen(s)/
-                        <br>
-                        Syndrome(s)
-                    </th>
-                    <th class="text-center">
-                        Geographic Coverage
-                        <a tabindex="0"
-                           type="button"
-                           class="info-button filter-description-popover"
-                           data-mdb-container="body"
-                           data-mdb-ripple-init
-                           data-mdb-popover-init
-                           data-mdb-trigger="hover"
-                           data-mdb-placement="right"
-                           data-mdb-content="{{ columns_descriptions|dict_get:'geographic_coverage' }}">
-                            <i class="far fa-circle-question"></i>
-                        </a>
-                    </th>
-                    <th class="min-w-300 text-center">
-                        Geographic Levels
-                        <a tabindex="0"
-                           type="button"
-                           class="info-button filter-description-popover"
-                           data-mdb-container="body"
-                           data-mdb-ripple-init
-                           data-mdb-popover-init
-                           data-mdb-trigger="hover"
-                           data-mdb-placement="right"
-                           data-mdb-content="{{ columns_descriptions|dict_get:'geographic_levels' }}">
-                            <i class="far fa-circle-question"></i>
-                        </a>
-                    </th>
-                    <th class="min-w-120 text-center">
-                        Temporal Scope Start
-                        <a tabindex="0"
-                           type="button"
-                           class="info-button filter-description-popover"
-                           data-mdb-container="body"
-                           data-mdb-ripple-init
-                           data-mdb-popover-init
-                           data-mdb-trigger="hover"
-                           data-mdb-placement="right"
-                           data-mdb-content="{{ columns_descriptions|dict_get:'temporal_scope_start' }}">
-                            <i class="far fa-circle-question"></i>
-                        </a>
-                    </th>
-                    <th class="min-w-120 text-center">
-                        Temporal Scope End
-                        <a tabindex="0"
-                           type="button"
-                           class="info-button filter-description-popover"
-                           data-mdb-container="body"
-                           data-mdb-ripple-init
-                           data-mdb-popover-init
-                           data-mdb-trigger="hover"
-                           data-mdb-placement="right"
-                           data-mdb-content="{{ columns_descriptions|dict_get:'temporal_scope_end' }}">
-                            <i class="far fa-circle-question"></i>
-                        </a>
-                    </th>
-                    <th class="text-center">
-                        Temporal Granularity
-                        <a tabindex="0"
-                           type="button"
-                           class="info-button filter-description-popover"
-                           data-mdb-container="body"
-                           data-mdb-ripple-init
-                           data-mdb-popover-init
-                           data-mdb-trigger="hover"
-                           data-mdb-placement="right"
-                           data-mdb-content="{{ columns_descriptions|dict_get:'temporal_granularity' }}">
-                            <i class="far fa-circle-question"></i>
-                        </a>
-                    </th>
-                    <th class="text-center">
-                        Reporting Cadence
-                        <a tabindex="0"
-                           type="button"
-                           class="info-button filter-description-popover"
-                           data-mdb-container="body"
-                           data-mdb-ripple-init
-                           data-mdb-popover-init
-                           data-mdb-trigger="hover"
-                           data-mdb-placement="right"
-                           data-mdb-content="{{ columns_descriptions|dict_get:'reporting_cadence' }}">
-                            <i class="far fa-circle-question"></i>
-                        </a>
-                    </th>
-                    <th class="text-center">
-                        Reporting Lag(nominal)
-                        <a tabindex="0"
-                           type="button"
-                           class="info-button filter-description-popover"
-                           data-mdb-container="body"
-                           data-mdb-ripple-init
-                           data-mdb-popover-init
-                           data-mdb-trigger="hover"
-                           data-mdb-placement="right"
-                           data-mdb-content="{{ columns_descriptions|dict_get:'reporting_lag' }}">
-                            <i class="far fa-circle-question"></i>
-                        </a>
-                    </th>
-                    <th class="text-center">
-                        Revision Cadence
-                        <a tabindex="0"
-                           type="button"
-                           class="info-button filter-description-popover"
-                           data-mdb-container="body"
-                           data-mdb-ripple-init
-                           data-mdb-popover-init
-                           data-mdb-trigger="hover"
-                           data-mdb-placement="right"
-                           data-mdb-content="{{ columns_descriptions|dict_get:'revision_cadence' }}">
-                            <i class="far fa-circle-question"></i>
-                        </a>
-                    </th>
-                    <th class="text-center">
-                        Population
-                        <a tabindex="0"
-                           type="button"
-                           class="info-button filter-description-popover"
-                           data-mdb-container="body"
-                           data-mdb-ripple-init
-                           data-mdb-popover-init
-                           data-mdb-trigger="hover"
-                           data-mdb-placement="right"
-                           data-mdb-content="{{ columns_descriptions|dict_get:'population' }}">
-                            <i class="far fa-circle-question"></i>
-                        </a>
-                    </th>
-                    <th class="text-center">
-                        Population Stratifiers
-                        <a tabindex="0"
-                           type="button"
-                           class="info-button filter-description-popover"
-                           data-mdb-container="body"
-                           data-mdb-ripple-init
-                           data-mdb-popover-init
-                           data-mdb-trigger="hover"
-                           data-mdb-placement="right"
-                           data-mdb-content="{{ columns_descriptions|dict_get:'population_stratifiers' }}">
-                            <i class="far fa-circle-question"></i>
-                        </a>
-                    </th>
-                    <th class="text-center">
-                        Surveillance Categories
-                        <a tabindex="0"
-                           type="button"
-                           class="info-button filter-description-popover"
-                           data-mdb-container="body"
-                           data-mdb-ripple-init
-                           data-mdb-popover-init
-                           data-mdb-trigger="hover"
-                           data-mdb-placement="right"
-                           data-mdb-content="{{ columns_descriptions|dict_get:'surveillance_categories' }}">
-                            <i class="far fa-circle-question"></i>
-                        </a>
-                    </th>
-                    <th class="text-center">
-                        Original Data Provider
-                        <a tabindex="0"
-                           type="button"
-                           class="info-button filter-description-popover"
-                           data-mdb-container="body"
-                           data-mdb-ripple-init
-                           data-mdb-popover-init
-                           data-mdb-trigger="hover"
-                           data-mdb-placement="right"
-                           data-mdb-content="{{ columns_descriptions|dict_get:'original_data_provider' }}">
-                            <i class="far fa-circle-question"></i>
-                        </a>
-                    </th>
-                    <th class="min-w-300 text-center">
-                        Pre-processing
-                        <a tabindex="0"
-                           type="button"
-                           class="info-button filter-description-popover"
-                           data-mdb-container="body"
-                           data-mdb-ripple-init
-                           data-mdb-popover-init
-                           data-mdb-trigger="hover"
-                           data-mdb-placement="right"
-                           data-mdb-content="{{ columns_descriptions|dict_get:'pre_processing' }}">
-                            <i class="far fa-circle-question"></i>
-                        </a>
-                    </th>
-                    <th class="min-w-300 text-center">
-                        Censoring
-                        <a tabindex="0"
-                           type="button"
-                           class="info-button filter-description-popover"
-                           data-mdb-container="body"
-                           data-mdb-ripple-init
-                           data-mdb-popover-init
-                           data-mdb-trigger="hover"
-                           data-mdb-placement="right"
-                           data-mdb-content="{{ columns_descriptions|dict_get:'censoring' }}">
-                            <i class="far fa-circle-question"></i>
-                        </a>
-                    </th>
-                    <th class="min-w-300 text-center">
-                        Missingness
-                        <a tabindex="0"
-                           type="button"
-                           class="info-button filter-description-popover"
-                           data-mdb-container="body"
-                           data-mdb-ripple-init
-                           data-mdb-popover-init
-                           data-mdb-trigger="hover"
-                           data-mdb-placement="right"
-                           data-mdb-content="{{ columns_descriptions|dict_get:'missingness' }}">
-                            <i class="far fa-circle-question"></i>
-                        </a>
-                    </th>
-                    <th class="text-center">Hosted by Delphi?</th>
-                    <th class="text-center">DUA required?</th>
-                    <th class="text-center min-w-300">
-                        Data Use Terms
-                        <a tabindex="0"
-                           type="button"
-                           class="info-button filter-description-popover"
-                           data-mdb-container="body"
-                           data-mdb-ripple-init
-                           data-mdb-popover-init
-                           data-mdb-trigger="hover"
-                           data-mdb-placement="right"
-                           data-mdb-content="{{ columns_descriptions|dict_get:'data_use_terms' }}">
-                            <i class="far fa-circle-question"></i>
-                        </a>
-                    </th>
-                    <th class="text-center">Documentation
-                        <a tabindex="0"
-                           type="button"
-                           class="info-button filter-description-popover"
-                           data-mdb-container="body"
-                           data-mdb-ripple-init
-                           data-mdb-popover-init
-                           data-mdb-trigger="hover"
-                           data-mdb-placement="right"
-                           data-mdb-content="{{ columns_descriptions|dict_get:'documentation' }}">
-                            <i class="far fa-circle-question"></i>
-                        </a>
-                    </th>
-                </tr>
-            </thead>
-            <tbody>
-                {% for indicator_set in indicator_sets %}
-                    <tr data-id="{{ indicator_set.id }}"
-                        data-description="{{ indicator_set.description }}">
-                        <td class="dt-control"></td>
-                        <td>
-                            <a data-mdb-tooltip-init title="{{ indicator_set.description }}">{{ indicator_set.name }}</a>
-                        </td>
-                        <td>
-                            {% for pathogen in indicator_set.pathogens.all %}
-                                <span class="badge badge-pill-outline">{{ pathogen }}</span>
-                            {% endfor %}
-                        </td>
-                        <td>{{ indicator_set.geographic_scope }}</td>
-                        <td>
-                            {% for geo_level in indicator_set.geographic_levels.all %}
-                                <span class="badge badge-pill-outline">{{ geo_level.display_name }}</span>
-                            {% endfor %}
-                        </td>
-                        <td>{{ indicator_set.temporal_scope_start }}</td>
-                        <td>{{ indicator_set.temporal_scope_end }}</td>
-                        <td>
-                            {% for item in indicator_set.temporal_granularity|split:"," %}
-                                <span class="badge badge-pill-outline">{{ item }}</span>
-                            {% endfor %}
-                        </td>
-                        <td>{{ indicator_set.reporting_cadence }}</td>
-                        <td>{{ indicator_set.reporting_lag }}</td>
-                        <td>{{ indicator_set.revision_cadence }}</td>
-                        <td>{{ indicator_set.demographic_scope }}</td>
-                        <td>{{ indicator_set.demographic_granularity }}</td>
-                        <td>
-                            {% for severity_pyramid_rung in indicator_set.severity_pyramid_rungs.all %}
-                                <span class="badge badge-pill-outline">{{ severity_pyramid_rung }}</span>
-                            {% endfor %}
-                        </td>
-                        <td>{{ indicator_set.original_data_provider }}</td>
-                        <td>{{ indicator_set.preprocessing_description }}</td>
-                        <td>{{ indicator_set.censoring }}</td>
-                        <td>{{ indicator_set.missingness }}</td>
-                        <td>
-                            {% if indicator_set.delphi_hosted %}
-                                Yes
-                            {% else %}
-                                No
-                            {% endif %}
-                        </td>
-                        <td>{{ indicator_set.dua_required }}</td>
-                        <td>{{ indicator_set.license }}</td>
-                        <td>
-                            <a href="{{ indicator_set.documentation_link }}" target="_blank">{{ indicator_set.documentation_link }}</a>
-                        </td>
-                    </tr>
-                {% endfor %}
-            </tbody>
-        </table>
+    <table
+        id="indicatorSetsTable"
+        class="display cell-border table-striped table-bordered"
+        width="100%"
+    >
+        <thead>
+            <tr>
+                <th></th>
+                <th class="text-center">
+                    Name
+                    <a
+                        tabindex="0"
+                        type="button"
+                        class="info-button filter-description-popover"
+                        data-mdb-container="body"
+                        data-mdb-ripple-init
+                        data-mdb-popover-init
+                        data-mdb-trigger="hover"
+                        data-mdb-placement="right"
+                        data-mdb-content="{{ columns_descriptions|dict_get:'name' }}"
+                    >
+                        <i class="far fa-circle-question"></i>
+                    </a>
+                </th>
+                <th class="text-center">
+                    Pathogen(s)/
+                    <br />
+                    Syndrome(s)
+                </th>
+                <th class="text-center">
+                    Geographic Coverage
+                    <a
+                        tabindex="0"
+                        type="button"
+                        class="info-button filter-description-popover"
+                        data-mdb-container="body"
+                        data-mdb-ripple-init
+                        data-mdb-popover-init
+                        data-mdb-trigger="hover"
+                        data-mdb-placement="right"
+                        data-mdb-content="{{ columns_descriptions|dict_get:'geographic_coverage' }}"
+                    >
+                        <i class="far fa-circle-question"></i>
+                    </a>
+                </th>
+                <th class="min-w-300 text-center">
+                    Geographic Levels
+                    <a
+                        tabindex="0"
+                        type="button"
+                        class="info-button filter-description-popover"
+                        data-mdb-container="body"
+                        data-mdb-ripple-init
+                        data-mdb-popover-init
+                        data-mdb-trigger="hover"
+                        data-mdb-placement="right"
+                        data-mdb-content="{{ columns_descriptions|dict_get:'geographic_levels' }}"
+                    >
+                        <i class="far fa-circle-question"></i>
+                    </a>
+                </th>
+                <th class="min-w-120 text-center">
+                    Temporal Scope Start
+                    <a
+                        tabindex="0"
+                        type="button"
+                        class="info-button filter-description-popover"
+                        data-mdb-container="body"
+                        data-mdb-ripple-init
+                        data-mdb-popover-init
+                        data-mdb-trigger="hover"
+                        data-mdb-placement="right"
+                        data-mdb-content="{{ columns_descriptions|dict_get:'temporal_scope_start' }}"
+                    >
+                        <i class="far fa-circle-question"></i>
+                    </a>
+                </th>
+                <th class="min-w-120 text-center">
+                    Temporal Scope End
+                    <a
+                        tabindex="0"
+                        type="button"
+                        class="info-button filter-description-popover"
+                        data-mdb-container="body"
+                        data-mdb-ripple-init
+                        data-mdb-popover-init
+                        data-mdb-trigger="hover"
+                        data-mdb-placement="right"
+                        data-mdb-content="{{ columns_descriptions|dict_get:'temporal_scope_end' }}"
+                    >
+                        <i class="far fa-circle-question"></i>
+                    </a>
+                </th>
+                <th class="text-center">
+                    Temporal Granularity
+                    <a
+                        tabindex="0"
+                        type="button"
+                        class="info-button filter-description-popover"
+                        data-mdb-container="body"
+                        data-mdb-ripple-init
+                        data-mdb-popover-init
+                        data-mdb-trigger="hover"
+                        data-mdb-placement="right"
+                        data-mdb-content="{{ columns_descriptions|dict_get:'temporal_granularity' }}"
+                    >
+                        <i class="far fa-circle-question"></i>
+                    </a>
+                </th>
+                <th class="text-center">
+                    Reporting Cadence
+                    <a
+                        tabindex="0"
+                        type="button"
+                        class="info-button filter-description-popover"
+                        data-mdb-container="body"
+                        data-mdb-ripple-init
+                        data-mdb-popover-init
+                        data-mdb-trigger="hover"
+                        data-mdb-placement="right"
+                        data-mdb-content="{{ columns_descriptions|dict_get:'reporting_cadence' }}"
+                    >
+                        <i class="far fa-circle-question"></i>
+                    </a>
+                </th>
+                <th class="text-center">
+                    Reporting Lag(nominal)
+                    <a
+                        tabindex="0"
+                        type="button"
+                        class="info-button filter-description-popover"
+                        data-mdb-container="body"
+                        data-mdb-ripple-init
+                        data-mdb-popover-init
+                        data-mdb-trigger="hover"
+                        data-mdb-placement="right"
+                        data-mdb-content="{{ columns_descriptions|dict_get:'reporting_lag' }}"
+                    >
+                        <i class="far fa-circle-question"></i>
+                    </a>
+                </th>
+                <th class="text-center">
+                    Revision Cadence
+                    <a
+                        tabindex="0"
+                        type="button"
+                        class="info-button filter-description-popover"
+                        data-mdb-container="body"
+                        data-mdb-ripple-init
+                        data-mdb-popover-init
+                        data-mdb-trigger="hover"
+                        data-mdb-placement="right"
+                        data-mdb-content="{{ columns_descriptions|dict_get:'revision_cadence' }}"
+                    >
+                        <i class="far fa-circle-question"></i>
+                    </a>
+                </th>
+                <th class="text-center">
+                    Population
+                    <a
+                        tabindex="0"
+                        type="button"
+                        class="info-button filter-description-popover"
+                        data-mdb-container="body"
+                        data-mdb-ripple-init
+                        data-mdb-popover-init
+                        data-mdb-trigger="hover"
+                        data-mdb-placement="right"
+                        data-mdb-content="{{ columns_descriptions|dict_get:'population' }}"
+                    >
+                        <i class="far fa-circle-question"></i>
+                    </a>
+                </th>
+                <th class="text-center">
+                    Population Stratifiers
+                    <a
+                        tabindex="0"
+                        type="button"
+                        class="info-button filter-description-popover"
+                        data-mdb-container="body"
+                        data-mdb-ripple-init
+                        data-mdb-popover-init
+                        data-mdb-trigger="hover"
+                        data-mdb-placement="right"
+                        data-mdb-content="{{ columns_descriptions|dict_get:'population_stratifiers' }}"
+                    >
+                        <i class="far fa-circle-question"></i>
+                    </a>
+                </th>
+                <th class="text-center">
+                    Surveillance Categories
+                    <a
+                        tabindex="0"
+                        type="button"
+                        class="info-button filter-description-popover"
+                        data-mdb-container="body"
+                        data-mdb-ripple-init
+                        data-mdb-popover-init
+                        data-mdb-trigger="hover"
+                        data-mdb-placement="right"
+                        data-mdb-content="{{ columns_descriptions|dict_get:'surveillance_categories' }}"
+                    >
+                        <i class="far fa-circle-question"></i>
+                    </a>
+                </th>
+                <th class="text-center">
+                    Original Data Provider
+                    <a
+                        tabindex="0"
+                        type="button"
+                        class="info-button filter-description-popover"
+                        data-mdb-container="body"
+                        data-mdb-ripple-init
+                        data-mdb-popover-init
+                        data-mdb-trigger="hover"
+                        data-mdb-placement="right"
+                        data-mdb-content="{{ columns_descriptions|dict_get:'original_data_provider' }}"
+                    >
+                        <i class="far fa-circle-question"></i>
+                    </a>
+                </th>
+                <th class="min-w-300 text-center">
+                    Pre-processing
+                    <a
+                        tabindex="0"
+                        type="button"
+                        class="info-button filter-description-popover"
+                        data-mdb-container="body"
+                        data-mdb-ripple-init
+                        data-mdb-popover-init
+                        data-mdb-trigger="hover"
+                        data-mdb-placement="right"
+                        data-mdb-content="{{ columns_descriptions|dict_get:'pre_processing' }}"
+                    >
+                        <i class="far fa-circle-question"></i>
+                    </a>
+                </th>
+                <th class="min-w-300 text-center">
+                    Censoring
+                    <a
+                        tabindex="0"
+                        type="button"
+                        class="info-button filter-description-popover"
+                        data-mdb-container="body"
+                        data-mdb-ripple-init
+                        data-mdb-popover-init
+                        data-mdb-trigger="hover"
+                        data-mdb-placement="right"
+                        data-mdb-content="{{ columns_descriptions|dict_get:'censoring' }}"
+                    >
+                        <i class="far fa-circle-question"></i>
+                    </a>
+                </th>
+                <th class="min-w-300 text-center">
+                    Missingness
+                    <a
+                        tabindex="0"
+                        type="button"
+                        class="info-button filter-description-popover"
+                        data-mdb-container="body"
+                        data-mdb-ripple-init
+                        data-mdb-popover-init
+                        data-mdb-trigger="hover"
+                        data-mdb-placement="right"
+                        data-mdb-content="{{ columns_descriptions|dict_get:'missingness' }}"
+                    >
+                        <i class="far fa-circle-question"></i>
+                    </a>
+                </th>
+                <th class="text-center">Hosted by Delphi?</th>
+                <th class="text-center">DUA required?</th>
+                <th class="text-center min-w-300">
+                    Data Use Terms
+                    <a
+                        tabindex="0"
+                        type="button"
+                        class="info-button filter-description-popover"
+                        data-mdb-container="body"
+                        data-mdb-ripple-init
+                        data-mdb-popover-init
+                        data-mdb-trigger="hover"
+                        data-mdb-placement="right"
+                        data-mdb-content="{{ columns_descriptions|dict_get:'data_use_terms' }}"
+                    >
+                        <i class="far fa-circle-question"></i>
+                    </a>
+                </th>
+                <th class="text-center">
+                    Documentation
+                    <a
+                        tabindex="0"
+                        type="button"
+                        class="info-button filter-description-popover"
+                        data-mdb-container="body"
+                        data-mdb-ripple-init
+                        data-mdb-popover-init
+                        data-mdb-trigger="hover"
+                        data-mdb-placement="right"
+                        data-mdb-content="{{ columns_descriptions|dict_get:'documentation' }}"
+                    >
+                        <i class="far fa-circle-question"></i>
+                    </a>
+                </th>
+            </tr>
+        </thead>
+        <tbody>
+            <!-- Data loaded via AJAX -->
+        </tbody>
+    </table>
+</div>
+<!-- Loader Overlay -->
+<div class="loader-overlay" id="loaderOverlay">
+    <div class="lds-roller">
+        <div></div>
+        <div></div>
+        <div></div>
+        <div></div>
+        <div></div>
+        <div></div>
+        <div></div>
+        <div></div>
     </div>
-    <!-- Loader Overlay -->
-    <div class="loader-overlay" id="loaderOverlay">
-        <div class="lds-roller">
-            <div></div>
-            <div></div>
-            <div></div>
-            <div></div>
-            <div></div>
-            <div></div>
-            <div></div>
-            <div></div>
-        </div>
-    </div>
-    <div class="float" id="showSelectedIndicatorsButton" style="display:none;">
-        <a type="button"
-           class="btn btn-primary"
-           data-mdb-ripple-init
-           data-mdb-modal-init
-           data-mdb-target="#selectedIndicatorsModal">Show selected indicators</a>
-    </div>
+</div>
+<div class="float" id="showSelectedIndicatorsButton" style="display: none">
+    <a
+        type="button"
+        class="btn btn-primary"
+        data-mdb-ripple-init
+        data-mdb-modal-init
+        data-mdb-target="#selectedIndicatorsModal"
+        >Show selected indicators</a
+    >
+</div>
+<script>
+    window.relatedIndicators = null;
+    window.numOfTimeseries = 0;
+</script>
 <script src="https://cdn.datatables.net/v/dt/dt-2.1.8/b-3.2.0/b-colvis-3.2.0/cr-2.0.4/fc-5.0.4/fh-4.0.1/kt-2.12.1/r-3.0.3/rg-1.5.1/rr-1.5.0/sc-2.4.3/sp-2.3.3/sl-2.1.0/datatables.min.js"></script>
 <script src="https://cdn.jsdelivr.net/g/mark.js(jquery.mark.min.js),datatables.mark.js"></script>
 <script src="{% static 'js/indicatorSetsTable.js' %}"></script>
@@ -362,57 +362,57 @@
         return x.toString().replace(/\B(?=(\d{3})+(?!\d))/g, ",");
     }
 
-    $(document).ready(function() {
-        table.columns.adjust();
-
-        // Fetch related indicators asynchronously
-        $.ajax({
-            url: "{% url 'get_related_indicators' %}" + window.location.search,
-            method: "GET",
-            success: function(response) {
-                relatedIndicators = response.related_indicators;
-                /*numOfTimeseries = response.num_of_timeseries;
-                if (numOfTimeseries > 0) {
-                    $('#indicatorSetsInfo').innerHTML = `Showing <b>${relatedIndicators.length}</b> distinct ${pluralize(relatedIndicators.length, 'indicator')} (arranged in <b>${table.page.info().recordsTotal}</b> ${pluralize(table.page.info().recordsTotal, 'set')}), including <b>${numberWithCommas(numOfTimeseries)}</b> Delphi-hosted time series across numerous locations.`;
-                } else {
-                    $('#indicatorSetsInfo').innerHTML = `Showing <b>${relatedIndicators.length}</b> distinct ${pluralize(relatedIndicators.length, 'indicator')} (arranged in <b>${table.page.info().recordsTotal}</b> ${pluralize(table.page.info().recordsTotal, 'set')}).`;
-                }*/
-
-                // Refresh any open rows now that data is loaded
-                if (typeof table !== 'undefined') {
-                    table.rows().every(function() {
-                        if (this.child.isShown()) {
-                            var tr = $(this.node());
-                            this.child(format(tr.data('id'), relatedIndicators, tr.data("description"))).show();
-                        }
-                    });
-                }
-                
-                // Expand rows for selected indicators if any
-                if (typeof expandSelectedRows === 'function') {
-                    expandSelectedRows();
-                }
-
-                
-            },
-            error: function(xhr, status, error) {
-                console.error("Error fetching related indicators:", error);
-            }
-        });
-    });
-
     // Add event listener for opening and closing details
-    $('#indicatorSetsTable tbody').on('click', 'td.dt-control', function () {
-        var tr = $(this).closest('tr');
+    $("#indicatorSetsTable tbody").on("click", "td.dt-control", function () {
+        var tr = $(this).closest("tr");
         var row = table.row(tr);
 
         if (row.child.isShown()) {
             // This row is already open - close it
             row.child.hide();
-        }
-        else {
+        } else {
             // Open this row
-            row.child(format(tr.data('id'), relatedIndicators, tr.data("description"))).show();
+            row.child(
+                format(
+                    tr.data("id"),
+                    relatedIndicators,
+                    tr.data("description"),
+                ),
+            ).show();
         }
+    });
+
+    $(document).ready(function () {
+        // Fetch related indicators asynchronously
+        $.ajax({
+            url: "{% url 'get_related_indicators' %}" + window.location.search,
+            method: "GET",
+            success: function (response) {
+                relatedIndicators = response.related_indicators;
+                // Refresh any open rows now that data is loaded
+                if (typeof table !== "undefined") {
+                    table.rows().every(function () {
+                        if (this.child.isShown()) {
+                            var tr = $(this.node());
+                            this.child(
+                                format(
+                                    tr.data("id"),
+                                    relatedIndicators,
+                                    tr.data("description"),
+                                ),
+                            ).show();
+                        }
+                    });
+                }
+
+                // Expand rows for selected indicators if any
+                if (typeof expandSelectedRows === "function") {
+                    expandSelectedRows();
+                }
+            },
+            error: function (xhr, status, error) {
+                console.error("Error fetching related indicators:", error);
+            },
+        });
     });
 </script>
