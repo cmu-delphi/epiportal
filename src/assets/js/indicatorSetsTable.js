@@ -113,7 +113,6 @@ var table = new DataTable("#indicatorSetsTable", {
                 url: "get_table_stats_info/" + window.location.search,
                 method: "GET",
                 success: function (response) {
-                    console.log(response)
                     if (response.num_of_locations > 0) {
                         indicatorSetsInfo.innerHTML =
                             `Showing <b>${response.num_of_indicators}</b> distinct ${pluralize(response.num_of_indicators, "indicator")} (arranged in <b>${response.num_of_indicator_sets}</b> ${pluralize(response.num_of_indicator_sets, "set")}), including <b>${numberWithCommas(response.num_of_locations)}</b> Delphi-hosted time series across numerous locations.`;
@@ -121,7 +120,6 @@ var table = new DataTable("#indicatorSetsTable", {
                         indicatorSetsInfo.innerHTML =
                             `Showing <b>${response.num_of_indicators}</b> indicator sets (arranged in <b>${response.num_of_indicator_sets}</b> ${pluralize(response.num_of_indicator_sets, "set")}).`;
                     }
-                    console.log(response);
                 }
             });
             return indicatorSetsInfo;

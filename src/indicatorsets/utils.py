@@ -831,5 +831,4 @@ def get_num_locations_from_meta(indicators):
     for r in metadata:
         if (r["data_source"], r["signal"]) in indicators:
             timeseries_count += r["num_locations"]
-    print(timeseries_count)
     return timeseries_count
