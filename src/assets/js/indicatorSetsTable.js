@@ -10,8 +10,7 @@ function calculate_table_height() {
     return (percent * h) / 100;
 }
 
-var table = new DataTable("#indicatorSetsTable", {
-    serverSide: true,
+var table = new DataTable("#indicatorSetsTable", {  
     ajax: {
         url: `${window.location.pathname}${window.location.search.replace(/[?&]format=[^&]*/, "")}${window.location.search ? "&" : "?"}format=json`,
         dataSrc: "data"
