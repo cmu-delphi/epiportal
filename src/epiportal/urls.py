@@ -50,7 +50,7 @@ urlpatterns = [
         f"{settings.MAIN_PAGE}/" if settings.MAIN_PAGE else "",
         include("alternative_interface.urls"),
     ),
-    path("__debug__/", include("debug_toolbar.urls")),
+    path("__debug__/", include("debug_toolbar.urls")),    
 ]
 
 

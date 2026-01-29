@@ -22,7 +22,7 @@ logger = logging.getLogger(__name__)
 
 class IndicatorSetFilter(django_filters.FilterSet):
 
-    indicators_qs = Indicator.objects.filter(indicator_set__isnull=False)
+    indicators_qs = Indicator.objects.filter(indicator_set__isnull=False).select_related("indicator_set", "source")
 
     pathogens = django_filters.ModelMultipleChoiceFilter(
         field_name="pathogens",

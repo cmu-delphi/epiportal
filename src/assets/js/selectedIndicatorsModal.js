@@ -210,7 +210,6 @@ async function checkFluviewGeoCoverage(geoValue) {
                 checkedIndicator["notCoveredGeos"] = [geoValue];
             }
         }
-        console.log(checkedIndicatorMembers);
         return result["not_covered_indicators"];
     } catch (error) {
         console.error("Error fetching fluview geo coverage:", error);
