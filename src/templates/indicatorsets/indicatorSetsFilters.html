@@ -389,7 +389,6 @@
 <script src="{% static 'js/indicatorSetsFilters.js' %}"></script>
 <script>
     $(document).ready(function() {
-        const geoValues = {{ geographic_granularities|safe }};
         var urlParams = JSON.parse(JSON.stringify({{ url_params_dict|safe }}));
         initSelect2('location_search', geoValues);
         if (urlParams.location_search != "") {

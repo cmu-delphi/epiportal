@@ -10,61 +10,153 @@ function calculate_table_height() {
     return (percent * h) / 100;
 }
 
-var table = new DataTable("#indicatorSetsTable", {
+var table = new DataTable("#indicatorSetsTable", {  
+    ajax: {
+        url: `${window.location.pathname}${window.location.search.replace(/[?&]format=[^&]*/, "")}${window.location.search ? "&" : "?"}format=json`,
+        dataSrc: "data"
+    },
+    columns: [
+        {
+            className: 'dt-control',
+            orderable: false,
+            data: null,
+            defaultContent: ''
+        },  // dt-control column
+        { data: "name" },  // Name
+        {
+            data: "pathogens",
+            render: function (data, type, row) {
+                if (data) {
+                    return data.map(pathogen => `<span class="badge badge-pill-outline">${pathogen.display_name}</span>`).join('');
+                } else {
+                    return '';
+                }
+            }
+        }, // Pathogens
+        { data: "geographic_scope" },  // Geographic Coverage
+        {
+            data: "geographic_levels",
+            render: function (data, type, row) {
+                if (data) {
+                    return data.map(geography => `<span class="badge badge-pill-outline">${geography.display_name}</span>`).join('');
+                } else {
+                    return '';
+                }
+            }
+        }, // Geographic Levels
+        { data: "temporal_scope_start" },  // Temporal Scope Start
+        { data: "temporal_scope_end" },  // Temporal Scope End
+        {
+            data: "temporal_granularity",
+            render: function (data, type, row) {
+                if (data) {
+                    return `<span class="badge badge-pill-outline">${data}</span>`;
+                } else {
+                    return '';
+                }
+            }
+        }, // Temporal Granularity
+        { data: "reporting_cadence" },  // Reporting Cadence
+        { data: "reporting_lag" },  // Reporting Lag
+        { data: "revision_cadence" }, // Revision Cadence
+        { data: "demographic_scope" }, // Population
+        { data: "demographic_granularity" }, // Population Stratifiers
+        {
+            data: "severity_pyramid_rungs",
+            render: function (data, type, row) {
+                if (data) {
+                    return data.map(severity_pyramid_rung => `<span class="badge badge-pill-outline">${severity_pyramid_rung.display_name}</span>`).join('');
+                } else {
+                    return '';
+                }
+            }
+        }, // Surveillance Categories
+        { data: "original_data_provider" }, // Original Data Provider
+        { data: "preprocessing_description" }, // Pre-processing
+        { data: "censoring" }, // Censoring
+        { data: "missingness" }, // Missingness
+        { data: "delphi_hosted" }, // Hosted by Delphi?
+        { data: "dua_required" }, // DUA required?
+        { data: "license" }, // Data Use Terms
+        {
+            data: "documentation_link",
+            render: function (data, type, row) {
+                if (data) {
+                    return `<a href="${data}" target="_blank">${data}</a>`;
+                } else {
+                    return '';
+                }
+            }
+        }, // Documentation
+    ],
     fixedHeader: true,
     paging: false,
     scrollCollapse: true,
     scrollX: true,
     scrollY: calculate_table_height() + 75,
-    info: false,
     fixedColumns: {
         left: 2,
     },
     ordering: false,
     mark: true,
-
     language: {
         emptyTable: "No indicators match your specified filters.  Try relaxing some filters, or clear all filters and try again.",
-        // buttons: {
-        //     colvis: "Toggle Columns",
-        // },
     },
-    search: {
-        smart: true,
-        highlight: true,
+    layout: {
+        topStart: function () {
+            let indicatorSetsInfo = document.createElement('span');
+            indicatorSetsInfo.className = 'table-stats-info';
+            indicatorSetsInfo.id = 'indicatorSetsInfo';
+            $.ajax({
+                
+                url: "get_table_stats_info/" + window.location.search,
+                method: "GET",
+                success: function (response) {
+                    if (response.num_of_locations > 0) {
+                        indicatorSetsInfo.innerHTML =
+                            `Showing <b>${response.num_of_indicators}</b> distinct ${pluralize(response.num_of_indicators, "indicator")} (arranged in <b>${response.num_of_indicator_sets}</b> ${pluralize(response.num_of_indicator_sets, "set")}), including <b>${numberWithCommas(response.num_of_locations)}</b> Delphi-hosted time series across numerous locations.`;
+                    } else {
+                        indicatorSetsInfo.innerHTML =
+                            `Showing <b>${response.num_of_indicators}</b> indicator sets (arranged in <b>${response.num_of_indicator_sets}</b> ${pluralize(response.num_of_indicator_sets, "set")}).`;
+                    }
+                }
+            });
+            return indicatorSetsInfo;
+        },
+        topEnd: null,
+        bottomStart: null,
+        bottomEnd: null
     },
-    sDom: 'ltipr',
-    rowCallback: function(row, data, index) {
-        if (index % 2 === 0) {
+    createdRow: function (row, data, dataIndex) {
+        if (data.description) {
+            $(row).attr('data-description', data.description);
+        } else {
+            $(row).attr('data-description', '');
+        }
+        // Set row ID if present
+        if (data.DT_RowId) {
+            $(row).attr('data-id', data.DT_RowId);
+        }
+        // Add odd-row class for styling
+        if (dataIndex % 2 === 0) {
             $(row).addClass('odd-row');
         }
-    }
+    },
 });
-
-// new DataTable.Buttons(table, {
-//     buttons: [
-//         {
-//             extend: "colvis",
-//             columns: "th:nth-child(n+3)",
-//             prefixButtons: ["colvisRestore"],
-//         },
-//     ],
-// });
-
-// table.buttons(0, null).container().appendTo("#colvis");
-
-// $("#tableSearch").keyup(function () {
-//     table.search(this.value).draw();
-// });
 
 function format(indicatorSetId, relatedIndicators, indicatorSetDescription) {
     if (!relatedIndicators) {
         return '<div class="d-flex justify-content-start my-3" style="padding-left: 20px;"><div class="spinner-border text-primary" role="status"><span class="visually-hidden">Loading...</span></div></div>';
     }
 
-    var indicators = relatedIndicators.filter(
-        (indicator) => indicator.indicator_set === indicatorSetId
-    );
+    var indicators;
+    if (Array.isArray(relatedIndicators)) {
+        indicators = relatedIndicators.filter(
+            (indicator) => indicator.indicator_set === indicatorSetId
+        );
+    } else {
+        indicators = relatedIndicators[indicatorSetId] || [];
+    }
     var disabled, restricted, sourceType;
 
     if (indicators.length > 0) {

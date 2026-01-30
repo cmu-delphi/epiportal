@@ -5,7 +5,7 @@ from indicatorsets.views import (IndicatorSetListView,
                                  check_fluview_geo_coverage, create_query_code,
                                  epivis, generate_export_data_url,
                                  get_available_geos,
-                                 get_related_indicators_json, preview_data)
+                                 get_related_indicators_json, preview_data, get_table_stats_info)
 
 urlpatterns: list[URLPattern] = [
     path("", IndicatorSetListView.as_view(), name="indicatorsets"),
@@ -23,5 +23,10 @@ urlpatterns: list[URLPattern] = [
         "check_fluview_geo_coverage/",
         check_fluview_geo_coverage,
         name="check_fluview_geo_coverage",
+    ),
+    path(
+        "get_table_stats_info/",
+        get_table_stats_info,
+        name="get_table_stats_info",
     ),
 ]

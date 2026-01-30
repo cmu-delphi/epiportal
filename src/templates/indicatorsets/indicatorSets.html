@@ -6,6 +6,11 @@
     Indicator Sets
 {% endblock title %}
 {% block content %}
+
+<script>
+    const geoValues = {{ geographic_granularities|safe }};
+</script>
+
     <div class="d-flex h-100 align-items-stretch">
         <!-- Filter Panel Wrapper -->
         <div id="filter-panel-wrapper" class="bg-white border-end shadow-sm" style="width: 350px; min-width: 350px; transition: all 0.3s ease; overflow-y: auto; overflow-x: hidden; flex-shrink: 0; margin-right: 1rem;">
