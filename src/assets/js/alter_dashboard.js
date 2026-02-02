@@ -1335,12 +1335,20 @@ async function loadAvailableGeographies(pathogen = '', preservedGeography = '') 
             window.geographyNames = data.available_geos.slice(0, count);
 
             if (preservedGeography) {
-                const optionExists = Array.from(geographySelect.options).some(opt => opt.value === preservedGeography);
-                if (optionExists) {
-                    geographySelect.value = preservedGeography;
-                    if (typeof handleGeographyChange === 'function') {
-                        handleGeographyChange();
-                    }
+                const hasGeoOption = (items, id) => {
+                    if (!Array.isArray(items)) return false;
+                    return items.some(item => {
+                        if (!item) return false;
+                        if (item.id === id) return true;
+                        if (Array.isArray(item.children)) {
+                            return hasGeoOption(item.children, id);
+                        }
+                        return false;
+                    });
+                };
+
+                if (hasGeoOption(data.available_geos, preservedGeography)) {
+                    $("#geographySelect").val(preservedGeography).trigger('change');
                 }
             }
         }
