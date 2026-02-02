@@ -171,6 +171,11 @@ class TypingAnimation {
         this.changeHandler = null;
         this.focusHandler = null;
         this.blurHandler = null;
+        this.select2OpenHandler = null;
+        this.select2CloseHandler = null;
+        this.select2SelectionElement = null;
+        this.select2Container = null;
+        this.isSelect2 = false;
         this.currentIndex = 0;
         this.currentText = '';
         this.isDeleting = false;
@@ -187,11 +192,18 @@ class TypingAnimation {
         }
 
         this.cleanup();
+        this.isSelect2 = this.selectElement.classList.contains('select2-hidden-accessible');
+        this.select2Container = this.selectElement.nextElementSibling && this.selectElement.nextElementSibling.classList.contains('select2')
+            ? this.selectElement.nextElementSibling
+            : null;
+        this.select2SelectionElement = this.select2Container
+            ? this.select2Container.querySelector('.select2-selection')
+            : null;
         this.setupHandlers();
         this.checkSelection();
         
         this.initTimeoutId = setTimeout(() => {
-            if (!this.selectElement.value && document.activeElement !== this.selectElement && !this.selectElement.disabled) {
+            if (!this.selectElement.value && !this.isFocused() && !this.selectElement.disabled) {
                 this.typingElement.style.display = 'block';
                 this.typingElement.textContent = '|';
                 this.typeCharacter();
@@ -220,6 +232,20 @@ class TypingAnimation {
             if (this.blurHandler) {
                 this.selectElement.removeEventListener('blur', this.blurHandler);
             }
+            if (this.select2OpenHandler && window.jQuery) {
+                window.jQuery(this.selectElement).off('select2:open', this.select2OpenHandler);
+            }
+            if (this.select2CloseHandler && window.jQuery) {
+                window.jQuery(this.selectElement).off('select2:close', this.select2CloseHandler);
+            }
+            if (this.select2SelectionElement) {
+                if (this.focusHandler) {
+                    this.select2SelectionElement.removeEventListener('focus', this.focusHandler);
+                }
+                if (this.blurHandler) {
+                    this.select2SelectionElement.removeEventListener('blur', this.blurHandler);
+                }
+            }
         }
         
         if (this.typingElement) {
@@ -228,6 +254,41 @@ class TypingAnimation {
         
         this.currentText = '';        this.isDeleting = false;
         this.currentIndex = 0;
+    }
+
+    isFocused() {
+        if (!this.selectElement) return false;
+        if (this.isSelect2 && this.select2Container) {
+            if (this.select2Container.classList.contains('select2-container--open')) {
+                return true;
+            }
+            return this.select2Container.contains(document.activeElement);
+        }
+        return document.activeElement === this.selectElement;
+    }
+
+    getDisplayText(name) {
+        if (name === null || name === undefined) {
+            return '';
+        }
+        if (typeof name === 'string' || typeof name === 'number') {
+            return String(name);
+        }
+        if (typeof name === 'object') {
+            if (typeof name.text === 'string' || typeof name.text === 'number') {
+                return String(name.text);
+            }
+            if (typeof name.name === 'string' || typeof name.name === 'number') {
+                return String(name.name);
+            }
+            if (typeof name.label === 'string' || typeof name.label === 'number') {
+                return String(name.label);
+            }
+            if (typeof name.id === 'string' || typeof name.id === 'number') {
+                return String(name.id);
+            }
+        }
+        return '';
     }
 
     setupHandlers() {
@@ -249,6 +310,16 @@ class TypingAnimation {
             this.selectElement.addEventListener('change', this.changeHandler);
             this.selectElement.addEventListener('focus', this.focusHandler);
             this.selectElement.addEventListener('blur', this.blurHandler);
+            if (this.isSelect2 && window.jQuery) {
+                this.select2OpenHandler = () => this.focusHandler();
+                this.select2CloseHandler = () => this.blurHandler();
+                window.jQuery(this.selectElement).on('select2:open', this.select2OpenHandler);
+                window.jQuery(this.selectElement).on('select2:close', this.select2CloseHandler);
+            }
+            if (this.select2SelectionElement) {
+                this.select2SelectionElement.addEventListener('focus', this.focusHandler);
+                this.select2SelectionElement.addEventListener('blur', this.blurHandler);
+            }
         }
     }
 
@@ -270,7 +341,7 @@ class TypingAnimation {
                 clearTimeout(this.timeoutId);
                 this.timeoutId = null;
             }
-        } else if (document.activeElement !== this.selectElement) {
+        } else if (!this.isFocused()) {
             this.typingElement.style.display = 'block';
             if (!this.timeoutId) {
                 this.currentText = '';
@@ -291,7 +362,12 @@ class TypingAnimation {
             return;
         }
 
-        const currentName = names[this.currentIndex];
+        const currentName = this.getDisplayText(names[this.currentIndex]);
+        if (!currentName) {
+            this.currentIndex = (this.currentIndex + 1) % names.length;
+            this.timeoutId = setTimeout(() => this.typeCharacter(), PAUSE_AFTER_DELETE);
+            return;
+        }
         
         if (this.selectElement.value) {
             if (this.typingElement) {
@@ -1237,13 +1313,17 @@ async function loadAvailableGeographies(pathogen = '', preservedGeography = '') 
 
         
         if (data && data.available_geos) {
+            geographySelect.innerHTML = '<option value=""></option>';
 
             $("#geographySelect").select2({
                 data: data.available_geos,
                 minimumInputLength: 0,
                 maximumSelectionLength: 5,
                 width: '100%',
+                placeholder: '',
+                allowClear: false,
             });
+            $("#geographySelect").val('').trigger('change.select2');
             
             // Randomize names for typing animation
             // Optimized: Partial shuffle to get just 50 random items
