@@ -1233,40 +1233,25 @@ async function loadAvailableGeographies(pathogen = '', preservedGeography = '') 
         }
         
         const data = await response.json();
-        geographySelect.innerHTML = '<option value=""></option>';
+        console.log(data.available_geos);
+
         
         if (data && data.available_geos) {
-            const geos = data.available_geos;
-            let allGeoNames = [];
-            
-            geos.forEach(group => {
-                const optgroup = document.createElement('optgroup');
-                optgroup.label = group.text;
-                
-                if (group.children && Array.isArray(group.children)) {
-                    group.children.forEach(child => {
-                        const option = document.createElement('option');
-                        option.value = child.id;
-                        option.textContent = child.text;
-                        optgroup.appendChild(option);
-                        
-                        allGeoNames.push(child.text);
-                    });
-                }
-                
-                geographySelect.appendChild(optgroup);
+
+            $("#geographySelect").select2({
+                data: data.available_geos,
+                minimumInputLength: 0,
+                maximumSelectionLength: 5,
             });
             
-            if (allGeoNames.length > 0) {
-                // Randomize names for typing animation
-                // Optimized: Partial shuffle to get just 50 random items
-                const count = Math.min(50, allGeoNames.length);
-                for (let i = 0; i < count; i++) {
-                    const j = i + Math.floor(Math.random() * (allGeoNames.length - i));
-                    [allGeoNames[i], allGeoNames[j]] = [allGeoNames[j], allGeoNames[i]];
-                }
-                window.geographyNames = allGeoNames.slice(0, count);
+            // Randomize names for typing animation
+            // Optimized: Partial shuffle to get just 50 random items
+            const count = Math.min(50, data.available_geos.length);
+            for (let i = 0; i < count; i++) {
+                const j = i + Math.floor(Math.random() * (data.available_geos.length - i));
+                [data.available_geos[i], data.available_geos[j]] = [data.available_geos[j], data.available_geos[i]];
             }
+            window.geographyNames = data.available_geos.slice(0, count);
 
             if (preservedGeography) {
                 const optionExists = Array.from(geographySelect.options).some(opt => opt.value === preservedGeography);
