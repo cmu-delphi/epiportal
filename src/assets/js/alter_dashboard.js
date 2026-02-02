@@ -1242,6 +1242,7 @@ async function loadAvailableGeographies(pathogen = '', preservedGeography = '') 
                 data: data.available_geos,
                 minimumInputLength: 0,
                 maximumSelectionLength: 5,
+                width: '100%',
             });
             
             // Randomize names for typing animation
