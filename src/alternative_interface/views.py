@@ -94,7 +94,6 @@ def alternative_interface_view(request):
             "selected_geography": geography_filter,
             "pathogens": pathogens,
             "indicators": indicators,
-            "available_geos": get_available_geos(indicators),
             "chart_data": (
                 get_chart_data(indicators, geography_filter)
                 if geography_filter
