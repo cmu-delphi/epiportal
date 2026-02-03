@@ -147,11 +147,11 @@ function showNotCoveredGeoWarningMessage(notCoveredIndicators, geoValue) {
     var warningMessage = "";
     notCoveredIndicators.forEach((indicator) => {
         if (currentMode === "epivis") {
-            warningMessage += `Indicator ${indicator.display_name} is not available for Location ${geoValue.text} <br>`;
+            warningMessage += `Indicator "${indicator.display_name}" is not available for Location "${geoValue.text}" <br>`;
         } else {
             var startDate = document.getElementById("start_date").value;
             var endDate = document.getElementById("end_date").value;
-            warningMessage += `Indicator ${indicator.display_name} is not available for Location ${geoValue.text} for the time period from ${startDate} to ${endDate} <br>`;
+            warningMessage += `Indicator "${indicator.display_name}" is not available for Location "${geoValue.text}" for the time period from "${startDate}" to "${endDate}" <br>`;
         }
     });
     appendAlert(warningMessage, "warning");
