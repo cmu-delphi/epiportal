@@ -150,6 +150,12 @@ body {
     background-color: rgba(255, 255, 255, 0.95);
     font-weight: 500;
     transition: var(--transition);
+    appearance: none;
+    background-image: url('data:image/svg+xml,<svg xmlns="http://www.w3.org/2000/svg" width="12" height="8" viewBox="0 0 12 8"><path fill="%2364748b" d="M6 8L0 0h12z"/></svg>');
+    background-repeat: no-repeat;
+    background-position: right 0.75rem center;
+    background-size: 0.7rem;
+    padding-right: 2.25rem;
 }
 
 .filter-select:focus {
@@ -157,6 +163,42 @@ body {
     border-color: rgba(255, 255, 255, 0.5);
     box-shadow: 0 0 0 3px rgba(255, 255, 255, 0.2);
     outline: none;
+}
+
+/* Select2 styling to match filter select */
+.select2-container--default .select2-selection--single {
+    min-height: 48px;
+    border: 1px solid rgba(255, 255, 255, 0.3);
+    border-radius: var(--border-radius);
+    background-color: rgba(255, 255, 255, 0.95);
+    font-weight: 500;
+    font-size: 1rem;
+    transition: var(--transition);
+    display: flex;
+    align-items: center;
+    background-image: url('data:image/svg+xml,<svg xmlns="http://www.w3.org/2000/svg" width="12" height="8" viewBox="0 0 12 8"><path fill="%2364748b" d="M6 8L0 0h12z"/></svg>');
+    background-repeat: no-repeat;
+    background-position: right 0.75rem center;
+    background-size: 0.7rem;
+}
+
+.select2-container--default .select2-selection--single .select2-selection__rendered {
+    padding-left: 1rem;
+    padding-right: 2.25rem;
+    line-height: 1.5;
+    color: var(--dark-text);
+    font-size: 1rem;
+}
+
+.select2-container--default .select2-selection--single .select2-selection__arrow {
+    display: none;
+}
+
+.select2-container--default.select2-container--focus .select2-selection--single,
+.select2-container--default.select2-container--open .select2-selection--single {
+    background-color: white;
+    border-color: rgba(255, 255, 255, 0.5);
+    box-shadow: 0 0 0 3px rgba(255, 255, 255, 0.2);
 }
 
 
@@ -474,6 +516,21 @@ footer {
     
     .filter-select {
         padding: 0.625rem 0.875rem;
+        font-size: 0.875rem;
+        background-position: right 0.65rem center;
+        background-size: 0.65rem;
+        padding-right: 2rem;
+    }
+
+    .select2-container--default .select2-selection--single {
+        min-height: 42px;
+        background-position: right 0.65rem center;
+        background-size: 0.65rem;
+    }
+
+    .select2-container--default .select2-selection--single .select2-selection__rendered {
+        padding-left: 0.875rem;
+        padding-right: 2rem;
         font-size: 0.875rem;
     }
     

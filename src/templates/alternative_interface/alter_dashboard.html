@@ -22,11 +22,13 @@
     <script src="https://cdn.jsdelivr.net/npm/hammerjs@2.0.8"></script>
     <!-- Chart.js Zoom Plugin -->
     <script src="https://cdn.jsdelivr.net/npm/chartjs-plugin-zoom@2.0.1"></script>
-    <!-- Register zoom plugin -->
-    <script>
-        // The plugin should auto-register when loaded via script tag
-        // No explicit registration needed for chartjs-plugin-zoom@2
-    </script>
+    <script src="https://ajax.googleapis.com/ajax/libs/jquery/3.5.1/jquery.min.js"></script>
+    
+    <!-- Select2 CSS -->
+    <link href="https://cdn.jsdelivr.net/npm/select2@4.1.0-rc.0/dist/css/select2.min.css" rel="stylesheet">
+    
+    <!-- Select2 JS -->
+    <script src="https://cdn.jsdelivr.net/npm/select2@4.1.0-rc.0/dist/js/select2.min.js"></script>
     
     <!-- Custom CSS -->
     <link href="{% static 'css/alter_dashboard.css' %}" rel="stylesheet" />
@@ -91,15 +93,7 @@
                     </div>
                     <span class="filter-label">in</span>
                     <div style="position: relative; display: inline-block; width: 100%;">
-                        <select class="form-select filter-select" id="geographySelect" name="geography" onchange="handleGeographyChange()" style="position: relative;">
-                            <option value=""></option>
-                            {% for geography in available_geos %}
-                                <optgroup label="{{ geography.text }}">
-                                    {% for child in geography.children %}
-                                        <option value="{{ child.id }}" {% if child.id == selected_geography %}selected{% endif %}>{{ child.text }}</option>
-                                    {% endfor %}
-                                </optgroup>
-                            {% endfor %}
+                        <select class="form-select filter-select form-control form-select-lg" id="geographySelect" name="geography" onchange="handleGeographyChange()" style="position: relative;">
                         </select>
                         <span id="geographyTypingAnimation" class="geography-typing-animation" style="position: absolute; left: 12px; top: 50%; transform: translateY(-50%); pointer-events: none; z-index: 10; color: black; font-size: 1.2rem; white-space: nowrap; overflow: hidden; display: none;"></span>
                         <span id="geographyLoader" class="geography-loader" style="position: absolute; left: 50%; top: 50%; transform: translate(-50%, -50%); pointer-events: none; z-index: 10; display: none;">
