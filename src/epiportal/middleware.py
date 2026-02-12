@@ -9,7 +9,8 @@ import uuid
 from typing import Any
 
 from django.utils.deprecation import MiddlewareMixin
-from django.conf import settings
+
+from epiportal.utils import get_client_ip
 
 logger = logging.getLogger("epiportal.requests")
 
@@ -32,9 +33,9 @@ MAX_BODY_LOG_SIZE = 4096
 
 # Path segments to exclude from request logging (matched anywhere in path)
 LOG_EXCLUDE_PATH_PATTERNS = (
-    "get_table_stats_info",
-    "get_related_indicators",
-    "get_available_geos",
+    # "get_table_stats_info",
+    # "get_related_indicators",
+    # "get_available_geos",
 )
 
 
@@ -42,37 +43,6 @@ def _should_log_request(request) -> bool:
     """Return False if this request should be excluded from logging."""
     path = request.path
     return not any(pattern in path for pattern in LOG_EXCLUDE_PATH_PATTERNS)
-
-
-def _get_client_ip(req) -> str:
-    """Extract client IP, respecting X-Forwarded-For when behind proxies."""
-    if settings.REVERSE_PROXY_DEPTH:
-        # we only expect/trust (up to) "REVERSE_PROXY_DEPTH" number of proxies between this server and the outside world.
-        # a REVERSE_PROXY_DEPTH of 0 means not proxied, i.e. server is globally directly reachable.
-        # a negative proxy depth is a special case to trust the whole chain -- not generally recommended unless the
-        # most-external proxy is configured to disregard "X-Forwarded-For" from outside.
-        # really, ONLY trust the following headers if reverse proxied!!!
-        x_forwarded_for = req.META.get("HTTP_X_FORWARDED_FOR")
-
-        if x_forwarded_for:
-            full_proxy_chain = x_forwarded_for.split(",")
-            # eliminate any extra addresses at the front of this list, as they could be spoofed.
-            if settings.REVERSE_PROXY_DEPTH > 0:
-                depth = settings.REVERSE_PROXY_DEPTH
-            else:
-                # special case for -1/negative: setting `depth` to 0 will not strip any items from the chain
-                depth = 0
-            trusted_proxy_chain = full_proxy_chain[-depth:]
-            # accept the first (or only) address in the remaining trusted part of the chain as the actual remote address
-            return trusted_proxy_chain[0].strip()
-
-        # fall back to "X-Real-Ip" if "X-Forwarded-For" isnt present
-        x_real_ip = req.META.get("HTTP_X_REAL_IP")
-        if x_real_ip:
-            return x_real_ip
-
-# if we are not proxied (or we are proxied but the headers werent present and we fell through to here), just use the remote ip addr as the true client address
-    return req.META.get("REMOTE_ADDR")
 
 
 def _sanitize_headers(meta: dict) -> dict[str, str]:
@@ -134,7 +104,7 @@ class RequestLoggingMiddleware(MiddlewareMixin):
                 "full_uri": request.build_absolute_uri(),
                 "query_string": request.META.get("QUERY_STRING") or "",
                 "query_params": dict(request.GET) if request.GET else {},
-                "client_ip": _get_client_ip(request),
+                "client_ip": get_client_ip(request),
                 "referer": request.META.get("HTTP_REFERER", ""),
                 "user_agent": request.META.get("HTTP_USER_AGENT", ""),
                 "content_type": request.content_type or "",
