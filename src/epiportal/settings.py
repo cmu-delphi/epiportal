@@ -135,6 +135,7 @@ LOCAL_APPS: list[str] = [
 INSTALLED_APPS: list[str] = DEFAULT_APPS + EXTERNAL_APPS + LOCAL_APPS
 
 MIDDLEWARE = [
+    'epiportal.middleware.RequestLoggingMiddleware',
     'django.middleware.security.SecurityMiddleware',
     'django.contrib.sessions.middleware.SessionMiddleware',
     'django.middleware.common.CommonMiddleware',
@@ -232,11 +233,20 @@ LOGGING = {
             'format': '[%(asctime)s] %(levelname)s | %(name)s | %(message)s',
             'datefmt': '%Y-%m-%d %H:%M:%S',
         },
+        'request_verbose': {
+            'format': '[%(asctime)s] %(levelname)s | epiportal.requests | %(message)s',
+            'datefmt': '%Y-%m-%d %H:%M:%S',
+        },
     },
     'handlers': {
         'console': {
             'class': 'logging.StreamHandler',
             'formatter': 'simple',
+            'stream': sys.stdout,
+        },
+        'request_console': {
+            'class': 'logging.StreamHandler',
+            'formatter': 'request_verbose',
             'stream': sys.stdout,
         },
     },
@@ -245,6 +255,11 @@ LOGGING = {
             'handlers': ['console'],
             'level': 'INFO',
             'propagate': True,
+        },
+        'epiportal.requests': {
+            'handlers': ['request_console'],
+            'level': 'INFO',
+            'propagate': False,
         },
     },
 }
