@@ -9,6 +9,7 @@ import uuid
 from typing import Any
 
 from django.utils.deprecation import MiddlewareMixin
+from django.conf import settings
 
 logger = logging.getLogger("epiportal.requests")
 
@@ -43,13 +44,35 @@ def _should_log_request(request) -> bool:
     return not any(pattern in path for pattern in LOG_EXCLUDE_PATH_PATTERNS)
 
 
-def _get_client_ip(request) -> str:
+def _get_client_ip(req) -> str:
     """Extract client IP, respecting X-Forwarded-For when behind proxies."""
-    x_forwarded_for = request.META.get("HTTP_X_FORWARDED_FOR")
-    if x_forwarded_for:
-        # Take the leftmost (original client) IP
-        return x_forwarded_for
-    return request.META.get("REMOTE_ADDR", "")
+    if settings.REVERSE_PROXY_DEPTH:
+        # we only expect/trust (up to) "REVERSE_PROXY_DEPTH" number of proxies between this server and the outside world.
+        # a REVERSE_PROXY_DEPTH of 0 means not proxied, i.e. server is globally directly reachable.
+        # a negative proxy depth is a special case to trust the whole chain -- not generally recommended unless the
+        # most-external proxy is configured to disregard "X-Forwarded-For" from outside.
+        # really, ONLY trust the following headers if reverse proxied!!!
+        x_forwarded_for = req.META.get("HTTP_X_FORWARDED_FOR")
+
+        if x_forwarded_for:
+            full_proxy_chain = x_forwarded_for.split(",")
+            # eliminate any extra addresses at the front of this list, as they could be spoofed.
+            if settings.REVERSE_PROXY_DEPTH > 0:
+                depth = settings.REVERSE_PROXY_DEPTH
+            else:
+                # special case for -1/negative: setting `depth` to 0 will not strip any items from the chain
+                depth = 0
+            trusted_proxy_chain = full_proxy_chain[-depth:]
+            # accept the first (or only) address in the remaining trusted part of the chain as the actual remote address
+            return trusted_proxy_chain[0].strip()
+
+        # fall back to "X-Real-Ip" if "X-Forwarded-For" isnt present
+        x_real_ip = req.META.get("HTTP_X_REAL_IP")
+        if x_real_ip:
+            return x_real_ip
+
+# if we are not proxied (or we are proxied but the headers werent present and we fell through to here), just use the remote ip addr as the true client address
+    return req.META.get("REMOTE_ADDR")
 
 
 def _sanitize_headers(meta: dict) -> dict[str, str]:
