@@ -237,6 +237,9 @@ LOGGING = {
             'format': '[%(asctime)s] %(levelname)s | epiportal.requests | %(message)s',
             'datefmt': '%Y-%m-%d %H:%M:%S',
         },
+        'json': {
+            '()': 'epiportal.logging_formatters.JsonFormatter',
+        },
     },
     'handlers': {
         'console': {
@@ -246,7 +249,7 @@ LOGGING = {
         },
         'request_console': {
             'class': 'logging.StreamHandler',
-            'formatter': 'request_verbose',
+            'formatter': 'json',
             'stream': sys.stdout,
         },
     },
@@ -266,7 +269,8 @@ LOGGING = {
 
 if DEBUG:
     for logger in LOGGING['loggers']:
-        LOGGING['loggers'][logger]['handlers'] = ['console']
+        if logger != 'epiportal.requests':
+            LOGGING['loggers'][logger]['handlers'] = ['console']
 
 
 # DRF Spectacular settings
