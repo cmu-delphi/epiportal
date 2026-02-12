@@ -2,7 +2,6 @@
 Request logging middleware that captures comprehensive data from all HTTP requests.
 """
 
-import json
 import logging
 import time
 import uuid
@@ -140,11 +139,11 @@ class RequestLoggingMiddleware(MiddlewareMixin):
                 log_data["duration_ms"] = round(duration_ms, 2)
 
             logger.info(
-                "%s %s %s | %s",
+                "%s %s %s",
                 request.method,
                 request.path,
                 response.status_code,
-                json.dumps(log_data, default=str),
+                extra=log_data,
             )
 
         except Exception as e:
