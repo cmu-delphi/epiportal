@@ -237,19 +237,11 @@ LOGGING = {
             'format': '[%(asctime)s] %(levelname)s | epiportal.requests | %(message)s',
             'datefmt': '%Y-%m-%d %H:%M:%S',
         },
-        'json': {
-            '()': 'epiportal.logging_formatters.JsonFormatter',
-        },
     },
     'handlers': {
         'console': {
             'class': 'logging.StreamHandler',
             'formatter': 'simple',
-            'stream': sys.stdout,
-        },
-        'request_console': {
-            'class': 'logging.StreamHandler',
-            'formatter': 'json',
             'stream': sys.stdout,
         },
     },
@@ -258,11 +250,6 @@ LOGGING = {
             'handlers': ['console'],
             'level': 'INFO',
             'propagate': True,
-        },
-        'epiportal.requests': {
-            'handlers': ['request_console'],
-            'level': 'INFO',
-            'propagate': False,
         },
     },
 }
