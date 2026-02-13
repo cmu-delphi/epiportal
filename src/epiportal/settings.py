@@ -244,11 +244,6 @@ LOGGING = {
             'formatter': 'simple',
             'stream': sys.stdout,
         },
-        'request_console': {
-            'class': 'logging.StreamHandler',
-            'formatter': 'request_verbose',
-            'stream': sys.stdout,
-        },
     },
     'loggers': {
         'django': {
@@ -256,17 +251,13 @@ LOGGING = {
             'level': 'INFO',
             'propagate': True,
         },
-        'epiportal.requests': {
-            'handlers': ['request_console'],
-            'level': 'INFO',
-            'propagate': False,
-        },
     },
 }
 
 if DEBUG:
     for logger in LOGGING['loggers']:
-        LOGGING['loggers'][logger]['handlers'] = ['console']
+        if logger != 'epiportal.requests':
+            LOGGING['loggers'][logger]['handlers'] = ['console']
 
 
 # DRF Spectacular settings
