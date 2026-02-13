@@ -2,16 +2,16 @@
 Request logging middleware that captures comprehensive data from all HTTP requests.
 """
 
-import logging
 import time
 import uuid
 from typing import Any
 
+from delphi_utils import get_structured_logger
 from django.utils.deprecation import MiddlewareMixin
 
 from epiportal.utils import get_client_ip
 
-logger = logging.getLogger("epiportal.requests")
+logger = get_structured_logger("epiportal.requests")
 
 # Headers that may contain sensitive data - values will be redacted
 SENSITIVE_HEADERS = frozenset(
@@ -26,9 +26,6 @@ SENSITIVE_HEADERS = frozenset(
         "x-session-id",
     )
 )
-
-# Maximum bytes of request/response body to log (prevents log bloat)
-MAX_BODY_LOG_SIZE = 4096
 
 # Path segments to exclude from request logging (matched anywhere in path)
 LOG_EXCLUDE_PATH_PATTERNS = (
@@ -55,19 +52,6 @@ def _sanitize_headers(meta: dict) -> dict[str, str]:
             elif value:
                 headers[header_name] = str(value)
     return headers
-
-
-def _safe_body_preview(body: bytes | None, max_size: int = MAX_BODY_LOG_SIZE) -> str | None:
-    """Return a safe preview of request/response body, truncated if large."""
-    if body is None or len(body) == 0:
-        return None
-    try:
-        decoded = body.decode("utf-8", errors="replace")
-        if len(decoded) > max_size:
-            return decoded[:max_size] + f"... [truncated, total {len(body)} bytes]"
-        return decoded
-    except Exception:
-        return f"[binary, {len(body)} bytes]"
 
 
 class RequestLoggingMiddleware(MiddlewareMixin):
@@ -120,31 +104,11 @@ class RequestLoggingMiddleware(MiddlewareMixin):
             else:
                 log_data["user"] = "anonymous"
 
-            # Request body (for methods that typically have one)
-            if request.method in ("POST", "PUT", "PATCH"):
-                try:
-                    body = getattr(request, "_body", None) or request.body
-                    log_data["request_body_preview"] = _safe_body_preview(body)
-                except Exception as e:
-                    log_data["request_body_error"] = str(e)
-
-            # Response body (for API responses, avoid huge HTML)
-            if (
-                "application/json" in (response.get("Content-Type") or "")
-                and hasattr(response, "content")
-            ):
-                log_data["response_body_preview"] = _safe_body_preview(response.content)
-
             if duration_ms is not None:
                 log_data["duration_ms"] = round(duration_ms, 2)
 
-            logger.info(
-                "%s %s %s",
-                request.method,
-                request.path,
-                response.status_code,
-                extra=log_data,
-            )
+            log_data["message"] = f"{request.method} {request.path} {response.status_code}"
+            logger.info("request", **log_data)
 
         except Exception as e:
             logger.exception("Error in request logging middleware: %s", e)
