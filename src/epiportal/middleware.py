@@ -107,7 +107,6 @@ class RequestLoggingMiddleware(MiddlewareMixin):
             if duration_ms is not None:
                 log_data["duration_ms"] = round(duration_ms, 2)
 
-            log_data["message"] = f"{request.method} {request.path} {response.status_code}"
             logger.info("request", **log_data)
 
         except Exception as e:
