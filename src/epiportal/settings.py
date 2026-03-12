@@ -144,6 +144,7 @@ MIDDLEWARE = [
     'django.contrib.messages.middleware.MessageMiddleware',
     'django.middleware.clickjacking.XFrameOptionsMiddleware',
     'debug_toolbar.middleware.DebugToolbarMiddleware',
+    'epiportal.block_middleware.BlockIPRangeMiddleware',
 ]
 
 INTERNAL_IPS: list[str] = [
