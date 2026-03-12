@@ -43,6 +43,7 @@ tzdata = "*"
 epiweeks = "*"
 delphi-utils = "*"
 numpy = "1.26.4"
+django-ipware = "*"
 
 [dev-packages]
 flake8 = "*"
