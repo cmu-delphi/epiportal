@@ -76,7 +76,7 @@ class IndicatorSetAdmin(BaseIndicatorSetAdmin):
     def get_queryset(self, request):
         # Exclude proxy model objects
         qs = super().get_queryset(request)
-        return qs.exclude(source_type="non_delphi")
+        return qs.exclude(source_type="non_delphi").exclude(source_type="us_state")
 
     change_list_template = "admin/indicatorsets/indicator_set_changelist.html"
 
@@ -187,7 +187,7 @@ class USStateIndicatorSetAdmin(BaseIndicatorSetAdmin):
     )
     search_fields = ("name", "state", "description")
     ordering = ["name"]
-    list_filter = ["state"]
+    list_filter = ["original_data_provider"]
 
     def get_queryset(self, request):
         # Exclude proxy model objects
