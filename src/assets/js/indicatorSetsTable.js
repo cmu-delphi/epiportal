@@ -117,7 +117,7 @@ var table = new DataTable("#indicatorSetsTable", {
                             `Showing <b>${response.num_of_indicators}</b> distinct ${pluralize(response.num_of_indicators, "indicator")} (arranged in <b>${response.num_of_indicator_sets}</b> ${pluralize(response.num_of_indicator_sets, "set")}), including <b>${numberWithCommas(response.num_of_locations)}</b> Delphi-hosted time series across numerous locations.`;
                     } else {
                         indicatorSetsInfo.innerHTML =
-                            `Showing <b>${response.num_of_indicators}</b> indicator sets (arranged in <b>${response.num_of_indicator_sets}</b> ${pluralize(response.num_of_indicator_sets, "set")}).`;
+                            `Showing <b>${response.num_of_indicators}</b> ${pluralize(response.num_of_indicators, "indicator")} (arranged in <b>${response.num_of_indicator_sets}</b> ${pluralize(response.num_of_indicator_sets, "set")}).`;
                     }
                 }
             });
