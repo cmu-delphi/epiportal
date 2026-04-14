@@ -1,10 +1,13 @@
 from django.db.models import Max
+from django.db import transaction
 from import_export import resources
 from import_export.fields import Field
 from import_export.widgets import ForeignKeyWidget, ManyToManyWidget
 
+from alternative_interface.models import ExpressViewIndicator
 from base.models import GeographicScope, Geography, Pathogen, SeverityPyramidRung
 from base.resources import get_geographic_mapping_by_name
+from indicators.models import Indicator
 from indicatorsets.models import (
     IndicatorSet,
     NonDelphiIndicatorSet,
@@ -88,7 +91,8 @@ def process_available_geographies(row) -> None:
         )
         available_geographies_ids.append(geography_obj.id)
     row["Geographic Levels"] = ",".join(map(str, available_geographies_ids))
-    row["Geographic Granularity - Delphi"] = row["Geographic Levels"]
+    if "Geographic Granularity - Delphi" in row:
+        row["Geographic Granularity - Delphi"] = row["Geographic Levels"]
 
 
 def fix_boolean_fields(row) -> None:
@@ -97,11 +101,12 @@ def fix_boolean_fields(row) -> None:
     ]
 
     for field in fields:
-        if row[field] == "TRUE":
+        value = row.get(field)
+        if value == "TRUE":
             row[field] = True
-        elif row[field] == "FALSE":
+        elif value == "FALSE":
             row[field] = False
-        elif row[field] == "":
+        elif value == "":
             row[field] = False
     return row
 
@@ -118,7 +123,24 @@ def process_data_use_terms(row) -> None:
         row["Data Use Terms"] = "None found"
 
 
-class IndicatorSetResource(resources.ModelResource):
+class IndicatorSetBaseResource(resources.ModelResource):
+
+    def skip_row(self, instance, original, row, import_validation_errors=None):
+        if not row["Include in indicator app"]:
+            indicator_sets = IndicatorSet.objects.filter(
+                name=row["Indicator Set name* "],
+                original_data_provider=row["Original Data Provider"],
+            )
+            for indicator_set in indicator_sets:
+                with transaction.atomic():
+                    indicators = Indicator.objects.filter(indicator_set=indicator_set)
+                    ExpressViewIndicator.objects.filter(indicator__in=indicators).delete()
+                    indicators.delete()
+                    indicator_set.delete()
+            return True
+
+
+class IndicatorSetResource(IndicatorSetBaseResource):
     name = Field(attribute="name", column_name="Indicator Set name* ")
     short_name = Field(attribute="short_name", column_name="Indicator Set Short Name")
     description = Field(
@@ -256,10 +278,6 @@ class IndicatorSetResource(resources.ModelResource):
 
         return None
 
-    def skip_row(self, instance, original, row, import_validation_errors=None):
-        if not row["Include in indicator app"]:
-            return True
-
     def before_import_row(self, row, **kwargs):
         strip_all_string_values(row)
         fix_boolean_fields(row)
@@ -278,7 +296,7 @@ class IndicatorSetResource(resources.ModelResource):
         instance.save()
 
 
-class NonDelphiIndicatorSetResource(resources.ModelResource):
+class NonDelphiIndicatorSetResource(IndicatorSetBaseResource):
     name = Field(attribute="name", column_name="Indicator Set name* ")
     short_name = Field(attribute="short_name", column_name="Indicator Set Short Name")
     description = Field(
@@ -402,10 +420,6 @@ class NonDelphiIndicatorSetResource(resources.ModelResource):
             "epidata_endpoint",
         )
 
-    def skip_row(self, instance, original, row, import_validation_errors=None):
-        if not row["Include in indicator app"]:
-            return True
-
     def before_import_row(self, row, **kwargs):
         strip_all_string_values(row)
         fix_boolean_fields(row)
@@ -420,7 +434,7 @@ class NonDelphiIndicatorSetResource(resources.ModelResource):
         instance.save()
 
 
-class USStateIndicatorSetResource(resources.ModelResource):
+class USStateIndicatorSetResource(IndicatorSetBaseResource):
     name = Field(attribute="name", column_name="Indicator Set name* ")
     state = Field(attribute="state", column_name="State")
     description = Field(
@@ -505,10 +519,6 @@ class USStateIndicatorSetResource(resources.ModelResource):
             "documentation_link",
             "license",
         )
-
-    def skip_row(self, instance, original, row, import_validation_errors=None):
-        if not row["Include in indicator app"]:
-            return True
 
     def get_instance(self, instance_loader, row):
         name = row.get("Indicator Set name* ")
