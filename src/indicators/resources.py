@@ -247,6 +247,17 @@ class ModelResource(resources.ModelResource):
 
         return import_result
 
+    def skip_row(self, instance, original, row, import_validation_errors=None):
+        if not row["Include in indicator app"]:
+            ind = Indicator.objects.filter(
+                name=row["Signal"], source=row["Source Subdivision"]
+            )
+            if ind.exists():
+                ind.delete()
+            return True
+        if row["Indicator Set"] is None:
+            return True
+
 
 def strip_all_string_values(row) -> None:
     for key, value in row.items():
@@ -486,12 +497,6 @@ class IndicatorResource(ModelResource):
         instance.source_type = "covidcast"
         instance.save()
 
-    def skip_row(self, instance, original, row, import_validation_errors=None):
-        if not row["Include in indicator app"]:
-            return True
-        if row["Indicator Set"] is None:
-            return True
-
 
 class OtherEndpointIndicatorResource(ModelResource):
     name = Field(attribute="name", column_name="Indicator")
@@ -660,12 +665,6 @@ class OtherEndpointIndicatorResource(ModelResource):
         process_available_geographies(row)
         process_indicator_set(row)
 
-    def skip_row(self, instance, original, row, import_validation_errors=None):
-        if not row["Include in indicator app"]:
-            return True
-        if row["Indicator Set"] is None:
-            return True
-
     def after_import_row(self, row, row_result, **kwargs):
         process_indicator_geography(row)
 
@@ -708,10 +707,6 @@ class NonDelphiIndicatorResource(resources.ModelResource):
         fix_boolean_fields(row)
         process_indicator_set(row)
 
-    def skip_row(self, instance, original, row, import_validation_errors=None):
-        if not row["Include in indicator app"]:
-            return True
-
     def after_save_instance(self, instance, row, **kwargs):
         instance.source_type = "non_delphi"
         instance.save()
@@ -733,10 +728,6 @@ class USStateIndicatorResource(ModelResource):
         ]
         import_id_fields: list[str] = ["name", "indicator_set"]
         skip_unchanged = True
-
-    def skip_row(self, instance, original, row, import_validation_errors=None):
-        if not row["Include in indicator app"]:
-            return True
 
     def before_import_row(self, row, **kwargs) -> None:
         """Post-processes each row after importing."""

@@ -1,5 +1,6 @@
 from import_export import resources
 from import_export.fields import Field
+from import_export.results import RowResult
 from import_export.widgets import ForeignKeyWidget
 from indicators.models import Indicator
 
@@ -40,12 +41,33 @@ class ExpressViewIndicatorResource(resources.ModelResource):
         attribute="display_order", column_name="Display Order"
     )
 
+    def get_field_names(self):
+        return [self.get_field_name(field) for field in self.fields.values()]
+
     def before_import_row(self, row, **kwargs):
+        if not row.get("Menu Item") or not row.get("Indicator Name"):
+            return
         process_indicator(row)
 
     def skip_row(self, instance, original, row, import_validation_errors=None):
-        if not row["Indicator Name"]:
+        if not row.get("Menu Item") or not row.get("Indicator Name"):
             return True
+
+    def import_row(self, row, instance_loader, **kwargs):
+        import_result = super().import_row(row, instance_loader, **kwargs)
+        if import_result.import_type in [
+            RowResult.IMPORT_TYPE_ERROR,
+            RowResult.IMPORT_TYPE_INVALID,
+        ]:
+            import_result.diff = [row.get(name, "") for name in self.get_field_names()]
+            import_result.diff.append(
+                "Errors: {}\n{}".format(
+                    [err.error for err in import_result.errors], row
+                )
+            )
+            import_result.errors = []
+            import_result.import_type = RowResult.IMPORT_TYPE_SKIP
+        return import_result
 
     class Meta:
         model = ExpressViewIndicator
