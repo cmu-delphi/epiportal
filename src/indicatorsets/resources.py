@@ -491,6 +491,11 @@ class USStateIndicatorSetResource(IndicatorSetBaseResource):
         attribute="documentation_link", column_name="Link to documentation"
     )
     license = Field(attribute="license", column_name="Data Use Terms")
+    severity_pyramid_rungs = Field(
+        attribute="severity_pyramid_rungs",
+        column_name="Surveillance Categories",
+        widget=ManyToManyWidget(SeverityPyramidRung),
+    )
 
     class Meta:
         model = USStateIndicatorSet
@@ -517,7 +522,7 @@ class USStateIndicatorSetResource(IndicatorSetBaseResource):
             "original_data_provider",
             "preprocessing_description",
             "documentation_link",
-            "license",
+            "severity_pyramid_rungs",
         )
 
     def get_instance(self, instance_loader, row):
