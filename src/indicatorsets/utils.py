@@ -83,28 +83,27 @@ def get_grouped_original_data_provider_choices():
     """
     Returns grouped choices with U.S. States providers in a sublist.
     """
-    # Define U.S. States providers that should be grouped under "U.S. States"
-    US_STATES_PROVIDERS = list(
-        IndicatorSet.objects.filter(source_type="us_state")
-        .values_list("original_data_provider", flat=True)
-        .distinct()
-    )
 
-    all_providers = list(
+    all_providers = set(
         IndicatorSet.objects.values_list("original_data_provider", flat=True)
         .order_by("original_data_provider")
         .distinct()
     )
 
-    # Separate providers into main list and U.S. States sublist
-    main_providers = []
-    us_states_providers = []
+    # Define U.S. States providers that should be grouped under "U.S. States"
+    us_states_providers = set(
+        IndicatorSet.objects.filter(source_type="us_state")
+        .values_list("original_data_provider", flat=True)
+        .distinct()
+    )
 
-    for provider in all_providers:
-        if provider and provider in US_STATES_PROVIDERS:
-            us_states_providers.append(provider)
-        else:
-            main_providers.append(provider)
+    # Define U.S. Government providers that should be grouped under "U.S. Government"
+    us_government_providers = set(
+        data_provider for data_provider in all_providers
+        if data_provider.split(" ")[0] == "US"
+    )
+
+    main_providers = [provider for provider in all_providers if provider not in [*us_states_providers, *us_government_providers]]
 
     return {
         "main": main_providers,
@@ -112,6 +111,10 @@ def get_grouped_original_data_provider_choices():
             {
                 "label": "U.S. States",
                 "providers": sorted(us_states_providers),
+            },
+            {
+                "label": "U.S. Government",
+                "providers": us_government_providers
             }
         ],
         "all": all_providers,  # Keep flat list for form compatibility
