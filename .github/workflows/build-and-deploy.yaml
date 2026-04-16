@@ -61,7 +61,7 @@ jobs:
         if: >-
           github.ref == 'refs/heads/main'
         run: |
-          curl --retry 3 --retry-all-errors\
+          curl --retry 3 --retry-all-errors \
             -X POST ${{ secrets.DELPHI_INTERNAL_PROD_DEPLOY_URL }} \
             --user ${{ secrets.DELPHI_INTERNAL_DEPLOY_AUTH }}
       - name: Non-production deploy (dev/stage/etc.)
