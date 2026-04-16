@@ -2,9 +2,9 @@ name: 'Build and deploy application containers'
 on:
   push:
 jobs:
-  build-tag-push-deploy:
+  build-containers:
     runs-on: ubuntu-latest
-    # CI/CD will run on these branches
+    # Container builds will run on these branches.
     if: >
       github.ref == 'refs/heads/main' ||
       github.ref == 'refs/heads/staging' ||
@@ -16,7 +16,7 @@ jobs:
         # names in the docker-compose.yml file.
         service: [epwebapp, epnginx]
     steps:
-      - name: Checkout
+      - name: Checkout repo
         uses: actions/checkout@v3
       - name: Login to GitHub container registry
         uses: docker/login-action@v1
@@ -24,7 +24,7 @@ jobs:
           registry: ghcr.io
           username: cmu-delphi-deploy-machine
           password: ${{ secrets.CMU_DELPHI_DEPLOY_MACHINE_PAT }}
-      - name: Create container image tags
+      - name: Create image tag based on branch name
         id: image-tag
         run: |
           baseRef="${GITHUB_REF#*/}"
@@ -38,23 +38,38 @@ jobs:
             ;;
           esac
           echo "IMAGE_TAG=${image_tag}" >> $GITHUB_OUTPUT
-      - name: Copy env file
+      - name: Set up CI env
         run: |
           cp ./.ci.env ./.env
       - name: Set up docker-compose
         uses: ndeloof/install-compose-action@v0.0.1
-      - name: docker-compose build --push
+      - name: Build images and push to registry with docker-compose
         run: |
           docker-compose build --push ${{ matrix.service }}
         env:
           TAG: ":${{ steps.image-tag.outputs.IMAGE_TAG }}"
           REGISTRY: "ghcr.io/${{ github.repository_owner }}/"
-      - name: docker-compose down
+      - name: Stop docker-compose
         run: |
           docker-compose down
-      - name: Trigger smee.io webhook to pull new container images
+  deploy-containers:
+    runs-on: ubuntu-latest
+    needs: build-containers
+    steps:
+      - name: Production deploy
+        # Trigger production deployment via internal system
+        if: >-
+          github.ref == 'refs/heads/main'
         run: |
-          curl -H "Authorization: Bearer ${{ secrets.DELPHI_DEPLOY_WEBHOOK_TOKEN }}" \
-               -X POST ${{ secrets.DELPHI_DEPLOY_WEBHOOK_URL }} \
-               -H "Content-Type: application/x-www-form-urlencoded" \
-               -d "repository=ghcr.io/${{ github.repository }}-${{ matrix.service }}&tag=${{ steps.image-tag.outputs.IMAGE_TAG }}"
+          curl --retry 3 --retry-all-errors\
+            -X POST ${{ secrets.DELPHI_INTERNAL_PROD_DEPLOY_URL }} \
+            --user ${{ secrets.DELPHI_INTERNAL_DEPLOY_AUTH }}
+      - name: Non-production deploy (dev/stage/etc.)
+        # Trigger non-production deployment via internal system
+        if: >-
+          github.ref == 'refs/heads/staging' ||
+          github.ref == 'refs/heads/development'
+        run: |
+          curl --retry 3 --retry-all-errors \
+            -X POST ${{ secrets.DELPHI_INTERNAL_NONPROD_DEPLOY_URL }} \
+            --user ${{ secrets.DELPHI_INTERNAL_DEPLOY_AUTH }}
