@@ -106,18 +106,18 @@ def get_grouped_original_data_provider_choices():
     main_providers = [provider for provider in all_providers if provider not in [*us_states_providers, *us_government_providers]]
 
     return {
-        "main": main_providers,
+        "main": sorted(main_providers),
         "groups": [
+            {
+                "label": "U.S. Government",
+                "providers": sorted(us_government_providers)
+            },
             {
                 "label": "U.S. States",
                 "providers": sorted(us_states_providers),
-            },
-            {
-                "label": "U.S. Government",
-                "providers": us_government_providers
             }
         ],
-        "all": all_providers,  # Keep flat list for form compatibility
+        "all": sorted(all_providers),  # Keep flat list for form compatibility
     }
 
 

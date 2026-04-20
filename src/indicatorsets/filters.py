@@ -75,11 +75,10 @@ class IndicatorSetFilter(django_filters.FilterSet):
     )
 
     temporal_scope_end = django_filters.ChoiceFilter(
-        field_name="temporal_scope_end",
         choices=[
             ("Ongoing", "Ongoing Surveillance Only"),
         ],
-        lookup_expr="exact",
+        method="temporal_scope_end_filter",
         required=False,
     )
 
@@ -104,6 +103,12 @@ class IndicatorSetFilter(django_filters.FilterSet):
             "hosted_by_delphi",
             "location_search",
         ]
+
+    def temporal_scope_end_filter(self, queryset, name, value):
+        if not value:
+            return queryset
+        self.indicators_qs = self.indicators_qs.filter(temporal_scope_end=value)
+        return queryset.filter(temporal_scope_end=value)
 
     def hosted_by_delphi_filter(self, queryset, name, value):
         """
