@@ -51,7 +51,7 @@ ENVIRONMENT = os.environ.get("SENTRY_ENVIRONMENT", "development")
 
 
 if ENVIRONMENT != "production":
-    SPREADSHEET_URLS["us_state_indicator_sets"] = "https://docs.google.com/spreadsheets/d/1zb7ItJzY5oq1n-2xtvnPBiJu2L3AqmCKubrLkKJZVHs/export?format=csv&gid=187438823"
+    SPREADSHEET_URLS["us_state_indicator_sets"] = "https://docs.google.com/spreadsheets/d/1zb7ItJzY5oq1n-2xtvnPBiJu2L3AqmCKubrLkKJZVHs/export?format=csv&gid=1635370101"
     SPREADSHEET_URLS["us_state_indicators"] = "https://docs.google.com/spreadsheets/d/1zb7ItJzY5oq1n-2xtvnPBiJu2L3AqmCKubrLkKJZVHs/export?format=csv&gid=527384770"
 
 SENTRY_DSN = os.environ.get('SENTRY_DSN')
