@@ -45,6 +45,8 @@ from indicatorsets.utils import (
     get_num_locations_from_meta,
     generate_pophive_dataset_epivis,
     generate_nwss_dataset_epivis,
+    generate_pophive_export_url,
+    generate_nwss_export_url,
 )
 
 indicatorsets_logger = get_structured_logger("indicatorsets_logger")
@@ -436,6 +438,13 @@ def generate_export_data_url(request):
         flusurv_locations = data.get("flusurvLocations", [])
         api_key = data.get("apiKey", None)
 
+        pophive_geos = data.get("pophiveLocations", [])
+        pophive_age_group = data.get("pophiveAgeGroup", [])
+        nwss_geographic_value = data.get("nwssGeographicValue", "")
+        nwss_pcr_target = data.get("nwssPcrTarget", [])
+        nwss_source = data.get("nwssSource", [])
+        nwss_fill_method = data.get("nwssFillMethod", "source")
+
         log_form_stats(request, data, "export")
         log_form_data(request, data, "export")
         data_export_commands.extend(
@@ -465,6 +474,18 @@ def generate_export_data_url(request):
             data_export_commands.extend(
                 generate_flusurv_export_url(
                     flusurv_locations, start_date, end_date, api_key
+                )
+            )
+        if pophive_geos:
+            data_export_commands.extend(
+                generate_pophive_export_url(
+                    indicators, start_date, end_date, pophive_geos, pophive_age_group, api_key
+                )
+            )
+        if nwss_geographic_value:
+            data_export_commands.extend(
+                generate_nwss_export_url(
+                    indicators, start_date, end_date, nwss_geographic_value, nwss_pcr_target, nwss_source, nwss_fill_method, api_key
                 )
             )
         data_export_block = data_export_block.format("<br>".join(data_export_commands))

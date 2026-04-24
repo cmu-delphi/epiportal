@@ -683,6 +683,10 @@ class IndicatorHandler {
         const flusurvLocations = $("#flusurvLocations").select2("data");
         const pophiveLocations = $("#pophiveLocations").select2("data");
         const pophiveAgeGroup = $("#pophiveAgeGroup").select2("data");
+        const nwssGeographicValue = $("#nwssGeographicValue").val();
+        const nwssPcrTarget = $("#nwssPcrTarget").select2("data");
+        const nwssSource = $("#nwssSource").select2("data");
+        const nwssFillMethod = $("#nwssFillMethod").select2("data");
         var covidCastGeographicValues = Object.groupBy(
             $("#geographic_value").select2("data"),
             ({ geoType }) => [geoType]
@@ -698,6 +702,10 @@ class IndicatorHandler {
             flusurvLocations: flusurvLocations,
             pophiveLocations: pophiveLocations,
             pophiveAgeGroup: pophiveAgeGroup,
+            nwssGeographicValue: nwssGeographicValue,
+            nwssPcrTarget: nwssPcrTarget,
+            nwssSource: nwssSource,
+            nwssFillMethod: nwssFillMethod,
             apiKey: document.getElementById("apiKey").value ? document.getElementById("apiKey").value : "",
             clientId: clientId ? clientId : "Not available",
         }

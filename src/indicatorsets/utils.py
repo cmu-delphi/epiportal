@@ -279,25 +279,26 @@ def generate_pophive_dataset_epivis(indicator, pophive_geos, pophive_age_group):
 
 def generate_nwss_dataset_epivis(indicator, geographic_type, geographic_value, pcr_target, source, fill_method):
     datasets = []
-    datasets.append(
-        {
-            "color": generate_random_color(),
-            "title": "value",
-            "params": {
-                "_endpoint": indicator["_endpoint"],
-                "source": indicator["data_source"],
-                "signal": indicator["indicator"],
-                "geo_type": geographic_type,
-                "geo_value": geographic_value,
-                "pcr_target": pcr_target[0]["id"],
-                "fill_method": fill_method,
-                "custom_title": generate_epivis_custom_title(
-                    indicator, geographic_value, f"pcr_target:{pcr_target[0]['id']}"
-                ),
-                "extra_keys": f"nwss_source:{source[0]['id']}",
+    for geo_value in geographic_value.replace(" ", "").split(","):
+        datasets.append(
+            {
+                "color": generate_random_color(),
+                "title": "value",
+                "params": {
+                    "_endpoint": indicator["_endpoint"],
+                    "source": indicator["data_source"],
+                    "signal": indicator["indicator"],
+                    "geo_type": geographic_type,
+                    "geo_value": geo_value,
+                    "pcr_target": pcr_target[0]["id"],
+                    "fill_method": fill_method,
+                    "custom_title": generate_epivis_custom_title(
+                        indicator, geo_value, f"pcr_target:{pcr_target[0]['id']}"
+                    ),
+                    "extra_keys": f"nwss_source:{source[0]['id']}",
+                }
             }
-        }
-    )
+        )
     return datasets
 
 
@@ -377,6 +378,38 @@ def generate_flusurv_export_url(flusurv_geos, start_date, end_date, api_key):
     data_export_commands.append(
         f'wget --content-disposition <a href="{data_export_url}">{data_export_url}</a>'
     )
+    return data_export_commands
+
+
+def generate_pophive_export_url(
+    indicators, start_date, end_date, pophive_geos, pophive_age_group, api_key
+):
+    data_export_commands = []
+    for indicator in indicators:
+        if indicator["_endpoint"] == "pophive":
+            for geo in pophive_geos:
+                data_export_url = f"{settings.EPIDATA_V5_URL}viz/?source=pophive&signal={indicator['indicator']}&geo_type={geo['geo_type']}&geo_value={geo['id']}&time_values={start_date}:{end_date}&extra_keys=age_group:{pophive_age_group[0]['id']}&format=json&header=false"
+                if api_key:
+                    data_export_url += f"&api_key={api_key}"
+                data_export_commands.append(
+                    f'curl -o {indicator["indicator"]}_{geo["geo_type"]}_{geo["id"]}.json <a href="{data_export_url}">{data_export_url}</a>'
+                )
+    return data_export_commands
+
+
+def generate_nwss_export_url(
+    indicators, start_date, end_date, nwss_geographic_value, nwss_pcr_target, nwss_source, nwss_fill_method, api_key
+):
+    data_export_commands = []
+    for indicator in indicators:
+        if indicator["_endpoint"] == "nwss":
+            for geo_value in nwss_geographic_value.replace(" ", "").split(","):
+                data_export_url = f"{settings.EPIDATA_V5_URL}viz/?source=nwss&signal={indicator['indicator']}&geo_type=sewershed&geo_value={geo_value}&pcr_target={nwss_pcr_target[0]['id']}&fill_method={nwss_fill_method}&time_values={start_date}:{end_date}&extra_keys=nwss_source:{nwss_source[0]['id']}&format=json&header=false"
+                if api_key:
+                    data_export_url += f"&api_key={api_key}"
+                data_export_commands.append(
+                    f'curl -o {indicator["indicator"]}_sewershed_{geo_value}.json <a href="{data_export_url}">{data_export_url}</a>'
+                )
     return data_export_commands
 
 
@@ -744,6 +777,8 @@ def log_form_stats(request, data, form_mode):
         "num_of_nidss_flu_geos": len(data.get("nidssFluLocations", [])),
         "num_of_nidss_dengue_geos": len(data.get("nidssDengueLocations", [])),
         "num_of_flusurv_geos": len(data.get("flusurvLocations", [])),
+        "num_of_pophive_geos": len(data.get("pophiveLocations", [])),
+        "num_of_nwss_geos": len(data.get("nwssGeographicValue", "")),
         "start_date": data.get("start_date"),
         "end_date": data.get("end_date"),
         "epiweeks": (
