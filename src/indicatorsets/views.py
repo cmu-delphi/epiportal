@@ -44,6 +44,7 @@ from indicatorsets.utils import (
     preview_nidss_flu_data,
     get_num_locations_from_meta,
     generate_pophive_dataset_epivis,
+    generate_nwss_dataset_epivis,
 )
 
 indicatorsets_logger = get_structured_logger("indicatorsets_logger")
@@ -373,6 +374,10 @@ def epivis(request):
         flusurv_locations = data.get("flusurvLocations", [])
         pophive_geos = data.get("pophiveLocations", [])
         pophive_age_group = data.get("pophiveAgeGroup", [])
+        nwss_pcr_target = data.get("nwssPcrTarget", [])
+        nwss_source = data.get("nwssSource", [])
+        nwss_geographic_value = data.get("nwssGeographicValue", "")
+        nwss_fill_method = data.get("nwssFillMethod", "source")
         log_form_stats(request, data, "epivis")
         log_form_data(request, data, "epivis")
         for indicator in indicators:
@@ -399,20 +404,18 @@ def epivis(request):
                     generate_flusurv_dataset_epivis(indicator, flusurv_locations)
                 )
             elif indicator["_endpoint"] == "pophive":
-                print("pophive_geos", pophive_geos)
                 datasets.extend(
                     generate_pophive_dataset_epivis(indicator, pophive_geos, pophive_age_group)
                 )
+            elif indicator["_endpoint"] == "nwss":
+                datasets.extend(
+                    generate_nwss_dataset_epivis(indicator, "sewershed", nwss_geographic_value, nwss_pcr_target, nwss_source, nwss_fill_method)
+                )
         if datasets:
             datasets_json = json.dumps({"datasets": datasets})
-            print("*"*20)
-            print("datasets_json", datasets_json)
-            print("*"*20)
             datasets_b64 = base64.b64encode(datasets_json.encode("ascii")).decode(
                 "ascii"
             )
-            print(datasets_b64)
-            print("*"*20)
             return JsonResponse({"epivis_url": f"{settings.EPIVIS_URL}#{datasets_b64}"})
         else:
             return JsonResponse({"epivis_url": settings.EPIVIS_URL})

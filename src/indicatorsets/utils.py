@@ -277,6 +277,30 @@ def generate_pophive_dataset_epivis(indicator, pophive_geos, pophive_age_group):
     return datasets
 
 
+def generate_nwss_dataset_epivis(indicator, geographic_type, geographic_value, pcr_target, source, fill_method):
+    datasets = []
+    datasets.append(
+        {
+            "color": generate_random_color(),
+            "title": "value",
+            "params": {
+                "_endpoint": indicator["_endpoint"],
+                "source": indicator["data_source"],
+                "signal": indicator["indicator"],
+                "geo_type": geographic_type,
+                "geo_value": geographic_value,
+                "pcr_target": pcr_target[0]["id"],
+                "fill_method": fill_method,
+                "custom_title": generate_epivis_custom_title(
+                    indicator, geographic_value, f"pcr_target:{pcr_target[0]['id']}"
+                ),
+                "extra_keys": f"nwss_source:{source[0]['id']}",
+            }
+        }
+    )
+    return datasets
+
+
 def generate_covidcast_indicators_export_url(
     indicators, start_date, end_date, covidcast_geos, api_key
 ):

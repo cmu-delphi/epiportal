@@ -256,6 +256,19 @@ class IndicatorHandler {
         { id: "wy", geo_type: "state", text: "WY" },
     ]
 
+    nwssPcrTargets = [
+        'fluav',
+        'fluav a h5',
+        'hmpxv',
+        'hmpxv clade i',
+        'hmpxv clade ii',
+        'mev_wt',
+        'nvo',
+        'rsv',
+        'sars-cov-2',
+      ];
+    nwssSources = ['CDC_Biobot', 'CDC_Verily', 'State_Territory', 'WastewaterSCAN'];
+
     checkForCovidcastIndicators() {
         return this.indicators.some((indicator) => {
             return indicator["_endpoint"] === "covidcast";
@@ -322,6 +335,16 @@ class IndicatorHandler {
         return pophiveIndicators;
     }
 
+    getNwssIndicators() {
+        var nwssIndicators = [];
+        this.indicators.forEach((indicator) => {
+            if (indicator["_endpoint"] === "nwss") {
+                nwssIndicators.push(indicator);
+            }
+        });
+        return nwssIndicators;
+    }
+
     getFromToDate(startDate, endDate, timeType) {
         if (timeType === "week") {
             $.ajax({
@@ -362,6 +385,7 @@ class IndicatorHandler {
             numNIDSSDengueIndicators: this.getNIDSSDengueIndicators().length,
             numFlusurvIndicators: this.getFlusurvIndicators().length,
             numPophiveIndicators: this.getPophiveIndicators().length,
+            numNwssIndicators: this.getNwssIndicators().length,
             formStartDate: document.getElementById("start_date").value,
             formEndDate: document.getElementById("end_date").value,
             apiKey: document.getElementById("apiKey").value ? document.getElementById("apiKey").value : "",
@@ -558,6 +582,54 @@ class IndicatorHandler {
         }
     }
 
+    showNwssFields() {
+        var nwssFields = `
+        <hr>
+        <div class="row margin-top-1rem" id="nwssDiv">
+            <div class="col-2">
+                <label for="nwssPcrTarget" class="col-form-label">PCR Target:</label>
+            </div>
+            <div class="col-10">
+                <select id="nwssPcrTarget" name="nwssPcrTarget" class="form-select"></select>
+            </div>
+
+            <div class="col-2 margin-top-1rem">
+                <label for="nwssSource" class="col-form-label">NWSS Source:</label>
+            </div>
+            <div class="col-10 margin-top-1rem">
+                <select id="nwssSource" name="nwssSource" class="form-select"></select>
+            </div>
+
+            <div class="col-2 margin-top-1rem">
+                <label for="nwssGeographicValue" class="col-form-label">Geographic Value:</label>
+            </div>
+            <div class="col-10 margin-top-1rem">
+                <input type="text" id="nwssGeographicValue" name="nwssGeographicValue" class="form-control" placeholder="Enter geographic value">
+            </div>
+        </div><hr>`;
+        if ($("#otherEndpointLocations").length) {
+            $("#otherEndpointLocations").append(nwssFields);
+            var pcrTargets = this.nwssPcrTargets.map(function (t) {
+                return { id: t, text: t };
+            });
+            $("#nwssPcrTarget").select2({
+                placeholder: "Select PCR Target",
+                data: pcrTargets,
+                allowClear: true,
+                width: "100%",
+            });
+            var sources = this.nwssSources.map(function (s) {
+                return { id: s, text: s };
+            });
+            $("#nwssSource").select2({
+                placeholder: "Select NWSS Source",
+                data: sources,
+                allowClear: true,
+                width: "100%",
+            });
+        }
+    }
+
     plotData() {
         const covidCastGeographicValues = Object.groupBy(
             $("#geographic_value").select2("data"),
@@ -569,6 +641,9 @@ class IndicatorHandler {
         const flusurvLocations = $("#flusurvLocations").select2("data");
         const pophiveLocations = $("#pophiveLocations").select2("data");
         const pophiveAgeGroup = $("#pophiveAgeGroup").select2("data");
+        const nwssPcrTarget = $("#nwssPcrTarget").select2("data");
+        const nwssSource = $("#nwssSource").select2("data");
+        const nwssGeographicValue = $("#nwssGeographicValue").val();
         const submitData = {
             indicators: this.indicators,
             covidCastGeographicValues: covidCastGeographicValues,
@@ -578,6 +653,10 @@ class IndicatorHandler {
             flusurvLocations: flusurvLocations,
             pophiveLocations: pophiveLocations,
             pophiveAgeGroup: pophiveAgeGroup,
+            nwssPcrTarget: nwssPcrTarget,
+            nwssSource: nwssSource,
+            nwssGeographicValue: nwssGeographicValue,
+            nwssFillMethod: "source",
             apiKey: document.getElementById("apiKey").value ? document.getElementById("apiKey").value : "",
             clientId: clientId ? clientId : "Not available",
         };

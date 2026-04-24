@@ -333,6 +333,22 @@ function showPophiveLocationSelect() {
     }
 }
 
+function showNwssFieldsSelect() {
+    if (indicatorHandler.getNwssIndicators().length > 0) {
+        if (document.getElementsByName("nwssPcrTarget").length === 0) {
+            indicatorHandler.showNwssFields();
+        } else {
+            $("#nwssDiv").show();
+        }
+    }
+    else {
+        $("#nwssPcrTarget").val(null).trigger("change");
+        $("#nwssSource").val(null).trigger("change");
+        $("#nwssGeographicValue").val("");
+        $("#nwssDiv").hide();
+    }
+}
+
 function showNonDelphiIndicatorSetsLocations() {
     if (indicatorHandler.nonCovidcastIndicatorSets.length > 0) {
 
@@ -343,6 +359,7 @@ function showNonDelphiIndicatorSetsLocations() {
         showNIDSSDengueLocationSelect();
         showFlusurvLocationSelect();
         showPophiveLocationSelect();
+        showNwssFieldsSelect();
         $("#otherEndpointLocationsWrapper").show();
     } else {
         $("#differentLocationNote").html("");
