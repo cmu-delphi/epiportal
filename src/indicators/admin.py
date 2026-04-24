@@ -252,7 +252,7 @@ class NonDelphiIndicatorAdmin(BaseIndicatorAdmin):
 @admin.register(USStateIndicator)
 class USStateIndicatorAdmin(BaseIndicatorAdmin):
     list_display = ("name", "indicator_set")
-    search_fields = ("name", "indicator_set")
+    search_fields = ("name", "indicator_set__name")
     ordering = ("name",)
     list_per_page = 50
     list_select_related = True

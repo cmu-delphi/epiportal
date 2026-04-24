@@ -315,6 +315,40 @@ function showFlusurvLocationSelect() {
     }
 }
 
+
+function showPophiveLocationSelect() {
+    if (indicatorHandler.getPophiveIndicators().length > 0) {
+        if (document.getElementsByName("pophiveLocations").length === 0) {
+            indicatorHandler.showPophiveLocations();
+        } else {
+            // IF code goes here, we assume that otherEndpointLocationWarning & pophiveRegion selector is already on the page, but is just hidden, so we should just show it.
+            $("#pophiveDiv").show();
+        }
+    }
+    else {
+        // If there are no non-covidcast indicators selected then hide otherEndpointLocationWarning & pophiveLocations selector.
+        $("#pophiveLocations").val(null).trigger("change");
+        $("#pophiveAgeGroup").val(null).trigger("change");
+        $("#pophiveDiv").hide();
+    }
+}
+
+function showNwssFieldsSelect() {
+    if (indicatorHandler.getNwssIndicators().length > 0) {
+        if (document.getElementsByName("nwssPcrTarget").length === 0) {
+            indicatorHandler.showNwssFields();
+        } else {
+            $("#nwssDiv").show();
+        }
+    }
+    else {
+        $("#nwssPcrTarget").val(null).trigger("change");
+        $("#nwssSource").val(null).trigger("change");
+        $("#nwssGeographicValue").val("");
+        $("#nwssDiv").hide();
+    }
+}
+
 function showNonDelphiIndicatorSetsLocations() {
     if (indicatorHandler.nonCovidcastIndicatorSets.length > 0) {
 
@@ -324,6 +358,8 @@ function showNonDelphiIndicatorSetsLocations() {
         showNIDSSFluLocationSelect();
         showNIDSSDengueLocationSelect();
         showFlusurvLocationSelect();
+        showPophiveLocationSelect();
+        showNwssFieldsSelect();
         $("#otherEndpointLocationsWrapper").show();
     } else {
         $("#differentLocationNote").html("");

@@ -46,8 +46,11 @@ def get_list_of_indicators_filtered_by_geo(geos):
     return response.json()
 
 
-def generate_epivis_custom_title(indicator, geo_value):
-    return f"{indicator['indicator_set_short_name']}:{indicator.get('member_short_name', '')} : {geo_value}"
+def generate_epivis_custom_title(indicator, geo_value, extra_keys=None):
+    title = f"{indicator['indicator_set_short_name']}:{indicator.get('member_short_name', '')} : {geo_value}"
+    if extra_keys:
+        title += f" ({extra_keys})"
+    return title
 
 
 def generate_random_color():
@@ -83,38 +86,41 @@ def get_grouped_original_data_provider_choices():
     """
     Returns grouped choices with U.S. States providers in a sublist.
     """
-    # Define U.S. States providers that should be grouped under "U.S. States"
-    US_STATES_PROVIDERS = list(
-        IndicatorSet.objects.filter(source_type="us_state")
-        .values_list("original_data_provider", flat=True)
-        .distinct()
-    )
 
-    all_providers = list(
+    all_providers = set(
         IndicatorSet.objects.values_list("original_data_provider", flat=True)
         .order_by("original_data_provider")
         .distinct()
     )
 
-    # Separate providers into main list and U.S. States sublist
-    main_providers = []
-    us_states_providers = []
+    # Define U.S. States providers that should be grouped under "U.S. States"
+    us_states_providers = set(
+        IndicatorSet.objects.filter(source_type="us_state")
+        .values_list("original_data_provider", flat=True)
+        .distinct()
+    )
 
-    for provider in all_providers:
-        if provider and provider in US_STATES_PROVIDERS:
-            us_states_providers.append(provider)
-        else:
-            main_providers.append(provider)
+    # Define U.S. Government providers that should be grouped under "U.S. Government"
+    us_government_providers = set(
+        data_provider for data_provider in all_providers
+        if data_provider.split(" ")[0] == "US"
+    )
+
+    main_providers = [provider for provider in all_providers if provider not in [*us_states_providers, *us_government_providers]]
 
     return {
-        "main": main_providers,
+        "main": sorted(main_providers),
         "groups": [
+            {
+                "label": "U.S. Government",
+                "providers": sorted(us_government_providers)
+            },
             {
                 "label": "U.S. States",
                 "providers": sorted(us_states_providers),
             }
         ],
-        "all": all_providers,  # Keep flat list for form compatibility
+        "all": sorted(all_providers),  # Keep flat list for form compatibility
     }
 
 
@@ -248,6 +254,54 @@ def generate_flusurv_dataset_epivis(indicator, flusurv_geos):
     return datasets
 
 
+def generate_pophive_dataset_epivis(indicator, pophive_geos, pophive_age_group):
+    datasets = []
+    for geo in pophive_geos:
+        datasets.append(
+            {
+                "color": generate_random_color(),
+                "title": "value",
+                "params": {
+                    "_endpoint": indicator["_endpoint"],
+                    "source": indicator["data_source"],
+                    "signal": indicator["indicator"],
+                    "geo_type": geo["geo_type"],
+                    "geo_value": geo["id"],
+                    "custom_title": generate_epivis_custom_title(
+                        indicator, geo["text"], f"age_group:{pophive_age_group[0]['id']}"
+                    ),
+                    "extra_keys": f"age_group:{pophive_age_group[0]['id']}",
+                },
+            }
+        )
+    return datasets
+
+
+def generate_nwss_dataset_epivis(indicator, geographic_type, geographic_value, pcr_target, source, fill_method):
+    datasets = []
+    for geo_value in geographic_value.replace(" ", "").split(","):
+        datasets.append(
+            {
+                "color": generate_random_color(),
+                "title": "value",
+                "params": {
+                    "_endpoint": indicator["_endpoint"],
+                    "source": indicator["data_source"],
+                    "signal": indicator["indicator"],
+                    "geo_type": geographic_type,
+                    "geo_value": geo_value,
+                    "pcr_target": pcr_target[0]["id"],
+                    "fill_method": fill_method,
+                    "custom_title": generate_epivis_custom_title(
+                        indicator, geo_value, f"pcr_target:{pcr_target[0]['id']}"
+                    ),
+                    "extra_keys": f"nwss_source:{source[0]['id']}",
+                }
+            }
+        )
+    return datasets
+
+
 def generate_covidcast_indicators_export_url(
     indicators, start_date, end_date, covidcast_geos, api_key
 ):
@@ -324,6 +378,38 @@ def generate_flusurv_export_url(flusurv_geos, start_date, end_date, api_key):
     data_export_commands.append(
         f'wget --content-disposition <a href="{data_export_url}">{data_export_url}</a>'
     )
+    return data_export_commands
+
+
+def generate_pophive_export_url(
+    indicators, start_date, end_date, pophive_geos, pophive_age_group, api_key
+):
+    data_export_commands = []
+    for indicator in indicators:
+        if indicator["_endpoint"] == "pophive":
+            for geo in pophive_geos:
+                data_export_url = f"{settings.EPIDATA_V5_URL}viz/?source=pophive&signal={indicator['indicator']}&geo_type={geo['geo_type']}&geo_value={geo['id']}&time_values={start_date}:{end_date}&extra_keys=age_group:{pophive_age_group[0]['id']}&format=json&header=false"
+                if api_key:
+                    data_export_url += f"&api_key={api_key}"
+                data_export_commands.append(
+                    f'curl -o {indicator["indicator"]}_{geo["geo_type"]}_{geo["id"]}.json <a href="{data_export_url}">{data_export_url}</a>'
+                )
+    return data_export_commands
+
+
+def generate_nwss_export_url(
+    indicators, start_date, end_date, nwss_geographic_value, nwss_pcr_target, nwss_source, nwss_fill_method, api_key
+):
+    data_export_commands = []
+    for indicator in indicators:
+        if indicator["_endpoint"] == "nwss":
+            for geo_value in nwss_geographic_value.replace(" ", "").split(","):
+                data_export_url = f"{settings.EPIDATA_V5_URL}viz/?source=nwss&signal={indicator['indicator']}&geo_type=sewershed&geo_value={geo_value}&pcr_target={nwss_pcr_target[0]['id']}&fill_method={nwss_fill_method}&time_values={start_date}:{end_date}&extra_keys=nwss_source:{nwss_source[0]['id']}&format=json&header=false"
+                if api_key:
+                    data_export_url += f"&api_key={api_key}"
+                data_export_commands.append(
+                    f'curl -o {indicator["indicator"]}_sewershed_{geo_value}.json <a href="{data_export_url}">{data_export_url}</a>'
+                )
     return data_export_commands
 
 
@@ -495,6 +581,79 @@ def preview_flusurv_data(flusurv_geos, start_date, end_date, api_key):
             "message": "API key does not exist. Register a new key at https://api.delphi.cmu.edu/epidata/admin/registration_form or contact delphi-support+privacy@andrew.cmu.edu to troubleshoot",
         }
         return JsonResponse(preview_data, safe=False)
+    return preview_data
+
+
+def preview_pophive_data(
+    indicators, start_date, end_date, pophive_geos, pophive_age_group, api_key
+):
+    preview_data = []
+    for indicator in indicators:
+        if indicator["_endpoint"] == "pophive":
+            for geo in pophive_geos:
+                params = {
+                    "source": "pophive",
+                    "signal": indicator["indicator"],
+                    "geo_type": geo["geo_type"],
+                    "geo_value": geo["id"],
+                    "time_values": f"{start_date}:{end_date}",
+                    "extra_keys": f"age_group:{pophive_age_group[0]['id']}",
+                    "format": "json",
+                    "header": "false",
+                    "api_key": api_key if api_key else settings.EPIDATA_API_KEY,
+                }
+                response = requests.get(
+                    f"{settings.EPIDATA_V5_URL}viz/", params=params
+                )
+                if response.status_code == 200:
+                    data = response.json()
+                    if isinstance(data, list) and len(data):
+                        preview_data.append(data[0])
+                elif response.status_code == 401:
+                    return {
+                        "message": "API key does not exist. Register a new key at https://api.delphi.cmu.edu/epidata/admin/registration_form or contact delphi-support+privacy@andrew.cmu.edu to troubleshoot",
+                    }
+    return preview_data
+
+
+def preview_nwss_data(
+    indicators,
+    start_date,
+    end_date,
+    nwss_geographic_value,
+    nwss_pcr_target,
+    nwss_source,
+    nwss_fill_method,
+    api_key,
+):
+    preview_data = []
+    for indicator in indicators:
+        if indicator["_endpoint"] == "nwss":
+            for geo_value in nwss_geographic_value.replace(" ", "").split(","):
+                params = {
+                    "source": "nwss",
+                    "signal": indicator["indicator"],
+                    "geo_type": "sewershed",
+                    "geo_value": geo_value,
+                    "pcr_target": nwss_pcr_target[0]["id"],
+                    "fill_method": nwss_fill_method,
+                    "time_values": f"{start_date}:{end_date}",
+                    "extra_keys": f"nwss_source:{nwss_source[0]['id']}",
+                    "format": "json",
+                    "header": "false",
+                    "api_key": api_key if api_key else settings.EPIDATA_API_KEY,
+                }
+                response = requests.get(
+                    f"{settings.EPIDATA_V5_URL}viz/", params=params
+                )
+                if response.status_code == 200:
+                    data = response.json()
+                    if isinstance(data, list) and len(data):
+                        preview_data.append(data[0])
+                elif response.status_code == 401:
+                    return {
+                        "message": "API key does not exist. Register a new key at https://api.delphi.cmu.edu/epidata/admin/registration_form or contact delphi-support+privacy@andrew.cmu.edu to troubleshoot",
+                    }
     return preview_data
 
 
@@ -682,6 +841,77 @@ def generate_query_code_flusurv(flusurv_geos, start_date, end_date):
     return python_code_blocks, r_code_blocks
 
 
+def generate_query_code_pophive(
+    indicators, start_date, end_date, pophive_geos, pophive_age_group
+):
+    python_code_blocks = []
+    r_code_blocks = []
+    for indicator in indicators:
+        if indicator["_endpoint"] == "pophive":
+            for geo in pophive_geos:
+                url = f"{settings.EPIDATA_V5_URL}viz/?source=pophive&signal={indicator['indicator']}&geo_type={geo['geo_type']}&geo_value={geo['id']}&time_values={start_date}:{end_date}&extra_keys=age_group:{pophive_age_group[0]['id']}&format=json&header=false"
+                python_code_block = dedent(
+                    f"""\
+                    import requests
+
+                    pophive_{indicator['indicator']}_{geo['geo_type']}_{geo['id']}_response = requests.get(
+                        "{url}"
+                    )
+                    pophive_{indicator['indicator']}_{geo['geo_type']}_{geo['id']}_data = pophive_{indicator['indicator']}_{geo['geo_type']}_{geo['id']}_response.json()
+                """
+                )
+                python_code_blocks.append(python_code_block)
+                r_code_block = dedent(
+                    f"""\
+                    library(httr)
+                    library(jsonlite)
+
+                    pophive_{indicator['indicator']}_{geo['geo_type']}_{geo['id']}_response <- GET(
+                        "{url}"
+                    )
+                    pophive_{indicator['indicator']}_{geo['geo_type']}_{geo['id']}_data <- fromJSON(content(pophive_{indicator['indicator']}_{geo['geo_type']}_{geo['id']}_response, "text"))
+                """
+                )
+                r_code_blocks.append(r_code_block)
+    return python_code_blocks, r_code_blocks
+
+
+def generate_query_code_nwss(
+    indicators, start_date, end_date, nwss_geographic_value, nwss_pcr_target,
+    nwss_source, nwss_fill_method
+):
+    python_code_blocks = []
+    r_code_blocks = []
+    for indicator in indicators:
+        if indicator["_endpoint"] == "nwss":
+            for geo_value in nwss_geographic_value.replace(" ", "").split(","):
+                url = f"{settings.EPIDATA_V5_URL}viz/?source=nwss&signal={indicator['indicator']}&geo_type=sewershed&geo_value={geo_value}&pcr_target={nwss_pcr_target[0]['id']}&fill_method={nwss_fill_method}&time_values={start_date}:{end_date}&extra_keys=nwss_source:{nwss_source[0]['id']}&format=json&header=false"
+                python_code_block = dedent(
+                    f"""\
+                    import requests
+
+                    nwss_{indicator['indicator']}_sewershed_{geo_value}_response = requests.get(
+                        "{url}"
+                    )
+                    nwss_{indicator['indicator']}_sewershed_{geo_value}_data = nwss_{indicator['indicator']}_sewershed_{geo_value}_response.json()
+                """
+                )
+                python_code_blocks.append(python_code_block)
+                r_code_block = dedent(
+                    f"""\
+                    library(httr)
+                    library(jsonlite)
+
+                    nwss_{indicator['indicator']}_sewershed_{geo_value}_response <- GET(
+                        "{url}"
+                    )
+                    nwss_{indicator['indicator']}_sewershed_{geo_value}_data <- fromJSON(content(nwss_{indicator['indicator']}_sewershed_{geo_value}_response, "text"))
+                """
+                )
+                r_code_blocks.append(r_code_block)
+    return python_code_blocks, r_code_blocks
+
+
 def log_form_stats(request, data, form_mode):
     log_data = {
         "form_mode": form_mode,
@@ -691,6 +921,8 @@ def log_form_stats(request, data, form_mode):
         "num_of_nidss_flu_geos": len(data.get("nidssFluLocations", [])),
         "num_of_nidss_dengue_geos": len(data.get("nidssDengueLocations", [])),
         "num_of_flusurv_geos": len(data.get("flusurvLocations", [])),
+        "num_of_pophive_geos": len(data.get("pophiveLocations", [])),
+        "num_of_nwss_geos": len(data.get("nwssGeographicValue", "")),
         "start_date": data.get("start_date"),
         "end_date": data.get("end_date"),
         "epiweeks": (
