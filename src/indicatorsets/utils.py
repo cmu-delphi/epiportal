@@ -584,6 +584,79 @@ def preview_flusurv_data(flusurv_geos, start_date, end_date, api_key):
     return preview_data
 
 
+def preview_pophive_data(
+    indicators, start_date, end_date, pophive_geos, pophive_age_group, api_key
+):
+    preview_data = []
+    for indicator in indicators:
+        if indicator["_endpoint"] == "pophive":
+            for geo in pophive_geos:
+                params = {
+                    "source": "pophive",
+                    "signal": indicator["indicator"],
+                    "geo_type": geo["geo_type"],
+                    "geo_value": geo["id"],
+                    "time_values": f"{start_date}:{end_date}",
+                    "extra_keys": f"age_group:{pophive_age_group[0]['id']}",
+                    "format": "json",
+                    "header": "false",
+                    "api_key": api_key if api_key else settings.EPIDATA_API_KEY,
+                }
+                response = requests.get(
+                    f"{settings.EPIDATA_V5_URL}viz/", params=params
+                )
+                if response.status_code == 200:
+                    data = response.json()
+                    if isinstance(data, list) and len(data):
+                        preview_data.append(data[0])
+                elif response.status_code == 401:
+                    return {
+                        "message": "API key does not exist. Register a new key at https://api.delphi.cmu.edu/epidata/admin/registration_form or contact delphi-support+privacy@andrew.cmu.edu to troubleshoot",
+                    }
+    return preview_data
+
+
+def preview_nwss_data(
+    indicators,
+    start_date,
+    end_date,
+    nwss_geographic_value,
+    nwss_pcr_target,
+    nwss_source,
+    nwss_fill_method,
+    api_key,
+):
+    preview_data = []
+    for indicator in indicators:
+        if indicator["_endpoint"] == "nwss":
+            for geo_value in nwss_geographic_value.replace(" ", "").split(","):
+                params = {
+                    "source": "nwss",
+                    "signal": indicator["indicator"],
+                    "geo_type": "sewershed",
+                    "geo_value": geo_value,
+                    "pcr_target": nwss_pcr_target[0]["id"],
+                    "fill_method": nwss_fill_method,
+                    "time_values": f"{start_date}:{end_date}",
+                    "extra_keys": f"nwss_source:{nwss_source[0]['id']}",
+                    "format": "json",
+                    "header": "false",
+                    "api_key": api_key if api_key else settings.EPIDATA_API_KEY,
+                }
+                response = requests.get(
+                    f"{settings.EPIDATA_V5_URL}viz/", params=params
+                )
+                if response.status_code == 200:
+                    data = response.json()
+                    if isinstance(data, list) and len(data):
+                        preview_data.append(data[0])
+                elif response.status_code == 401:
+                    return {
+                        "message": "API key does not exist. Register a new key at https://api.delphi.cmu.edu/epidata/admin/registration_form or contact delphi-support+privacy@andrew.cmu.edu to troubleshoot",
+                    }
+    return preview_data
+
+
 def generate_query_code_covidcast(
     indicators,
     covidcast_geos,

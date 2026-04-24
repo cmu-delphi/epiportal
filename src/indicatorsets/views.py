@@ -47,6 +47,8 @@ from indicatorsets.utils import (
     generate_nwss_dataset_epivis,
     generate_pophive_export_url,
     generate_nwss_export_url,
+    preview_pophive_data,
+    preview_nwss_data,
 )
 
 indicatorsets_logger = get_structured_logger("indicatorsets_logger")
@@ -509,6 +511,12 @@ def preview_data(request):
         nidss_flu_locations = data.get("nidssFluLocations", [])
         nidss_dengue_locations = data.get("nidssDengueLocations", [])
         flusurv_locations = data.get("flusurvLocations", [])
+        pophive_geos = data.get("pophiveLocations", [])
+        pophive_age_group = data.get("pophiveAgeGroup", [])
+        nwss_pcr_target = data.get("nwssPcrTarget", [])
+        nwss_source = data.get("nwssSource", [])
+        nwss_geographic_value = data.get("nwssGeographicValue", "")
+        nwss_fill_method = data.get("nwssFillMethod", "source")
         api_key = data.get("apiKey", None)
 
         preview_data = []
@@ -536,6 +544,19 @@ def preview_data(request):
         if flusurv_locations:
             preview_data.extend(
                 preview_flusurv_data(flusurv_locations, start_date, end_date, api_key)
+            )
+        if pophive_geos and pophive_age_group:
+            preview_data.extend(
+                preview_pophive_data(
+                    indicators, start_date, end_date, pophive_geos, pophive_age_group, api_key
+                )
+            )
+        if nwss_geographic_value and nwss_pcr_target and nwss_source:
+            preview_data.extend(
+                preview_nwss_data(
+                    indicators, start_date, end_date, nwss_geographic_value,
+                    nwss_pcr_target, nwss_source, nwss_fill_method, api_key
+                )
             )
         return JsonResponse(preview_data, safe=False)
 
