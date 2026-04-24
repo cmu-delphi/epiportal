@@ -179,7 +179,7 @@ function format(indicatorSetId, relatedIndicators, indicatorSetDescription) {
             ).length;
             var checkboxTitle = "";
             checked = checked ? "checked" : "";
-            const enabledEndpoints = ["covidcast", "fluview", "nidss_flu", "nidss_dengue", "flusurv"];
+            const enabledEndpoints = ["covidcast", "fluview", "nidss_flu", "nidss_dengue", "flusurv", "pophive", "nwss"];
             disabled = enabledEndpoints.includes(indicator.endpoint) ? "" : "disabled";
             sourceType = indicator.source_type;
             var restricted = indicator.restricted != "No";
