@@ -46,8 +46,11 @@ def get_list_of_indicators_filtered_by_geo(geos):
     return response.json()
 
 
-def generate_epivis_custom_title(indicator, geo_value):
-    return f"{indicator['indicator_set_short_name']}:{indicator.get('member_short_name', '')} : {geo_value}"
+def generate_epivis_custom_title(indicator, geo_value, extra_keys=None):
+    title = f"{indicator['indicator_set_short_name']}:{indicator.get('member_short_name', '')} : {geo_value}"
+    if extra_keys:
+        title += f" ({extra_keys})"
+    return title
 
 
 def generate_random_color():
@@ -245,6 +248,29 @@ def generate_flusurv_dataset_epivis(indicator, flusurv_geos):
                     "custom_title": generate_epivis_custom_title(
                         indicator, geo["text"]
                     ),
+                },
+            }
+        )
+    return datasets
+
+
+def generate_pophive_dataset_epivis(indicator, pophive_geos, pophive_age_group):
+    datasets = []
+    for geo in pophive_geos:
+        datasets.append(
+            {
+                "color": generate_random_color(),
+                "title": "value",
+                "params": {
+                    "_endpoint": indicator["_endpoint"],
+                    "source": indicator["data_source"],
+                    "signal": indicator["indicator"],
+                    "geo_type": geo["geo_type"],
+                    "geo_value": geo["id"],
+                    "custom_title": generate_epivis_custom_title(
+                        indicator, geo["text"], f"age_group:{pophive_age_group[0]['id']}"
+                    ),
+                    "extra_keys": f"age_group:{pophive_age_group[0]['id']}",
                 },
             }
         )
