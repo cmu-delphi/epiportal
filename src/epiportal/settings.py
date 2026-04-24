@@ -40,8 +40,8 @@ SPREADSHEET_URLS = {
     "indicators": "https://docs.google.com/spreadsheets/d/1zb7ItJzY5oq1n-2xtvnPBiJu2L3AqmCKubrLkKJZVHs/export?format=csv&gid=329338228",
     "other_endpoint_indicators": "https://docs.google.com/spreadsheets/d/1zb7ItJzY5oq1n-2xtvnPBiJu2L3AqmCKubrLkKJZVHs/export?format=csv&gid=1364181703",
     "non_delphi_indicators": "https://docs.google.com/spreadsheets/d/1zb7ItJzY5oq1n-2xtvnPBiJu2L3AqmCKubrLkKJZVHs/export?format=csv&gid=493612863",
-    "us_state_indicator_sets": "https://docs.google.com/spreadsheets/d/1zb7ItJzY5oq1n-2xtvnPBiJu2L3AqmCKubrLkKJZVHs/export?format=csv&gid=232438393",
-    "us_state_indicators": "https://docs.google.com/spreadsheets/d/1zb7ItJzY5oq1n-2xtvnPBiJu2L3AqmCKubrLkKJZVHs/export?format=csv&gid=1158629578",
+    "us_state_indicator_sets": "https://docs.google.com/spreadsheets/d/1zb7ItJzY5oq1n-2xtvnPBiJu2L3AqmCKubrLkKJZVHs/export?format=csv&gid=1635370101",
+    "us_state_indicators": "https://docs.google.com/spreadsheets/d/1zb7ItJzY5oq1n-2xtvnPBiJu2L3AqmCKubrLkKJZVHs/export?format=csv&gid=527384770",
     "column_descriptions": "https://docs.google.com/spreadsheets/d/10BxyiLN7l9PWQuWbDeVmtzte-G9YNSuj2PzjDIy_OEc/export?format=csv&gid=1361858243#gid=1361858243",
     "filter_descriptions": "https://docs.google.com/spreadsheets/d/10BxyiLN7l9PWQuWbDeVmtzte-G9YNSuj2PzjDIy_OEc/export?format=csv&gid=502883488#gid=502883488",
     "express_view_indicators": "https://docs.google.com/spreadsheets/d/1zb7ItJzY5oq1n-2xtvnPBiJu2L3AqmCKubrLkKJZVHs/export?format=csv&gid=1759850611#gid=1759850611",
@@ -49,10 +49,6 @@ SPREADSHEET_URLS = {
 
 ENVIRONMENT = os.environ.get("SENTRY_ENVIRONMENT", "development")
 
-
-if ENVIRONMENT != "production":
-    SPREADSHEET_URLS["us_state_indicator_sets"] = "https://docs.google.com/spreadsheets/d/1zb7ItJzY5oq1n-2xtvnPBiJu2L3AqmCKubrLkKJZVHs/export?format=csv&gid=1635370101"
-    SPREADSHEET_URLS["us_state_indicators"] = "https://docs.google.com/spreadsheets/d/1zb7ItJzY5oq1n-2xtvnPBiJu2L3AqmCKubrLkKJZVHs/export?format=csv&gid=527384770"
 
 SENTRY_DSN = os.environ.get('SENTRY_DSN')
 if SENTRY_DSN:
