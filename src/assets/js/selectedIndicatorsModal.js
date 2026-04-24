@@ -328,6 +328,7 @@ function showPophiveLocationSelect() {
     else {
         // If there are no non-covidcast indicators selected then hide otherEndpointLocationWarning & pophiveLocations selector.
         $("#pophiveLocations").val(null).trigger("change");
+        $("#pophiveAgeGroup").val(null).trigger("change");
         $("#pophiveDiv").hide();
     }
 }

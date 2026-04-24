@@ -30,6 +30,7 @@ ALTERNATIVE_INTERFACE_VERSION = "1.0.11"
 
 EPIVIS_URL = os.environ.get("EPIVIS_URL", "https://delphi.cmu.edu/epivis/")
 EPIDATA_URL = os.environ.get("EPIDATA_URL", "https://api.delphi.cmu.edu/epidata/")
+EPIDATA_V5_URL = os.environ.get("EPIDATA_V5_URL", "https://api.delphi.cmu.edu/epidata/v5/")
 EPIDATA_API_KEY = os.environ.get("EPIDATA_API_KEY", "")
 
 SPREADSHEET_URLS = {
