@@ -841,6 +841,77 @@ def generate_query_code_flusurv(flusurv_geos, start_date, end_date):
     return python_code_blocks, r_code_blocks
 
 
+def generate_query_code_pophive(
+    indicators, start_date, end_date, pophive_geos, pophive_age_group
+):
+    python_code_blocks = []
+    r_code_blocks = []
+    for indicator in indicators:
+        if indicator["_endpoint"] == "pophive":
+            for geo in pophive_geos:
+                url = f"{settings.EPIDATA_V5_URL}viz/?source=pophive&signal={indicator['indicator']}&geo_type={geo['geo_type']}&geo_value={geo['id']}&time_values={start_date}:{end_date}&extra_keys=age_group:{pophive_age_group[0]['id']}&format=json&header=false"
+                python_code_block = dedent(
+                    f"""\
+                    import requests
+
+                    pophive_{indicator['indicator']}_{geo['geo_type']}_{geo['id']}_response = requests.get(
+                        "{url}"
+                    )
+                    pophive_{indicator['indicator']}_{geo['geo_type']}_{geo['id']}_data = pophive_{indicator['indicator']}_{geo['geo_type']}_{geo['id']}_response.json()
+                """
+                )
+                python_code_blocks.append(python_code_block)
+                r_code_block = dedent(
+                    f"""\
+                    library(httr)
+                    library(jsonlite)
+
+                    pophive_{indicator['indicator']}_{geo['geo_type']}_{geo['id']}_response <- GET(
+                        "{url}"
+                    )
+                    pophive_{indicator['indicator']}_{geo['geo_type']}_{geo['id']}_data <- fromJSON(content(pophive_{indicator['indicator']}_{geo['geo_type']}_{geo['id']}_response, "text"))
+                """
+                )
+                r_code_blocks.append(r_code_block)
+    return python_code_blocks, r_code_blocks
+
+
+def generate_query_code_nwss(
+    indicators, start_date, end_date, nwss_geographic_value, nwss_pcr_target,
+    nwss_source, nwss_fill_method
+):
+    python_code_blocks = []
+    r_code_blocks = []
+    for indicator in indicators:
+        if indicator["_endpoint"] == "nwss":
+            for geo_value in nwss_geographic_value.replace(" ", "").split(","):
+                url = f"{settings.EPIDATA_V5_URL}viz/?source=nwss&signal={indicator['indicator']}&geo_type=sewershed&geo_value={geo_value}&pcr_target={nwss_pcr_target[0]['id']}&fill_method={nwss_fill_method}&time_values={start_date}:{end_date}&extra_keys=nwss_source:{nwss_source[0]['id']}&format=json&header=false"
+                python_code_block = dedent(
+                    f"""\
+                    import requests
+
+                    nwss_{indicator['indicator']}_sewershed_{geo_value}_response = requests.get(
+                        "{url}"
+                    )
+                    nwss_{indicator['indicator']}_sewershed_{geo_value}_data = nwss_{indicator['indicator']}_sewershed_{geo_value}_response.json()
+                """
+                )
+                python_code_blocks.append(python_code_block)
+                r_code_block = dedent(
+                    f"""\
+                    library(httr)
+                    library(jsonlite)
+
+                    nwss_{indicator['indicator']}_sewershed_{geo_value}_response <- GET(
+                        "{url}"
+                    )
+                    nwss_{indicator['indicator']}_sewershed_{geo_value}_data <- fromJSON(content(nwss_{indicator['indicator']}_sewershed_{geo_value}_response, "text"))
+                """
+                )
+                r_code_blocks.append(r_code_block)
+    return python_code_blocks, r_code_blocks
+
+
 def log_form_stats(request, data, form_mode):
     log_data = {
         "form_mode": form_mode,

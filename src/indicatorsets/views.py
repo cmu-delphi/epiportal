@@ -49,6 +49,8 @@ from indicatorsets.utils import (
     generate_nwss_export_url,
     preview_pophive_data,
     preview_nwss_data,
+    generate_query_code_pophive,
+    generate_query_code_nwss,
 )
 
 indicatorsets_logger = get_structured_logger("indicatorsets_logger")
@@ -574,6 +576,12 @@ def create_query_code(request):
         nidss_flu_locations = data.get("nidssFluLocations", [])
         nidss_dengue_locations = data.get("nidssDengueLocations", [])
         flusurv_locations = data.get("flusurvLocations", [])
+        pophive_geos = data.get("pophiveLocations", [])
+        pophive_age_group = data.get("pophiveAgeGroup", [])
+        nwss_pcr_target = data.get("nwssPcrTarget", [])
+        nwss_source = data.get("nwssSource", [])
+        nwss_geographic_value = data.get("nwssGeographicValue", "")
+        nwss_fill_method = data.get("nwssFillMethod", "source")
         python_code_blocks = [
             dedent(
                 """\
@@ -593,6 +601,7 @@ def create_query_code(request):
             """
             )
         ]
+        all_indicators = indicators
         grouped_indicators = group_by_property(indicators, "data_source")
         for data_source, indicators in grouped_indicators.items():
             indicators_str = ",".join(
@@ -630,6 +639,19 @@ def create_query_code(request):
         if flusurv_locations:
             python_code_block, r_code_block = generate_query_code_flusurv(
                 flusurv_locations, start_date, end_date
+            )
+            python_code_blocks.extend(python_code_block)
+            r_code_blocks.extend(r_code_block)
+        if pophive_geos and pophive_age_group:
+            python_code_block, r_code_block = generate_query_code_pophive(
+                all_indicators, start_date, end_date, pophive_geos, pophive_age_group
+            )
+            python_code_blocks.extend(python_code_block)
+            r_code_blocks.extend(r_code_block)
+        if nwss_geographic_value and nwss_pcr_target and nwss_source:
+            python_code_block, r_code_block = generate_query_code_nwss(
+                all_indicators, start_date, end_date, nwss_geographic_value,
+                nwss_pcr_target, nwss_source, nwss_fill_method
             )
             python_code_blocks.extend(python_code_block)
             r_code_blocks.extend(r_code_block)
