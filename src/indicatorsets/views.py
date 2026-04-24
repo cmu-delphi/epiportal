@@ -370,6 +370,7 @@ def epivis(request):
         nidss_flu_locations = data.get("nidssFluLocations", [])
         nidss_dengue_locations = data.get("nidssDengueLocations", [])
         flusurv_locations = data.get("flusurvLocations", [])
+        pophive_age_group = data.get("pophiveAgeGroup", [])
         log_form_stats(request, data, "epivis")
         log_form_data(request, data, "epivis")
         for indicator in indicators:
@@ -418,6 +419,7 @@ def generate_export_data_url(request):
         nidss_flu_locations = data.get("nidssFluLocations", [])
         nidss_dengue_locations = data.get("nidssDengueLocations", [])
         flusurv_locations = data.get("flusurvLocations", [])
+        pophive_age_group = data.get("pophiveAgeGroup", [])
         api_key = data.get("apiKey", None)
 
         log_form_stats(request, data, "export")
@@ -472,6 +474,7 @@ def preview_data(request):
         nidss_flu_locations = data.get("nidssFluLocations", [])
         nidss_dengue_locations = data.get("nidssDengueLocations", [])
         flusurv_locations = data.get("flusurvLocations", [])
+        pophive_age_group = data.get("pophiveAgeGroup", [])
         api_key = data.get("apiKey", None)
 
         preview_data = []
@@ -516,6 +519,7 @@ def create_query_code(request):
         nidss_flu_locations = data.get("nidssFluLocations", [])
         nidss_dengue_locations = data.get("nidssDengueLocations", [])
         flusurv_locations = data.get("flusurvLocations", [])
+        pophive_age_group = data.get("pophiveAgeGroup", [])
         python_code_blocks = [
             dedent(
                 """\
@@ -723,3 +727,14 @@ def check_fluview_geo_coverage(request):
             if indicator["indicator"] in null_data_indicators
         ]
         return JsonResponse({"not_covered_indicators": not_covered_indicators})
+
+
+def get_pophive_age_groups(request):
+    url = settings.EPIDATA_V5_URL + "metadata/extra_key_values/?source=pophive"
+    pophive_age_groups = cache.get("pophive_age_groups")
+    if not pophive_age_groups:
+        response = requests.get(url)
+        if response.status_code == 200:
+            pophive_age_groups = response.json()["age_groups"]
+            cache.set("pophive_age_groups", pophive_age_groups, 60 * 60 * 24)
+    return JsonResponse({"age_groups": pophive_age_groups})

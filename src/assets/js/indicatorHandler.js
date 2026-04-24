@@ -422,12 +422,17 @@ class IndicatorHandler {
                     ));
             payload.pophiveGeoValues = pophiveGeoValues;
         }
+        var pophiveAgeGroupData = $("#pophiveAgeGroup").select2("data");
+        if (pophiveAgeGroupData && pophiveAgeGroupData.length > 0) {
+            payload.pophiveAgeGroup = pophiveAgeGroupData[0].id;
+        }
         return payload;
 
     }
 
     showfluviewLocations() {
         var fluviewLocationselect = `
+        <hr>
         <div class="row margin-top-1rem" id="fluviewDiv">
             <div class="col-2">
                 <label for="fluviewLocations" class="col-form-label">ILINet Location(s):</label>
@@ -435,7 +440,7 @@ class IndicatorHandler {
             <div class="col-10">
                 <select id="fluviewLocations" name="fluviewLocations" class="form-select" multiple="multiple"></select>
             </div>
-        </div>`;
+        </div><hr>`;
         if ($("#otherEndpointLocations").length) {
             $("#otherEndpointLocations").append(fluviewLocationselect);
             $("#fluviewLocations").select2({
@@ -449,6 +454,7 @@ class IndicatorHandler {
 
     showNIDSSFluLocations() {
         var nidssFluLocationselect = `
+        <hr>
         <div class="row margin-top-1rem" id="nidssFluDiv">
             <div class="col-2">
                 <label for="nidssFluLocations" class="col-form-label">Taiwanese ILI Location(s):</label>
@@ -456,7 +462,7 @@ class IndicatorHandler {
             <div class="col-10">
                 <select id="nidssFluLocations" name="nidssFluLocations" class="form-select" multiple="multiple"></select>
             </div>
-        </div>`;
+        </div><hr>`;
         if ($("#otherEndpointLocations").length) {
             $("#otherEndpointLocations").append(nidssFluLocationselect);
             $("#nidssFluLocations").select2({
@@ -470,6 +476,7 @@ class IndicatorHandler {
 
     showNIDSSDengueLocations() {
         var nidssDengueLocationselect = `
+        <hr>
         <div class="row margin-top-1rem" id="nidssDengueDiv">
             <div class="col-2">
                 <label for="nidssDengueLocations" class="col-form-label">Taiwanese Dengue Cases Location(s):</label>
@@ -477,7 +484,7 @@ class IndicatorHandler {
             <div class="col-10">
                 <select id="nidssDengueLocations" name="nidssDengueLocations" class="form-select" multiple="multiple"></select>
             </div>
-        </div>`;
+        </div><hr>`;
         if ($("#otherEndpointLocations").length) {
             $("#otherEndpointLocations").append(nidssDengueLocationselect);
             $("#nidssDengueLocations").select2({
@@ -491,6 +498,7 @@ class IndicatorHandler {
 
     showFlusurvLocations() {
         var flusurvLocationselect = `
+        <hr>
         <div class="row margin-top-1rem" id="flusurvDiv">
             <div class="col-2">
                 <label for="flusurvLocations" class="col-form-label">FluSurv Location(s):</label>
@@ -498,7 +506,7 @@ class IndicatorHandler {
             <div class="col-10">
                 <select id="flusurvLocations" name="flusurvLocations" class="form-select" multiple="multiple"></select>
             </div>
-        </div>`;
+        </div><hr>`;
         if ($("#otherEndpointLocations").length) {
             $("#otherEndpointLocations").append(flusurvLocationselect);
             $("#flusurvLocations").select2({
@@ -512,6 +520,7 @@ class IndicatorHandler {
 
     showPophiveLocations() {
         var pophiveLocationselect = `
+        <hr>
         <div class="row margin-top-1rem" id="pophiveDiv">
             <div class="col-2">
                 <label for="pophiveLocations" class="col-form-label">Pophive Location(s):</label>
@@ -519,7 +528,14 @@ class IndicatorHandler {
             <div class="col-10">
                 <select id="pophiveLocations" name="pophiveLocations" class="form-select" multiple="multiple"></select>
             </div>
-        </div>`;
+
+            <div class="col-2 margin-top-1rem">
+                <label for="pophiveAgeGroup" class="col-form-label">Age Group:</label>
+            </div>
+            <div class="col-10 margin-top-1rem">
+                <select id="pophiveAgeGroup" name="pophiveAgeGroup" class="form-select"></select>
+            </div>
+        </div><hr>`;
         if ($("#otherEndpointLocations").length) {
             $("#otherEndpointLocations").append(pophiveLocationselect);
             $("#pophiveLocations").select2({
@@ -527,6 +543,17 @@ class IndicatorHandler {
                 data: this.pophiveLocations,
                 allowClear: true,
                 width: "100%",
+            });
+            $.get("get_pophive_age_groups/", function (response) {
+                var ageGroups = response.age_groups.map(function (ag) {
+                    return { id: ag, text: ag };
+                });
+                $("#pophiveAgeGroup").select2({
+                    placeholder: "Select Age Group",
+                    data: ageGroups,
+                    allowClear: true,
+                    width: "100%",
+                });
             });
         }
     }
@@ -541,6 +568,7 @@ class IndicatorHandler {
         const nidssDengueLocations = $("#nidssDengueLocations").select2("data");
         const flusurvLocations = $("#flusurvLocations").select2("data");
         const pophiveLocations = $("#pophiveLocations").select2("data");
+        const pophiveAgeGroup = $("#pophiveAgeGroup").select2("data");
         const submitData = {
             indicators: this.indicators,
             covidCastGeographicValues: covidCastGeographicValues,
@@ -549,6 +577,7 @@ class IndicatorHandler {
             nidssDengueLocations: nidssDengueLocations,
             flusurvLocations: flusurvLocations,
             pophiveLocations: pophiveLocations,
+            pophiveAgeGroup: pophiveAgeGroup,
             apiKey: document.getElementById("apiKey").value ? document.getElementById("apiKey").value : "",
             clientId: clientId ? clientId : "Not available",
         };
@@ -574,6 +603,7 @@ class IndicatorHandler {
         const nidssDengueLocations = $("#nidssDengueLocations").select2("data");
         const flusurvLocations = $("#flusurvLocations").select2("data");
         const pophiveLocations = $("#pophiveLocations").select2("data");
+        const pophiveAgeGroup = $("#pophiveAgeGroup").select2("data");
         var covidCastGeographicValues = Object.groupBy(
             $("#geographic_value").select2("data"),
             ({ geoType }) => [geoType]
@@ -588,6 +618,7 @@ class IndicatorHandler {
             nidssDengueLocations: nidssDengueLocations,
             flusurvLocations: flusurvLocations,
             pophiveLocations: pophiveLocations,
+            pophiveAgeGroup: pophiveAgeGroup,
             apiKey: document.getElementById("apiKey").value ? document.getElementById("apiKey").value : "",
             clientId: clientId ? clientId : "Not available",
         }
@@ -614,6 +645,7 @@ class IndicatorHandler {
         const nidssDengueLocations = $("#nidssDengueLocations").select2("data");
         const flusurvLocations = $("#flusurvLocations").select2("data");
         const pophiveLocations = $("#pophiveLocations").select2("data");
+        const pophiveAgeGroup = $("#pophiveAgeGroup").select2("data");
         const covidCastGeographicValues = Object.groupBy(
             $("#geographic_value").select2("data"),
             ({ geoType }) => [geoType]
@@ -628,6 +660,7 @@ class IndicatorHandler {
             nidssDengueLocations: nidssDengueLocations,
             flusurvLocations: flusurvLocations,
             pophiveLocations: pophiveLocations,
+            pophiveAgeGroup: pophiveAgeGroup,
             apiKey: document.getElementById("apiKey").value ? document.getElementById("apiKey").value : "",
             clientId: clientId ? clientId : "Not available",
         }
@@ -653,6 +686,7 @@ class IndicatorHandler {
         const nidssDengueLocations = $("#nidssDengueLocations").select2("data");
         const flusurvLocations = $("#flusurvLocations").select2("data");
         const pophiveLocations = $("#pophiveLocations").select2("data");
+        const pophiveAgeGroup = $("#pophiveAgeGroup").select2("data");
         const covidCastGeographicValues = Object.groupBy(
             $("#geographic_value").select2("data"),
             ({ geoType }) => [geoType]
@@ -668,6 +702,7 @@ class IndicatorHandler {
             nidssDengueLocations: nidssDengueLocations,
             flusurvLocations: flusurvLocations,
             pophiveLocations: pophiveLocations,
+            pophiveAgeGroup: pophiveAgeGroup,
             apiKey: document.getElementById("apiKey").value ? document.getElementById("apiKey").value : "",
             clientId: clientId ? clientId : "Not available",
         }
