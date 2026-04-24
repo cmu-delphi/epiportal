@@ -45,6 +45,12 @@ from indicatorsets.utils import (
     get_num_locations_from_meta,
     generate_pophive_dataset_epivis,
     generate_nwss_dataset_epivis,
+    generate_pophive_export_url,
+    generate_nwss_export_url,
+    preview_pophive_data,
+    preview_nwss_data,
+    generate_query_code_pophive,
+    generate_query_code_nwss,
 )
 
 indicatorsets_logger = get_structured_logger("indicatorsets_logger")
@@ -436,6 +442,13 @@ def generate_export_data_url(request):
         flusurv_locations = data.get("flusurvLocations", [])
         api_key = data.get("apiKey", None)
 
+        pophive_geos = data.get("pophiveLocations", [])
+        pophive_age_group = data.get("pophiveAgeGroup", [])
+        nwss_geographic_value = data.get("nwssGeographicValue", "")
+        nwss_pcr_target = data.get("nwssPcrTarget", [])
+        nwss_source = data.get("nwssSource", [])
+        nwss_fill_method = data.get("nwssFillMethod", "source")
+
         log_form_stats(request, data, "export")
         log_form_data(request, data, "export")
         data_export_commands.extend(
@@ -467,6 +480,18 @@ def generate_export_data_url(request):
                     flusurv_locations, start_date, end_date, api_key
                 )
             )
+        if pophive_geos:
+            data_export_commands.extend(
+                generate_pophive_export_url(
+                    indicators, start_date, end_date, pophive_geos, pophive_age_group, api_key
+                )
+            )
+        if nwss_geographic_value:
+            data_export_commands.extend(
+                generate_nwss_export_url(
+                    indicators, start_date, end_date, nwss_geographic_value, nwss_pcr_target, nwss_source, nwss_fill_method, api_key
+                )
+            )
         data_export_block = data_export_block.format("<br>".join(data_export_commands))
         response = {
             "data_export_block": data_export_block,
@@ -488,6 +513,12 @@ def preview_data(request):
         nidss_flu_locations = data.get("nidssFluLocations", [])
         nidss_dengue_locations = data.get("nidssDengueLocations", [])
         flusurv_locations = data.get("flusurvLocations", [])
+        pophive_geos = data.get("pophiveLocations", [])
+        pophive_age_group = data.get("pophiveAgeGroup", [])
+        nwss_pcr_target = data.get("nwssPcrTarget", [])
+        nwss_source = data.get("nwssSource", [])
+        nwss_geographic_value = data.get("nwssGeographicValue", "")
+        nwss_fill_method = data.get("nwssFillMethod", "source")
         api_key = data.get("apiKey", None)
 
         preview_data = []
@@ -516,6 +547,19 @@ def preview_data(request):
             preview_data.extend(
                 preview_flusurv_data(flusurv_locations, start_date, end_date, api_key)
             )
+        if pophive_geos and pophive_age_group:
+            preview_data.extend(
+                preview_pophive_data(
+                    indicators, start_date, end_date, pophive_geos, pophive_age_group, api_key
+                )
+            )
+        if nwss_geographic_value and nwss_pcr_target and nwss_source:
+            preview_data.extend(
+                preview_nwss_data(
+                    indicators, start_date, end_date, nwss_geographic_value,
+                    nwss_pcr_target, nwss_source, nwss_fill_method, api_key
+                )
+            )
         return JsonResponse(preview_data, safe=False)
 
 
@@ -532,6 +576,12 @@ def create_query_code(request):
         nidss_flu_locations = data.get("nidssFluLocations", [])
         nidss_dengue_locations = data.get("nidssDengueLocations", [])
         flusurv_locations = data.get("flusurvLocations", [])
+        pophive_geos = data.get("pophiveLocations", [])
+        pophive_age_group = data.get("pophiveAgeGroup", [])
+        nwss_pcr_target = data.get("nwssPcrTarget", [])
+        nwss_source = data.get("nwssSource", [])
+        nwss_geographic_value = data.get("nwssGeographicValue", "")
+        nwss_fill_method = data.get("nwssFillMethod", "source")
         python_code_blocks = [
             dedent(
                 """\
@@ -551,6 +601,7 @@ def create_query_code(request):
             """
             )
         ]
+        all_indicators = indicators
         grouped_indicators = group_by_property(indicators, "data_source")
         for data_source, indicators in grouped_indicators.items():
             indicators_str = ",".join(
@@ -588,6 +639,19 @@ def create_query_code(request):
         if flusurv_locations:
             python_code_block, r_code_block = generate_query_code_flusurv(
                 flusurv_locations, start_date, end_date
+            )
+            python_code_blocks.extend(python_code_block)
+            r_code_blocks.extend(r_code_block)
+        if pophive_geos and pophive_age_group:
+            python_code_block, r_code_block = generate_query_code_pophive(
+                all_indicators, start_date, end_date, pophive_geos, pophive_age_group
+            )
+            python_code_blocks.extend(python_code_block)
+            r_code_blocks.extend(r_code_block)
+        if nwss_geographic_value and nwss_pcr_target and nwss_source:
+            python_code_block, r_code_block = generate_query_code_nwss(
+                all_indicators, start_date, end_date, nwss_geographic_value,
+                nwss_pcr_target, nwss_source, nwss_fill_method
             )
             python_code_blocks.extend(python_code_block)
             r_code_blocks.extend(r_code_block)
