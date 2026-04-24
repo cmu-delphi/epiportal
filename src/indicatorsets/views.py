@@ -43,6 +43,8 @@ from indicatorsets.utils import (
     preview_nidss_dengue_data,
     preview_nidss_flu_data,
     get_num_locations_from_meta,
+    generate_pophive_dataset_epivis,
+    generate_nwss_dataset_epivis,
 )
 
 indicatorsets_logger = get_structured_logger("indicatorsets_logger")
@@ -370,7 +372,12 @@ def epivis(request):
         nidss_flu_locations = data.get("nidssFluLocations", [])
         nidss_dengue_locations = data.get("nidssDengueLocations", [])
         flusurv_locations = data.get("flusurvLocations", [])
+        pophive_geos = data.get("pophiveLocations", [])
         pophive_age_group = data.get("pophiveAgeGroup", [])
+        nwss_pcr_target = data.get("nwssPcrTarget", [])
+        nwss_source = data.get("nwssSource", [])
+        nwss_geographic_value = data.get("nwssGeographicValue", "")
+        nwss_fill_method = data.get("nwssFillMethod", "source")
         log_form_stats(request, data, "epivis")
         log_form_data(request, data, "epivis")
         for indicator in indicators:
@@ -396,6 +403,14 @@ def epivis(request):
                 datasets.extend(
                     generate_flusurv_dataset_epivis(indicator, flusurv_locations)
                 )
+            elif indicator["_endpoint"] == "pophive":
+                datasets.extend(
+                    generate_pophive_dataset_epivis(indicator, pophive_geos, pophive_age_group)
+                )
+            elif indicator["_endpoint"] == "nwss":
+                datasets.extend(
+                    generate_nwss_dataset_epivis(indicator, "sewershed", nwss_geographic_value, nwss_pcr_target, nwss_source, nwss_fill_method)
+                )
         if datasets:
             datasets_json = json.dumps({"datasets": datasets})
             datasets_b64 = base64.b64encode(datasets_json.encode("ascii")).decode(
@@ -419,7 +434,6 @@ def generate_export_data_url(request):
         nidss_flu_locations = data.get("nidssFluLocations", [])
         nidss_dengue_locations = data.get("nidssDengueLocations", [])
         flusurv_locations = data.get("flusurvLocations", [])
-        pophive_age_group = data.get("pophiveAgeGroup", [])
         api_key = data.get("apiKey", None)
 
         log_form_stats(request, data, "export")
@@ -474,7 +488,6 @@ def preview_data(request):
         nidss_flu_locations = data.get("nidssFluLocations", [])
         nidss_dengue_locations = data.get("nidssDengueLocations", [])
         flusurv_locations = data.get("flusurvLocations", [])
-        pophive_age_group = data.get("pophiveAgeGroup", [])
         api_key = data.get("apiKey", None)
 
         preview_data = []
@@ -519,7 +532,6 @@ def create_query_code(request):
         nidss_flu_locations = data.get("nidssFluLocations", [])
         nidss_dengue_locations = data.get("nidssDengueLocations", [])
         flusurv_locations = data.get("flusurvLocations", [])
-        pophive_age_group = data.get("pophiveAgeGroup", [])
         python_code_blocks = [
             dedent(
                 """\
@@ -735,6 +747,10 @@ def get_pophive_age_groups(request):
     if not pophive_age_groups:
         response = requests.get(url)
         if response.status_code == 200:
-            pophive_age_groups = response.json()["age_groups"]
+            data = response.json()
+            if data["extra_key_values"]:
+                pophive_age_groups = data["extra_key_values"].get("age_group", [])
+            else:
+                pophive_age_groups = []
             cache.set("pophive_age_groups", pophive_age_groups, 60 * 60 * 24)
     return JsonResponse({"age_groups": pophive_age_groups})
