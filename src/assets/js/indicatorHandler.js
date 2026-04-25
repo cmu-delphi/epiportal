@@ -547,7 +547,7 @@ class IndicatorHandler {
         <hr>
         <div class="row margin-top-1rem" id="pophiveDiv">
             <div class="col-2">
-                <label for="pophiveLocations" class="col-form-label">Pophive Location(s):</label>
+                <label for="pophiveLocations" class="col-form-label">Cosmos Location(s):</label>
             </div>
             <div class="col-10">
                 <select id="pophiveLocations" name="pophiveLocations" class="form-select" multiple="multiple"></select>
@@ -563,7 +563,7 @@ class IndicatorHandler {
         if ($("#otherEndpointLocations").length) {
             $("#otherEndpointLocations").append(pophiveLocationselect);
             $("#pophiveLocations").select2({
-                placeholder: "Select Pophive Location(s)",
+                placeholder: "Select Cosmos Location(s)",
                 data: this.pophiveLocations,
                 allowClear: true,
                 width: "100%",
