@@ -1,6 +1,3 @@
-from django.core.exceptions import ValidationError
-from django.utils.translation import gettext_lazy as _
-
 from django.db import models
 
 from base.models import SOURCE_TYPES
@@ -152,7 +149,7 @@ class Indicator(models.Model):
     indicator_type: models.ForeignKey = models.ForeignKey(
         "indicators.IndicatorType",
         verbose_name="Indicator Type",
-        on_delete=models.CASCADE,
+        on_delete=models.RESTRICT,
         related_name="indicators",
         null=True,
         blank=True,
@@ -165,7 +162,7 @@ class Indicator(models.Model):
     format_type: models.ForeignKey = models.ForeignKey(
         "indicators.FormatType",
         verbose_name="Format Type",
-        on_delete=models.PROTECT,
+        on_delete=models.RESTRICT,
         related_name="indicators",
         null=True,
         blank=True,
@@ -214,7 +211,7 @@ class Indicator(models.Model):
     category: models.ForeignKey = models.ForeignKey(
         "indicators.Category",
         verbose_name="Category",
-        on_delete=models.CASCADE,
+        on_delete=models.RESTRICT,
         related_name="indicators",
         null=True,
         blank=True,
@@ -233,7 +230,7 @@ class Indicator(models.Model):
     geographic_scope: models.ForeignKey = models.ForeignKey(
         "base.GeographicScope",
         verbose_name="Geographic Scope",
-        on_delete=models.PROTECT,
+        on_delete=models.RESTRICT,
         related_name="indicators",
         null=True,
         blank=True,
@@ -300,7 +297,7 @@ class Indicator(models.Model):
     source: models.ForeignKey = models.ForeignKey(
         "datasources.SourceSubdivision",
         verbose_name="Source Subdivision",
-        on_delete=models.PROTECT,
+        on_delete=models.CASCADE,
         related_name="indicators",
         null=True,
         blank=True,
@@ -362,19 +359,10 @@ class Indicator(models.Model):
         null=True,
         help_text="Number of days the indicator is available",
     )
-
-    base: models.ForeignKey = models.ForeignKey(
-        "indicators.Indicator",
-        verbose_name="Base Indicator",
-        related_name="base_for",
-        on_delete=models.CASCADE,
-        null=True,
-        blank=True,
-    )
     indicator_set: models.ForeignKey = models.ForeignKey(
         "indicatorsets.IndicatorSet",
         verbose_name="Indicator Set",
-        on_delete=models.PROTECT,
+        on_delete=models.CASCADE,
         related_name="indicators",
         null=True,
         blank=True,
@@ -418,29 +406,12 @@ class Indicator(models.Model):
             ),
         ]
 
-    @property
-    def same_base_indicators(self):
-        """
-        Returns the indicators that have the same base indicator.
-        """
-        return self.base.base_for.exclude(id=self.id) if self.base else None
-
     def __str__(self) -> str:
         """
         Returns the name of the indicator as a string.
 
         """
         return str(self.name)
-
-    def clean(self) -> None:
-        """
-        Validate that the indicator has a base if any other indicators exist.
-
-        Raises:
-            ValidationError: If there are other indicators and this indicator doesn't have a base.
-        """
-        if Indicator.objects.exists() and not self.base:
-            raise ValidationError(_("Indicator should have base."))
 
     @property
     def get_display_name(self):

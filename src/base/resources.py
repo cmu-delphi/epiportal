@@ -1,3 +1,5 @@
+import import_export
+
 GEOGRAPHIC_GRANULARITY_MAPPING = {
     "nation": {
         "display_name": "National",
@@ -97,3 +99,21 @@ def get_geographic_mapping_by_name(name):
             return (key, value)
 
     return None
+
+
+class CustomModelResource(import_export.resources.ModelResource):
+
+    def after_import_row(self, row, row_result, **kwargs):
+        """For each row in the import file, add the pk to the list."""
+        if row_result.instance and row_result.instance.pk:
+            self.imported_rows_pks.append(row_result.instance.pk)
+        super().after_import_row(row, row_result, **kwargs)
+
+    def after_import(self, dataset, result, **kwargs):
+        """
+        Delete all rows not in the import data set.
+        Then call the same method in the parent to still sequence the DB.
+        """
+        if self.imported_rows_pks:
+            self.Meta.model.objects.exclude(pk__in=self.imported_rows_pks).delete()
+        super().after_import(dataset, result, **kwargs)

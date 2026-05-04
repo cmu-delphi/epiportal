@@ -78,7 +78,7 @@ class IndicatorSet(models.Model):
         verbose_name="Geographic Scope",
         blank=True,
         null=True,
-        on_delete=models.PROTECT,
+        on_delete=models.RESTRICT,
         help_text="Geographic scope of the Indicator Set",
     )
     geographic_levels: models.ManyToManyField = models.ManyToManyField(

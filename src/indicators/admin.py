@@ -16,7 +16,6 @@ from indicators.models import (
     USStateIndicator,
 )
 from indicators.resources import (
-    IndicatorBaseResource,
     IndicatorResource,
     NonDelphiIndicatorResource,
     OtherEndpointIndicatorResource,
@@ -103,7 +102,7 @@ class IndicatorAdmin(BaseIndicatorAdmin):
     list_editable = ("indicator_type", "format_type", "category", "geographic_scope")
     list_display_links = ("name",)
 
-    resource_classes = [IndicatorResource, IndicatorBaseResource]
+    resource_classes = [IndicatorResource]
 
     change_list_template = "admin/indicators/indicator_changelist.html"
 

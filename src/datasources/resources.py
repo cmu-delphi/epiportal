@@ -1,7 +1,7 @@
-from import_export import resources
 from import_export.fields import Field
 
 from datasources.models import SourceSubdivision, OtherEndpointSourceSubdivision
+from base.resources import CustomModelResource
 
 
 def strip_all_string_values(row) -> None:
@@ -11,7 +11,10 @@ def strip_all_string_values(row) -> None:
             row[key] = value.strip()
 
 
-class SourceSubdivisionResource(resources.ModelResource):
+class SourceSubdivisionResource(CustomModelResource):
+
+    imported_rows_pks = []
+
     name = Field(
         attribute="name",
         column_name="Source Subdivision",
