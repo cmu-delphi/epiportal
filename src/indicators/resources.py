@@ -1,13 +1,12 @@
 import logging
 
 from django.db.models import Max
-from import_export import resources
 from import_export.fields import Field
 from import_export.results import RowResult
 from import_export.widgets import ForeignKeyWidget, ManyToManyWidget
 
 from base.models import GeographicScope, Geography, Pathogen, SeverityPyramidRung
-from base.resources import GEOGRAPHIC_GRANULARITY_MAPPING
+from base.resources import GEOGRAPHIC_GRANULARITY_MAPPING, CustomModelResource
 from datasources.models import SourceSubdivision
 from indicators.models import (
     Category,
@@ -201,21 +200,7 @@ def process_indicator_geography(row):
                 indicator_geography_obj.save()
 
 
-def process_base(row) -> None:
-    if row["Signal BaseName"]:
-        source = SourceSubdivision.objects.get(name=row["Source Subdivision"])
-
-        try:
-            base_indicator_obj = Indicator.objects.get(
-                name=row["Signal BaseName"], source=source
-            )
-        except Indicator.DoesNotExist:
-            return
-
-        row["base"] = base_indicator_obj.id
-
-
-class ModelResource(resources.ModelResource):
+class ModelResource(CustomModelResource):
     def get_field_names(self):
         names = []
         for field in list(self.fields.values()):
@@ -275,32 +260,8 @@ class PermissiveForeignKeyWidget(ForeignKeyWidget):
             logger.warning(f"instance matching '{value}' does not exist")
 
 
-class IndicatorBaseResource(ModelResource):
-    name = Field(attribute="name", column_name="Signal")
-    display_name = Field(attribute="display_name", column_name="Name")
-    base = Field(
-        attribute="base",
-        column_name="base",
-        widget=PermissiveForeignKeyWidget(Indicator),
-    )
-    source = Field(
-        attribute="source",
-        column_name="Source Subdivision",
-        widget=PermissiveForeignKeyWidget(SourceSubdivision, field="name"),
-    )
-
-    class Meta:
-        model = Indicator
-        fields: list[str] = ["base", "name", "source", "display_name"]
-        import_id_fields: list[str] = ["name", "source"]
-
-    def before_import_row(self, row, **kwargs) -> None:
-        """Post-processes each row after importing."""
-        strip_all_string_values(row)
-        process_base(row)
-
-
 class IndicatorResource(ModelResource):
+    imported_rows_pks = []
     name = Field(attribute="name", column_name="Signal")
     display_name = Field(attribute="display_name", column_name="Name")
     short_description = Field(
@@ -492,6 +453,7 @@ class IndicatorResource(ModelResource):
 
     def after_import_row(self, row, row_result, **kwargs):
         process_indicator_geography(row)
+        super().after_import_row(row, row_result, **kwargs)
 
     def after_save_instance(self, instance, row, **kwargs):
         instance.source_type = "covidcast"
@@ -499,6 +461,7 @@ class IndicatorResource(ModelResource):
 
 
 class OtherEndpointIndicatorResource(ModelResource):
+    imported_rows_pks = []
     name = Field(attribute="name", column_name="Indicator")
     display_name = Field(attribute="display_name", column_name="Name")
     short_description = Field(
@@ -667,13 +630,15 @@ class OtherEndpointIndicatorResource(ModelResource):
 
     def after_import_row(self, row, row_result, **kwargs):
         process_indicator_geography(row)
+        super().after_import_row(row, row_result, **kwargs)
 
     def after_save_instance(self, instance, row, **kwargs):
         instance.source_type = "other_endpoint"
         instance.save()
 
 
-class NonDelphiIndicatorResource(resources.ModelResource):
+class NonDelphiIndicatorResource(ModelResource):
+    imported_rows_pks = []
 
     name = Field(attribute="name", column_name="Indicator Name")
     display_name = Field(attribute="display_name", column_name="Indicator Name")
@@ -713,6 +678,7 @@ class NonDelphiIndicatorResource(resources.ModelResource):
 
 
 class USStateIndicatorResource(ModelResource):
+    imported_rows_pks = []
     name = Field(attribute="name", column_name="Indicator Name")
     indicator_set = Field(
         attribute="indicator_set",

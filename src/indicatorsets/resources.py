@@ -6,7 +6,7 @@ from import_export.widgets import ForeignKeyWidget, ManyToManyWidget
 
 from alternative_interface.models import ExpressViewIndicator
 from base.models import GeographicScope, Geography, Pathogen, SeverityPyramidRung
-from base.resources import get_geographic_mapping_by_name
+from base.resources import CustomModelResource, get_geographic_mapping_by_name
 from indicators.models import Indicator
 from indicatorsets.models import (
     IndicatorSet,
@@ -123,7 +123,8 @@ def process_data_use_terms(row) -> None:
         row["Data Use Terms"] = "None found"
 
 
-class IndicatorSetBaseResource(resources.ModelResource):
+class IndicatorSetBaseResource(CustomModelResource):
+    imported_rows_pks = []
 
     def skip_row(self, instance, original, row, import_validation_errors=None):
         if not row["Include in indicator app"]:
@@ -523,6 +524,7 @@ class USStateIndicatorSetResource(IndicatorSetBaseResource):
             "preprocessing_description",
             "documentation_link",
             "severity_pyramid_rungs",
+            "license",
         )
 
     def get_instance(self, instance_loader, row):
