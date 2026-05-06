@@ -345,26 +345,6 @@ class IndicatorHandler {
         return nwssIndicators;
     }
 
-    getFromToDate(startDate, endDate, timeType) {
-        if (timeType === "week") {
-            $.ajax({
-                url: "get_epiweek/",
-                type: "POST",
-                async: false,
-                data: {
-                    csrfmiddlewaretoken: csrf_token,
-                    start_date: startDate,
-                    end_date: endDate,
-                },
-                success: function (result) {
-                    startDate = result.start_date;
-                    endDate = result.end_date;
-                },
-            });
-        }
-        return [startDate, endDate];
-    }
-
     sendAsyncAjaxRequest(url, data) {
         var request = $.ajax({
             url: url,
