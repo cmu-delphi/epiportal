@@ -414,11 +414,20 @@ def epivis(request):
                 )
             elif indicator["_endpoint"] == "pophive":
                 datasets.extend(
-                    generate_pophive_dataset_epivis(indicator, pophive_geos, pophive_age_group)
+                    generate_pophive_dataset_epivis(
+                        indicator, pophive_geos, pophive_age_group
+                    )
                 )
             elif indicator["_endpoint"] == "nwss":
                 datasets.extend(
-                    generate_nwss_dataset_epivis(indicator, "sewershed", nwss_geographic_value, nwss_pcr_target, nwss_source, nwss_fill_method)
+                    generate_nwss_dataset_epivis(
+                        indicator,
+                        "sewershed",
+                        nwss_geographic_value,
+                        nwss_pcr_target,
+                        nwss_source,
+                        nwss_fill_method,
+                    )
                 )
         if datasets:
             datasets_json = json.dumps({"datasets": datasets})
@@ -486,13 +495,25 @@ def generate_export_data_url(request):
         if pophive_geos:
             data_export_commands.extend(
                 generate_pophive_export_url(
-                    indicators, start_date, end_date, pophive_geos, pophive_age_group, api_key
+                    indicators,
+                    start_date,
+                    end_date,
+                    pophive_geos,
+                    pophive_age_group,
+                    api_key,
                 )
             )
         if nwss_geographic_value:
             data_export_commands.extend(
                 generate_nwss_export_url(
-                    indicators, start_date, end_date, nwss_geographic_value, nwss_pcr_target, nwss_source, nwss_fill_method, api_key
+                    indicators,
+                    start_date,
+                    end_date,
+                    nwss_geographic_value,
+                    nwss_pcr_target,
+                    nwss_source,
+                    nwss_fill_method,
+                    api_key,
                 )
             )
         data_export_block = data_export_block.format("<br>".join(data_export_commands))
@@ -549,19 +570,32 @@ def preview_data(request):
                 )
             if flusurv_locations:
                 preview_data.extend(
-                    preview_flusurv_data(flusurv_locations, start_date, end_date, api_key)
+                    preview_flusurv_data(
+                        flusurv_locations, start_date, end_date, api_key
+                    )
                 )
             if pophive_geos and pophive_age_group:
                 preview_data.extend(
                     preview_pophive_data(
-                        indicators, start_date, end_date, pophive_geos, pophive_age_group, api_key
+                        indicators,
+                        start_date,
+                        end_date,
+                        pophive_geos,
+                        pophive_age_group,
+                        api_key,
                     )
                 )
             if nwss_geographic_value and nwss_pcr_target and nwss_source:
                 preview_data.extend(
                     preview_nwss_data(
-                        indicators, start_date, end_date, nwss_geographic_value,
-                        nwss_pcr_target, nwss_source, nwss_fill_method, api_key
+                        indicators,
+                        start_date,
+                        end_date,
+                        nwss_geographic_value,
+                        nwss_pcr_target,
+                        nwss_source,
+                        nwss_fill_method,
+                        api_key,
                     )
                 )
         except InvalidApiKeyError as e:
@@ -660,8 +694,13 @@ def create_query_code(request):
             r_code_blocks.extend(r_code_block)
         if nwss_geographic_value and nwss_pcr_target and nwss_source:
             python_code_block, r_code_block = generate_query_code_nwss(
-                all_indicators, start_date, end_date, nwss_geographic_value,
-                nwss_pcr_target, nwss_source, nwss_fill_method
+                all_indicators,
+                start_date,
+                end_date,
+                nwss_geographic_value,
+                nwss_pcr_target,
+                nwss_source,
+                nwss_fill_method,
             )
             python_code_blocks.extend(python_code_block)
             r_code_blocks.extend(r_code_block)
@@ -739,9 +778,19 @@ def get_table_stats_info(request):
         queryset = IndicatorSet.objects.none()
 
     filter = IndicatorSetFilter(request.GET, queryset=queryset)
-    related_indicators = filter.indicators_qs.filter(indicator_set__id__in=filter.qs.values_list("id", flat=True))
-    num_locations = get_num_locations_from_meta(related_indicators.values("source__name", "name").distinct())
-    return JsonResponse({"num_of_indicator_sets": filter.qs.count(), "num_of_indicators": related_indicators.count(), "num_of_locations": num_locations})
+    related_indicators = filter.indicators_qs.filter(
+        indicator_set__id__in=filter.qs.values_list("id", flat=True)
+    )
+    num_locations = get_num_locations_from_meta(
+        related_indicators.values("source__name", "name").distinct()
+    )
+    return JsonResponse(
+        {
+            "num_of_indicator_sets": filter.qs.count(),
+            "num_of_indicators": related_indicators.count(),
+            "num_of_locations": num_locations,
+        }
+    )
 
 
 def get_related_indicators_json(request):
@@ -809,7 +858,9 @@ def check_fluview_geo_coverage(request):
         if fluview_clinical_indicators:
             try:
                 response = requests.get(
-                    f"{settings.EPIDATA_URL}fluview_clinical", params=params, timeout=(5, 30)
+                    f"{settings.EPIDATA_URL}fluview_clinical",
+                    params=params,
+                    timeout=(5, 30),
                 )
                 response.raise_for_status()
             except requests.RequestException:
@@ -841,19 +892,16 @@ def check_fluview_geo_coverage(request):
 
 
 def get_pophive_age_groups(request):
-    url = settings.EPIDATA_V5_URL + "metadata/extra_key_values/?source=pophive"
-    pophive_age_groups = cache.get("pophive_age_groups")
+    pophive_age_groups = cache.get("pophive_age_groups") or []
     if not pophive_age_groups:
         try:
-            response = requests.get(url, timeout=(5, 30))
+            response = requests.get(
+                settings.EPIDATA_V5_URL + "metadata/extra_key_values/?source=pophive",
+                timeout=(5, 30),
+            )
             response.raise_for_status()
+            pophive_age_groups = response.json().get("epidata", [])
+            cache.set("pophive_age_groups", pophive_age_groups, 60 * 60 * 24)
         except requests.RequestException:
             logger.exception("Error getting pophive age groups")
-            return JsonResponse({"age_groups": []}, safe=False, status=502)
-        data = response.json()
-        if data["extra_key_values"]:
-            pophive_age_groups = data["extra_key_values"].get("age_group", [])
-        else:
-            pophive_age_groups = []
-        cache.set("pophive_age_groups", pophive_age_groups, 60 * 60 * 24)
-    return JsonResponse({"age_groups": pophive_age_groups}, safe=False)
+    return JsonResponse({"age_groups": pophive_age_groups})
