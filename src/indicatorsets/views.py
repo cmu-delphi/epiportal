@@ -18,6 +18,7 @@ from indicatorsets.filters import IndicatorSetFilter
 from indicatorsets.forms import IndicatorSetFilterForm
 from indicatorsets.models import ColumnDescription, FilterDescription, IndicatorSet
 from indicatorsets.utils import (
+    InvalidApiKeyError,
     generate_covidcast_dataset_epivis,
     generate_covidcast_indicators_export_url,
     generate_flusurv_dataset_epivis,
@@ -53,6 +54,8 @@ from indicatorsets.utils import (
     generate_query_code_nwss,
 )
 
+
+logger = get_structured_logger("indicatorsets.views")
 indicatorsets_logger = get_structured_logger("indicatorsets_logger")
 
 
@@ -522,43 +525,50 @@ def preview_data(request):
         api_key = data.get("apiKey", None)
 
         preview_data = []
-        preview_data.extend(
-            preview_covidcast_data(
-                indicators, start_date, end_date, covidcast_geos, api_key
-            )
-        )
-        if fluview_geos:
+        try:
             preview_data.extend(
-                preview_fluview_data(fluview_geos, start_date, end_date, api_key)
-            )
-        if nidss_flu_locations:
-            preview_data.extend(
-                preview_nidss_flu_data(
-                    nidss_flu_locations, start_date, end_date, api_key
+                preview_covidcast_data(
+                    indicators, start_date, end_date, covidcast_geos, api_key
                 )
             )
-        if nidss_dengue_locations:
-            preview_data.extend(
-                preview_nidss_dengue_data(
-                    nidss_dengue_locations, start_date, end_date, api_key
+            if fluview_geos:
+                preview_data.extend(
+                    preview_fluview_data(fluview_geos, start_date, end_date, api_key)
                 )
-            )
-        if flusurv_locations:
-            preview_data.extend(
-                preview_flusurv_data(flusurv_locations, start_date, end_date, api_key)
-            )
-        if pophive_geos and pophive_age_group:
-            preview_data.extend(
-                preview_pophive_data(
-                    indicators, start_date, end_date, pophive_geos, pophive_age_group, api_key
+            if nidss_flu_locations:
+                preview_data.extend(
+                    preview_nidss_flu_data(
+                        nidss_flu_locations, start_date, end_date, api_key
+                    )
                 )
-            )
-        if nwss_geographic_value and nwss_pcr_target and nwss_source:
-            preview_data.extend(
-                preview_nwss_data(
-                    indicators, start_date, end_date, nwss_geographic_value,
-                    nwss_pcr_target, nwss_source, nwss_fill_method, api_key
+            if nidss_dengue_locations:
+                preview_data.extend(
+                    preview_nidss_dengue_data(
+                        nidss_dengue_locations, start_date, end_date, api_key
+                    )
                 )
+            if flusurv_locations:
+                preview_data.extend(
+                    preview_flusurv_data(flusurv_locations, start_date, end_date, api_key)
+                )
+            if pophive_geos and pophive_age_group:
+                preview_data.extend(
+                    preview_pophive_data(
+                        indicators, start_date, end_date, pophive_geos, pophive_age_group, api_key
+                    )
+                )
+            if nwss_geographic_value and nwss_pcr_target and nwss_source:
+                preview_data.extend(
+                    preview_nwss_data(
+                        indicators, start_date, end_date, nwss_geographic_value,
+                        nwss_pcr_target, nwss_source, nwss_fill_method, api_key
+                    )
+                )
+        except InvalidApiKeyError as e:
+            return JsonResponse(
+                {"epidata": [], "result": -2, "message": str(e)},
+                safe=False,
+                status=401,
             )
         return JsonResponse(preview_data, safe=False)
 
@@ -673,15 +683,23 @@ def get_available_geos(request):
             indicators_str = ",".join(
                 indicator["indicator"] for indicator in indicators
             )
-            response = requests.get(
-                f"{settings.EPIDATA_URL}covidcast/geo_indicator_coverage",
-                params={"data_source": data_source, "signals": indicators_str},
-                auth=("epidata", settings.EPIDATA_API_KEY),
-            )
-            if response.status_code == 200:
-                data = response.json()
-                if len(data["epidata"]):
-                    geo_values.extend(data["epidata"])
+            try:
+                response = requests.get(
+                    f"{settings.EPIDATA_URL}covidcast/geo_indicator_coverage",
+                    params={"data_source": data_source, "signals": indicators_str},
+                    auth=("epidata", settings.EPIDATA_API_KEY),
+                    timeout=(5, 30),
+                )
+                response.raise_for_status()
+            except requests.RequestException:
+                logger.exception(
+                    "Error getting geo indicator coverage",
+                    extra={"data_source": data_source, "signals": indicators_str},
+                )
+                continue
+            data = response.json()
+            if len(data["epidata"]):
+                geo_values.extend(data["epidata"])
         unique_values = set(geo_values)
         geo_levels = set([el.split(":")[0] for el in unique_values])
         geo_unit_ids = set([geo_value.split(":")[1] for geo_value in unique_values])
@@ -771,8 +789,16 @@ def check_fluview_geo_coverage(request):
         }
 
         if fluview_indicators:
-            response = requests.get(f"{settings.EPIDATA_URL}fluview", params=params)
-            if response.status_code == 200:
+            try:
+                response = requests.get(
+                    f"{settings.EPIDATA_URL}fluview", params=params, timeout=(5, 30)
+                )
+                response.raise_for_status()
+            except requests.RequestException:
+                logger.exception(
+                    "Error getting fluview data", extra={"geo_value": geo_value}
+                )
+            else:
                 data = response.json()
                 if len(data["epidata"]):
                     for el in data["epidata"]:
@@ -781,10 +807,17 @@ def check_fluview_geo_coverage(request):
                                 el[indicator] if el[indicator] else 0
                             )
         if fluview_clinical_indicators:
-            response = requests.get(
-                f"{settings.EPIDATA_URL}fluview_clinical", params=params
-            )
-            if response.status_code == 200:
+            try:
+                response = requests.get(
+                    f"{settings.EPIDATA_URL}fluview_clinical", params=params, timeout=(5, 30)
+                )
+                response.raise_for_status()
+            except requests.RequestException:
+                logger.exception(
+                    "Error getting fluview clinical data",
+                    extra={"geo_value": geo_value},
+                )
+            else:
                 data = response.json()
                 if len(data["epidata"]):
                     for el in data["epidata"]:
@@ -802,19 +835,25 @@ def check_fluview_geo_coverage(request):
             for indicator in indicators
             if indicator["indicator"] in null_data_indicators
         ]
-        return JsonResponse({"not_covered_indicators": not_covered_indicators})
+        return JsonResponse(
+            {"not_covered_indicators": not_covered_indicators}, safe=False
+        )
 
 
 def get_pophive_age_groups(request):
     url = settings.EPIDATA_V5_URL + "metadata/extra_key_values/?source=pophive"
     pophive_age_groups = cache.get("pophive_age_groups")
     if not pophive_age_groups:
-        response = requests.get(url)
-        if response.status_code == 200:
-            data = response.json()
-            if data["extra_key_values"]:
-                pophive_age_groups = data["extra_key_values"].get("age_group", [])
-            else:
-                pophive_age_groups = []
-            cache.set("pophive_age_groups", pophive_age_groups, 60 * 60 * 24)
-    return JsonResponse({"age_groups": pophive_age_groups})
+        try:
+            response = requests.get(url, timeout=(5, 30))
+            response.raise_for_status()
+        except requests.RequestException:
+            logger.exception("Error getting pophive age groups")
+            return JsonResponse({"age_groups": []}, safe=False, status=502)
+        data = response.json()
+        if data["extra_key_values"]:
+            pophive_age_groups = data["extra_key_values"].get("age_group", [])
+        else:
+            pophive_age_groups = []
+        cache.set("pophive_age_groups", pophive_age_groups, 60 * 60 * 24)
+    return JsonResponse({"age_groups": pophive_age_groups}, safe=False)

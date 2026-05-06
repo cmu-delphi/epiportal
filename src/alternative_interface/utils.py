@@ -4,6 +4,7 @@ from typing import Iterable, Union
 import requests
 from django.conf import settings
 from epiweeks import Week
+from delphi_utils import get_structured_logger
 
 from base.models import GeographyUnit
 from indicatorsets.utils import (
@@ -16,6 +17,8 @@ from alternative_interface.helper import (
 )
 
 from alternative_interface.models import ExpressViewIndicator
+
+logger = get_structured_logger("alternative_interface.utils")
 
 
 def epiweeks_in_date_range(start_date_str: str, end_date_str: str):
@@ -80,15 +83,23 @@ def get_available_geos(indicators):
         sources = grouped_indicators.keys()
         for data_source, indicators in grouped_indicators.items():
             indicators_str = ",".join(indicator["name"] for indicator in indicators)
-            response = requests.get(
-                f"{settings.EPIDATA_URL}covidcast/geo_indicator_coverage",
-                params={"data_source": data_source, "signals": indicators_str},
-                auth=("epidata", settings.EPIDATA_API_KEY),
-            )
-            if response.status_code == 200:
-                data = response.json()
-                if len(data["epidata"]):
-                    geo_values.extend(data["epidata"])
+            try:
+                response = requests.get(
+                    f"{settings.EPIDATA_URL}covidcast/geo_indicator_coverage",
+                    params={"data_source": data_source, "signals": indicators_str},
+                    auth=("epidata", settings.EPIDATA_API_KEY),
+                    timeout=(5, 30),
+                )
+                response.raise_for_status()
+            except requests.RequestException:
+                logger.exception(
+                    "Error getting geo indicator coverage",
+                    extra={"data_source": data_source, "signals": indicators_str},
+                )
+                continue
+            data = response.json()
+            if len(data["epidata"]):
+                geo_values.extend(data["epidata"])
         unique_values = set(geo_values)
         geo_levels = set([el.split(":")[0] for el in unique_values])
         geo_unit_ids = set([geo_value.split(":")[1] for geo_value in unique_values])
@@ -167,11 +178,17 @@ def get_covidcast_data(indicator, start_date, end_date, geo, api_key):
         "geo_values": geo_value.lower(),
         "api_key": api_key if api_key else settings.EPIDATA_API_KEY,
     }
-    response = requests.get(f"{settings.EPIDATA_URL}covidcast", params=params)
-    if response.status_code == 200:
+    try:
+        response = requests.get(f"{settings.EPIDATA_URL}covidcast", params=params, timeout=(5, 30))
+        response.raise_for_status()
         response_data = response.json()
         if len(response_data["epidata"]):
             return response_data["epidata"]
+    except requests.RequestException:
+        logger.exception(
+            "Error getting covidcast data",
+            extra={"signal": indicator["name"], "geo": geo},
+        )
     return []
 
 
@@ -190,21 +207,28 @@ def get_fluview_data(indicator, geo, start_date, end_date, api_key):
         "epiweeks": time_values,
         "api_key": api_key if api_key else settings.EPIDATA_API_KEY,
     }
-    response = requests.get(
-        f"{settings.EPIDATA_URL}{indicator['data_source']}", params=params
-    )
-    if response.status_code == 200:
-        data = response.json()
-        if len(data["epidata"]):
-            return [
-                {
-                    "time_value": el["epiweek"],
-                    "value": el[indicator["name"]],
-                    "signal": indicator["name"],
-                    "time_type": indicator["time_type"],
-                }
-                for el in data["epidata"]
-            ]
+    try:
+        response = requests.get(
+            f"{settings.EPIDATA_URL}{indicator['data_source']}", params=params, timeout=(5, 30)
+        )
+        response.raise_for_status()
+    except requests.RequestException:
+        logger.exception(
+            "Error getting fluview data",
+            extra={"signal": indicator["name"], "geo": geo},
+        )
+        return []
+    data = response.json()
+    if len(data["epidata"]):
+        return [
+            {
+                "time_value": el["epiweek"],
+                "value": el[indicator["name"]],
+                "signal": indicator["name"],
+                "time_type": indicator["time_type"],
+            }
+            for el in data["epidata"]
+        ]
     return []
 
 

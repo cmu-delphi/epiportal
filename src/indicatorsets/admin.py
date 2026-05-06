@@ -106,7 +106,10 @@ class IndicatorSetAdmin(BaseIndicatorSetAdmin):
 
     def download_indicator_set(self, request):
         return download_source_file(
-            settings.SPREADSHEET_URLS["indicator_sets"], "Indicator_Sets.csv"
+            self,
+            request,
+            settings.SPREADSHEET_URLS["indicator_sets"],
+            "Indicator_Sets.csv",
         )
 
 
@@ -168,6 +171,8 @@ class NonDelphiIndicatorSetAdmin(BaseIndicatorSetAdmin):
 
     def download_nondelphi_indicator_set(self, request):
         return download_source_file(
+            self,
+            request,
             settings.SPREADSHEET_URLS["non_delphi_indicator_sets"],
             "Non_Delphi_Indicator_Sets.csv",
         )
@@ -222,6 +227,8 @@ class USStateIndicatorSetAdmin(BaseIndicatorSetAdmin):
 
     def download_us_state_indicator_set(self, request):
         return download_source_file(
+            self,
+            request,
             settings.SPREADSHEET_URLS["us_state_indicator_sets"],
             "US_State_Indicator_Sets.csv",
         )
@@ -269,6 +276,8 @@ class FilterDescriptionAdmin(ImportExportModelAdmin):
 
     def download_filter_descriptions(self, request):
         return download_source_file(
+            self,
+            request,
             settings.SPREADSHEET_URLS["filter_descriptions"],
             "Indicator_Sets_Table_Filter_Descriptions.csv",
         )
@@ -316,6 +325,8 @@ class ColumnDescriptionAdmin(ImportExportModelAdmin):
 
     def download_column_descriptions(self, request):
         return download_source_file(
+            self,
+            request,
             settings.SPREADSHEET_URLS["column_descriptions"],
             "Indicator_Sets_Table_Column_Descriptions.csv",
         )

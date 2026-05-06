@@ -44,6 +44,8 @@ class ExpressViewIndicatorAdmin(ImportExportModelAdmin):
 
     def download_express_view_indicators(self, request):
         return download_source_file(
+            self,
+            request,
             settings.SPREADSHEET_URLS["express_view_indicators"],
             "Express_View_Indicators.csv",
         )

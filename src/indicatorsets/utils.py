@@ -7,7 +7,6 @@ from textwrap import dedent
 import requests
 from django.conf import settings
 from django.core.cache import cache
-from django.http import JsonResponse
 from epiportal.utils import get_client_ip
 from epiweeks import Week
 from delphi_utils import get_structured_logger
@@ -16,8 +15,20 @@ from indicatorsets.models import IndicatorSet
 
 FLUVIEW_INDICATORS_MAPPING = {"wili": "%wILI", "ili": "%ILI"}
 
+logger = get_structured_logger("indicatorsets.utils")
+
 form_data_logger = get_structured_logger("form_data_logger")
 form_stats_logger = get_structured_logger("form_stats_logger")
+
+INVALID_API_KEY_MESSAGE = (
+    "API key does not exist. Register a new key at "
+    "https://api.delphi.cmu.edu/epidata/admin/registration_form or contact "
+    "delphi-support+privacy@andrew.cmu.edu to troubleshoot"
+)
+
+
+class InvalidApiKeyError(Exception):
+    """Raised when an Epidata request returns 401 Unauthorized."""
 
 
 def list_to_dict(lst):
@@ -42,7 +53,12 @@ def get_list_of_indicators_filtered_by_geo(geos):
     geos = list_to_dict(ast.literal_eval(geos))
     url = f"{settings.EPIDATA_URL}covidcast/geo_coverage"
     params = {"geo": dict_to_geo_string(geos), "api_key": settings.EPIDATA_API_KEY}
-    response = requests.get(url, params=params)
+    try:
+        response = requests.get(url, params=params, timeout=(5, 30))
+        response.raise_for_status()
+    except requests.RequestException:
+        logger.exception("Error getting geo coverage", extra={"geos": geos})
+        return {"epidata": [], "result": -1}
     return response.json()
 
 
@@ -441,26 +457,28 @@ def preview_covidcast_data(indicators, start_date, end_date, covidcast_geos, api
                     "geo_values": geo_values,
                     "api_key": api_key if api_key else settings.EPIDATA_API_KEY,
                 }
-                response = requests.get(
-                    f"{settings.EPIDATA_URL}covidcast", params=params
-                )
-                if response.status_code == 200:
-                    data = response.json()
-                    if len(data["epidata"]):
-                        preview_data.append(
-                            {
-                                "epidata": data["epidata"][0],
-                                "result": data["result"],
-                                "message": data["message"],
-                            }
-                        )
-                elif response.status_code == 401:
-                    preview_data = {
-                        "epidata": [],
-                        "result": -2,
-                        "message": "API key does not exist. Register a new key at https://api.delphi.cmu.edu/epidata/admin/registration_form or contact delphi-support+privacy@andrew.cmu.edu to troubleshoot",
-                    }
-                    return JsonResponse(preview_data, safe=False)
+                try:
+                    response = requests.get(
+                        f"{settings.EPIDATA_URL}covidcast", params=params, timeout=(5, 30)
+                    )
+                    if response.status_code == 401:
+                        raise InvalidApiKeyError(INVALID_API_KEY_MESSAGE)
+                    response.raise_for_status()
+                except requests.RequestException:
+                    logger.exception(
+                        "Error getting covidcast data",
+                        extra={"signal": indicator["indicator"], "geo_type": geo_type},
+                    )
+                    continue
+                data = response.json()
+                if len(data["epidata"]):
+                    preview_data.append(
+                        {
+                            "epidata": data["epidata"][0],
+                            "result": data["result"],
+                            "message": data["message"],
+                        }
+                    )
     return preview_data
 
 
@@ -473,24 +491,23 @@ def preview_fluview_data(fluview_geos, start_date, end_date, api_key):
         "epiweeks": f"{date_from}-{date_to}",
         "api_key": api_key if api_key else settings.EPIDATA_API_KEY,
     }
-    response = requests.get(f"{settings.EPIDATA_URL}fluview", params=params)
-    if response.status_code == 200:
-        data = response.json()
-        if len(data["epidata"]):
-            preview_data.append(
-                {
-                    "epidata": data["epidata"][0],
-                    "result": data["result"],
-                    "message": data["message"],
-                }
-            )
-    elif response.status_code == 401:
-        preview_data = {
-            "epidata": [],
-            "result": -2,
-            "message": "API key does not exist. Register a new key at https://api.delphi.cmu.edu/epidata/admin/registration_form or contact delphi-support+privacy@andrew.cmu.edu to troubleshoot",
-        }
-        return JsonResponse(preview_data, safe=False)
+    try:
+        response = requests.get(f"{settings.EPIDATA_URL}fluview", params=params, timeout=(5, 30))
+        if response.status_code == 401:
+            raise InvalidApiKeyError(INVALID_API_KEY_MESSAGE)
+        response.raise_for_status()
+    except requests.RequestException:
+        logger.exception("Error getting fluview data", extra={"regions": regions})
+        return preview_data
+    data = response.json()
+    if len(data["epidata"]):
+        preview_data.append(
+            {
+                "epidata": data["epidata"][0],
+                "result": data["result"],
+                "message": data["message"],
+            }
+        )
     return preview_data
 
 
@@ -503,24 +520,23 @@ def preview_nidss_flu_data(nidss_flu_geos, start_date, end_date, api_key):
         "epiweeks": f"{date_from}-{date_to}",
         "api_key": api_key if api_key else settings.EPIDATA_API_KEY,
     }
-    response = requests.get(f"{settings.EPIDATA_URL}nidss_flu", params=params)
-    if response.status_code == 200:
-        data = response.json()
-        if len(data["epidata"]):
-            preview_data.append(
-                {
-                    "epidata": data["epidata"][0],
-                    "result": data["result"],
-                    "message": data["message"],
-                }
-            )
-    elif response.status_code == 401:
-        preview_data = {
-            "epidata": [],
-            "result": -2,
-            "message": "API key does not exist. Register a new key at https://api.delphi.cmu.edu/epidata/admin/registration_form or contact delphi-support+privacy@andrew.cmu.edu to troubleshoot",
-        }
-        return JsonResponse(preview_data, safe=False)
+    try:
+        response = requests.get(f"{settings.EPIDATA_URL}nidss_flu", params=params, timeout=(5, 30))
+        if response.status_code == 401:
+            raise InvalidApiKeyError(INVALID_API_KEY_MESSAGE)
+        response.raise_for_status()
+    except requests.RequestException:
+        logger.exception("Error getting nidss_flu data", extra={"regions": regions})
+        return preview_data
+    data = response.json()
+    if len(data["epidata"]):
+        preview_data.append(
+            {
+                "epidata": data["epidata"][0],
+                "result": data["result"],
+                "message": data["message"],
+            }
+        )
     return preview_data
 
 
@@ -533,24 +549,23 @@ def preview_nidss_dengue_data(nidss_dengue_geos, start_date, end_date, api_key):
         "epiweeks": f"{date_from}-{date_to}",
         "api_key": api_key if api_key else settings.EPIDATA_API_KEY,
     }
-    response = requests.get(f"{settings.EPIDATA_URL}nidss_dengue", params=params)
-    if response.status_code == 200:
-        data = response.json()
-        if len(data["epidata"]):
-            preview_data.append(
-                {
-                    "epidata": data["epidata"][0],
-                    "result": data["result"],
-                    "message": data["message"],
-                }
-            )
-    elif response.status_code == 401:
-        preview_data = {
-            "epidata": [],
-            "result": -2,
-            "message": "API key does not exist. Register a new key at https://api.delphi.cmu.edu/epidata/admin/registration_form or contact delphi-support+privacy@andrew.cmu.edu to troubleshoot",
-        }
-        return JsonResponse(preview_data, safe=False)
+    try:
+        response = requests.get(f"{settings.EPIDATA_URL}nidss_dengue", params=params, timeout=(5, 30))
+        if response.status_code == 401:
+            raise InvalidApiKeyError(INVALID_API_KEY_MESSAGE)
+        response.raise_for_status()
+    except requests.RequestException:
+        logger.exception("Error getting nidss_dengue data", extra={"regions": regions})
+        return preview_data
+    data = response.json()
+    if len(data["epidata"]):
+        preview_data.append(
+            {
+                "epidata": data["epidata"][0],
+                "result": data["result"],
+                "message": data["message"],
+            }
+        )
     return preview_data
 
 
@@ -563,24 +578,23 @@ def preview_flusurv_data(flusurv_geos, start_date, end_date, api_key):
         "epiweeks": f"{date_from}-{date_to}",
         "api_key": api_key if api_key else settings.EPIDATA_API_KEY,
     }
-    response = requests.get(f"{settings.EPIDATA_URL}flusurv", params=params)
-    if response.status_code == 200:
-        data = response.json()
-        if len(data["epidata"]):
-            preview_data.append(
-                {
-                    "epidata": data["epidata"][0],
-                    "result": data["result"],
-                    "message": data["message"],
-                }
-            )
-    elif response.status_code == 401:
-        preview_data = {
-            "epidata": [],
-            "result": -2,
-            "message": "API key does not exist. Register a new key at https://api.delphi.cmu.edu/epidata/admin/registration_form or contact delphi-support+privacy@andrew.cmu.edu to troubleshoot",
-        }
-        return JsonResponse(preview_data, safe=False)
+    try:
+        response = requests.get(f"{settings.EPIDATA_URL}flusurv", params=params, timeout=(5, 30))
+        if response.status_code == 401:
+            raise InvalidApiKeyError(INVALID_API_KEY_MESSAGE)
+        response.raise_for_status()
+    except requests.RequestException:
+        logger.exception("Error getting flusurv data", extra={"regions": regions})
+        return preview_data
+    data = response.json()
+    if len(data["epidata"]):
+        preview_data.append(
+            {
+                "epidata": data["epidata"][0],
+                "result": data["result"],
+                "message": data["message"],
+            }
+        )
     return preview_data
 
 
@@ -602,17 +616,26 @@ def preview_pophive_data(
                     "header": "false",
                     "api_key": api_key if api_key else settings.EPIDATA_API_KEY,
                 }
-                response = requests.get(
-                    f"{settings.EPIDATA_V5_URL}viz/", params=params
-                )
-                if response.status_code == 200:
-                    data = response.json()
-                    if isinstance(data, list) and len(data):
-                        preview_data.append(data[0])
-                elif response.status_code == 401:
-                    return {
-                        "message": "API key does not exist. Register a new key at https://api.delphi.cmu.edu/epidata/admin/registration_form or contact delphi-support+privacy@andrew.cmu.edu to troubleshoot",
-                    }
+                try:
+                    response = requests.get(
+                        f"{settings.EPIDATA_V5_URL}viz/", params=params, timeout=(5, 30)
+                    )
+                    if response.status_code == 401:
+                        raise InvalidApiKeyError(INVALID_API_KEY_MESSAGE)
+                    response.raise_for_status()
+                except requests.RequestException:
+                    logger.exception(
+                        "Error getting pophive data",
+                        extra={
+                            "signal": indicator["indicator"],
+                            "geo_type": geo["geo_type"],
+                            "geo_value": geo["id"],
+                        },
+                    )
+                    continue
+                data = response.json()
+                if isinstance(data, list) and len(data):
+                    preview_data.append(data[0])
     return preview_data
 
 
@@ -643,17 +666,25 @@ def preview_nwss_data(
                     "header": "false",
                     "api_key": api_key if api_key else settings.EPIDATA_API_KEY,
                 }
-                response = requests.get(
-                    f"{settings.EPIDATA_V5_URL}viz/", params=params
-                )
-                if response.status_code == 200:
-                    data = response.json()
-                    if isinstance(data, list) and len(data):
-                        preview_data.append(data[0])
-                elif response.status_code == 401:
-                    return {
-                        "message": "API key does not exist. Register a new key at https://api.delphi.cmu.edu/epidata/admin/registration_form or contact delphi-support+privacy@andrew.cmu.edu to troubleshoot",
-                    }
+                try:
+                    response = requests.get(
+                        f"{settings.EPIDATA_V5_URL}viz/", params=params, timeout=(5, 30)
+                    )
+                    if response.status_code == 401:
+                        raise InvalidApiKeyError(INVALID_API_KEY_MESSAGE)
+                    response.raise_for_status()
+                except requests.RequestException:
+                    logger.exception(
+                        "Error getting nwss data",
+                        extra={
+                            "signal": indicator["indicator"],
+                            "geo_value": geo_value,
+                        },
+                    )
+                    continue
+                data = response.json()
+                if isinstance(data, list) and len(data):
+                    preview_data.append(data[0])
     return preview_data
 
 
@@ -1023,12 +1054,17 @@ def get_num_locations_from_meta(indicators):
     metadata = cache.get("covidcast_meta")
     if not metadata:
         try:
-            metadata = requests.get(
-                f"{settings.EPIDATA_URL}covidcast_meta/", timeout=5
-            ).json()["epidata"]
+            response = requests.get(
+                f"{settings.EPIDATA_URL}covidcast_meta/", timeout=(5, 30)
+            )
+            response.raise_for_status()
+            metadata = response.json()
             cache.set("covidcast_meta", metadata, 60 * 60 * 24)
+        except requests.RequestException:
+            logger.error("Error fetching covidcast metadata")
+            return 0
         except Exception as e:
-            print(f"Error fetching covidcast metadata: {e}")
+            logger.error(f"Error fetching covidcast metadata: {e}")
             return 0
 
     for r in metadata:

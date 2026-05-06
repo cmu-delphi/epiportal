@@ -134,7 +134,7 @@ class IndicatorAdmin(BaseIndicatorAdmin):
 
     def download_indicator(self, request):
         return download_source_file(
-            settings.SPREADSHEET_URLS["indicators"], "Indicators.csv"
+            self, request, settings.SPREADSHEET_URLS["indicators"], "Indicators.csv"
         )
 
 
@@ -191,6 +191,8 @@ class OtherEndpointIndicatorAdmin(BaseIndicatorAdmin):
 
     def download_other_endpoint_indicator(self, request):
         return download_source_file(
+            self,
+            request,
             settings.SPREADSHEET_URLS["other_endpoint_indicators"],
             "Other_Endpoint_Indicators.csv",
         )
@@ -243,6 +245,8 @@ class NonDelphiIndicatorAdmin(BaseIndicatorAdmin):
 
     def download_nondelphi_indicator(self, request):
         return download_source_file(
+            self,
+            request,
             settings.SPREADSHEET_URLS["non_delphi_indicators"],
             "Non_Delphi_Indicators.csv",
         )
@@ -290,6 +294,8 @@ class USStateIndicatorAdmin(BaseIndicatorAdmin):
 
     def download_us_state_indicator(self, request):
         return download_source_file(
+            self,
+            request,
             settings.SPREADSHEET_URLS["us_state_indicators"],
             "US_State_Indicators.csv",
         )
