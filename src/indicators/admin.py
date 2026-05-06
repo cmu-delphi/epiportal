@@ -63,7 +63,7 @@ class BaseIndicatorAdmin(ImportExportModelAdmin):
         Filter geographic_levels field to show only a subset of Geography objects.
         Modify the filter criteria as needed.
         """
-        if db_field.name == "geographic_levels":
+        if db_field.name == "available_geographies":
             # Filter to show only geographies used in indicatorsets
             # You can modify this filter to show a different subset
             kwargs["queryset"] = Geography.objects.filter(
