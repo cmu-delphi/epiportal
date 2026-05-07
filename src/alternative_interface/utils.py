@@ -179,7 +179,9 @@ def get_covidcast_data(indicator, start_date, end_date, geo, api_key):
         "api_key": api_key if api_key else settings.EPIDATA_API_KEY,
     }
     try:
-        response = requests.get(f"{settings.EPIDATA_URL}covidcast", params=params, timeout=(5, 30))
+        response = requests.get(
+            f"{settings.EPIDATA_URL}covidcast", params=params, timeout=(5, 30)
+        )
         response.raise_for_status()
         response_data = response.json()
         if len(response_data["epidata"]):
@@ -209,7 +211,9 @@ def get_fluview_data(indicator, geo, start_date, end_date, api_key):
     }
     try:
         response = requests.get(
-            f"{settings.EPIDATA_URL}{indicator['data_source']}", params=params, timeout=(5, 30)
+            f"{settings.EPIDATA_URL}{indicator['data_source']}",
+            params=params,
+            timeout=(5, 30),
         )
         response.raise_for_status()
     except requests.RequestException:
@@ -528,10 +532,14 @@ def get_chart_data(indicators, geography):
     data_start_date = ten_years_ago.strftime("%Y-%m-%d")
     data_end_date = today.strftime("%Y-%m-%d")
 
-    express_view_indicators_qs = ExpressViewIndicator.objects.all().prefetch_related("indicator", "indicator__source")
-
+    title_by_key = {
+        (e.indicator.name, e.indicator.source.name): e.display_name
+        for e in ExpressViewIndicator.objects.select_related(
+            "indicator", "indicator__source"
+        )
+    }
     for indicator in indicators:
-        title = express_view_indicators_qs.get(indicator__name=indicator["name"], indicator__source__name=indicator["data_source"]).display_name
+        title = title_by_key[(indicator["name"], indicator["data_source"])]
         color = generate_random_color()
         indicator_time_type = indicator.get("time_type", "week")
         data = None
@@ -591,14 +599,14 @@ def get_chart_data(indicators, geography):
         # Calculate global max for the group in the initial view range
         global_max = 0
         has_data = False
-        
+
         # Helper to get numeric values in view range
         for ds in group:
             data = ds.get("data", [])
             day_labels = chart_data["dayLabels"]
             initial_view_start = chart_data["initialViewStart"]
             initial_view_end = chart_data["initialViewEnd"]
-            
+
             if not data or not day_labels or len(data) != len(day_labels):
                 continue
 
@@ -606,29 +614,36 @@ def get_chart_data(indicators, geography):
             for i, day_label in enumerate(day_labels):
                 if initial_view_start <= day_label <= initial_view_end:
                     view_indices.append(i)
-            
+
             view_values = [
                 data[i]
                 for i in view_indices
                 if i < len(data)
                 and data[i] is not None
-                and not (isinstance(data[i], float) and (data[i] != data[i] or data[i] in (float("inf"), float("-inf"))))
+                and not (
+                    isinstance(data[i], float)
+                    and (data[i] != data[i] or data[i] in (float("inf"), float("-inf")))
+                )
             ]
-            
+
             if view_values:
                 current_max = max(view_values)
                 if current_max > global_max:
                     global_max = current_max
                     has_data = True
-        
+
         # If no data in view range, try overall max
         if not has_data:
             for ds in group:
                 data = ds.get("data", [])
                 numeric_values = [
-                    v for v in data
+                    v
+                    for v in data
                     if v is not None
-                    and not (isinstance(v, float) and (v != v or v in (float("inf"), float("-inf"))))
+                    and not (
+                        isinstance(v, float)
+                        and (v != v or v in (float("inf"), float("-inf")))
+                    )
                 ]
                 if numeric_values:
                     current_max = max(numeric_values)
@@ -643,12 +658,14 @@ def get_chart_data(indicators, geography):
             if ds.get("data"):
                 # Preserve original data before normalization
                 ds["original_data"] = list(ds["data"])
-                
+
                 normalized = []
                 for value in ds["data"]:
                     if value is None:
                         normalized.append(None)
-                    elif isinstance(value, float) and (value != value or value in (float("inf"), float("-inf"))):
+                    elif isinstance(value, float) and (
+                        value != value or value in (float("inf"), float("-inf"))
+                    ):
                         normalized.append(None)
                     else:
                         normalized.append(value * scale_factor)

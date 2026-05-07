@@ -331,27 +331,33 @@ class IndicatorSetListView(ListView):
         context["form"] = IndicatorSetFilterForm(initial=form_initial)
         context["filter"] = filter
         context["APP_VERSION"] = settings.APP_VERSION
-        context["indicator_sets"] = filter.qs.annotate(
-            is_top_priority=Case(
-                When(
-                    temporal_scope_end="Ongoing",
-                    dua_required__in=["No", "Unknown", "Sensor-dependent", ""],
-                    source_type__in=["covidcast", "other_endpoint"],
-                    then=Value(1),
+        context["indicator_sets"] = (
+            filter.qs.prefetch_related(
+                "pathogens", "geographic_levels", "severity_pyramid_rungs"
+            ).annotate(
+                is_top_priority=Case(
+                    When(
+                        temporal_scope_end="Ongoing",
+                        dua_required__in=["No", "Unknown", "Sensor-dependent", ""],
+                        source_type__in=["covidcast", "other_endpoint"],
+                        then=Value(1),
+                    ),
+                    default=Value(0),
+                    output_field=IntegerField(),
                 ),
-                default=Value(0),
-                output_field=IntegerField(),
-            ),
-            beta_last=Case(
-                When(name__istartswith="beta", then=Value(sys.maxsize)),
-                default=Value(0),
-                output_field=IntegerField(),
-            ),
-            delphi_hosted=Case(
-                When(source_type__in=["covidcast", "other_endpoint"], then=Value(1)),
-                default=Value(0),
-                output_field=IntegerField(),
-            ),
+                beta_last=Case(
+                    When(name__istartswith="beta", then=Value(sys.maxsize)),
+                    default=Value(0),
+                    output_field=IntegerField(),
+                ),
+                delphi_hosted=Case(
+                    When(
+                        source_type__in=["covidcast", "other_endpoint"], then=Value(1)
+                    ),
+                    default=Value(0),
+                    output_field=IntegerField(),
+                ),
+            )
         ).order_by("beta_last", "-is_top_priority", "-delphi_hosted", "name")
         context["filters_descriptions"] = (
             FilterDescription.get_all_descriptions_as_dict()
