@@ -67,7 +67,7 @@ GEOGRAPHIC_GRANULARITY_MAPPING = {
         "short_name": "FluSurv-Net site",
     },
     "facility": {
-        "display_name": 'Hospital ("Facility")',
+        "display_name": "Facility",
         "display_order_number": 14,
         "short_name": "Facility",
     },
