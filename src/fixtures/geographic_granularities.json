@@ -125,7 +125,7 @@
         "pk": 11,
         "fields": {
             "name": "facility",
-            "display_name": "Hospital (\"Facility\")",
+            "display_name": "Facility",
             "display_order_number": 12,
             "used_in": "indicatorsets",
             "short_name": "Facility"

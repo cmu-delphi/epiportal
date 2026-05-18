@@ -124,8 +124,6 @@ def process_data_use_terms(row) -> None:
 
 
 class IndicatorSetBaseResource(CustomModelResource):
-    imported_rows_pks = []
-
     def skip_row(self, instance, original, row, import_validation_errors=None):
         if not row["Include in indicator app"]:
             indicator_sets = IndicatorSet.objects.filter(
