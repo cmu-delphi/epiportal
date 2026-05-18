@@ -1067,7 +1067,7 @@ def get_num_locations_from_meta(indicators):
             logger.error(f"Error fetching covidcast metadata: {e}")
             return 0
 
-    for r in metadata:
+    for r in metadata["epidata"]:
         if (r["data_source"], r["signal"]) in indicators:
             timeseries_count += r["num_locations"]
     return timeseries_count

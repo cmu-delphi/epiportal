@@ -52,9 +52,10 @@ urlpatterns = [
     ),
 ]
 
+urlpatterns += [path("health/", include("health_check.urls"))]
+
 if settings.DEBUG:
     urlpatterns += [path("__debug__/", include("debug_toolbar.urls"))]
-    urlpatterns += [path("health/", include("health_check.urls"))]
 
 
 urlpatterns += static(settings.MEDIA_URL, document_root=settings.MEDIA_ROOT)  # type: ignore

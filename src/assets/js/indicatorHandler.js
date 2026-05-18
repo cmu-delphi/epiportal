@@ -641,19 +641,54 @@ class IndicatorHandler {
             clientId: clientId ? clientId : "Not available",
         };
         const csrftoken = Cookies.get("csrftoken");
+        /* Open synchronously from the user gesture so pop-up blockers allow it,
+         * then navigate to the real Epivis URL when the AJAX response arrives. */
+        const epivisTab = window.open("about:blank", "_blank");
+
         $.ajax({
             url: "epivis/",
             type: "POST",
-            async: false,
             dataType: "json",
             contentType: "application/json",
             headers: { "X-CSRFToken": csrftoken },
             data: JSON.stringify(submitData),
-        }).done((data) => {
-            const payload = this.prepareDataLayerPayload("epivis");
-            dataLayerPush(payload);
-            window.open(data["epivis_url"], '_blank').focus();
-        });
+        })
+            .done((data) => {
+                const payload = this.prepareDataLayerPayload("epivis");
+                dataLayerPush(payload);
+                const url = data["epivis_url"];
+                if (!url) {
+                    if (epivisTab) epivisTab.close();
+                    $("#modeSubmitResult").html(
+                        '<div class="alert alert-warning" role="alert">Epivis URL was not returned.</div>'
+                    );
+                    return;
+                }
+                if (epivisTab && !epivisTab.closed) {
+                    epivisTab.location.href = url;
+                    epivisTab.focus();
+                } else {
+                    /* Pop-up blocker may have prevented opening the prefetch tab — offer a clickable link */
+                    const $wrap = $('<div>', { class: "mt-2" });
+                    $('<p>', {
+                        text: "Your browser may have blocked a new tab. Open Epivis from the button below:",
+                    }).appendTo($wrap);
+                    $("<a>", {
+                        href: url,
+                        target: "_blank",
+                        rel: "noopener noreferrer",
+                        class: "btn btn-primary mt-2",
+                        text: "Open Epivis",
+                    }).appendTo($wrap);
+                    $("#modeSubmitResult").empty().append($wrap);
+                }
+            })
+            .fail(() => {
+                if (epivisTab && !epivisTab.closed) epivisTab.close();
+                $("#modeSubmitResult").html(
+                    '<div class="alert alert-danger" role="alert">Could not prepare Epivis. Please try again.</div>'
+                );
+            });
     }
 
     exportData() {
@@ -693,16 +728,21 @@ class IndicatorHandler {
         $.ajax({
             url: "export/",
             type: "POST",
-            async: false,
             dataType: "json",
             contentType: "application/json",
             headers: { "X-CSRFToken": csrftoken },
             data: JSON.stringify(submitData),
-        }).done((data) => {
-            const payload = this.prepareDataLayerPayload("export");
-            dataLayerPush(payload);
-            $('#modeSubmitResult').html(data["data_export_block"]);
-        });
+        })
+            .done((data) => {
+                const payload = this.prepareDataLayerPayload("export");
+                dataLayerPush(payload);
+                $("#modeSubmitResult").html(data["data_export_block"]);
+            })
+            .fail(() => {
+                $("#modeSubmitResult").html(
+                    '<div class="alert alert-danger" role="alert">Export failed. Please try again.</div>'
+                );
+            });
     }
 
     previewData() {
