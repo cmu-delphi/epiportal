@@ -102,14 +102,15 @@ def get_geographic_mapping_by_name(name):
 
 
 class CustomModelResource(ModelResource):
-    def before_import(self, dataset, dry_run, **kwargs):
-        self.imported_rows_pks: list[int] = []      # instance-scoped
+    def before_import(self, dataset, **kwargs):
+        self.imported_rows_pks: list[int] = []
 
     def after_import_row(self, row, row_result, **kwargs):
-        if getattr(row_result.instance, "pk", None):
-            self.imported_rows_pks.append(row_result.instance.pk)
+        pk = getattr(row_result.instance, "pk", None) or row_result.object_id
+        if pk:
+            self.imported_rows_pks.append(pk)
         super().after_import_row(row, row_result, **kwargs)
 
-    def after_import(self, dataset, result, using_transactions, dry_run, **kwargs):
-        if not dry_run:
+    def after_import(self, dataset, result, **kwargs):
+        if not kwargs.get("dry_run", False):
             self._meta.model.objects.exclude(pk__in=self.imported_rows_pks).delete()
