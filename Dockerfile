@@ -3,13 +3,21 @@ FROM ubuntu:22.04
 ENV PYTHONDONTWRITEBYTECODE=1
 ENV PYTHONUNBUFFERED=1
 
+RUN apt-get update -y && apt-get install -y \
+    gcc \
+    default-libmysqlclient-dev \
+    pkg-config \
+    git \
+    mysql-client \
+    graphviz \
+    graphviz-dev \
+    python3 \
+    python3-pip \
+    libblas-dev \
+    liblapack-dev \
+    libopenblas-dev \
+    && rm -rf /var/lib/apt/lists/*
 
-RUN apt-get update -y
-RUN apt-get install -y gcc default-libmysqlclient-dev pkg-config git
-RUN apt-get install mysql-client -y
-RUN apt-get install graphviz graphviz-dev -y
-RUN apt-get install python3 -y
-RUN apt-get install python3-pip -y
 RUN python3 -m pip install --upgrade pip
 RUN pip3 install pipenv
 
