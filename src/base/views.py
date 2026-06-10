@@ -1,6 +1,6 @@
 import requests
 from django.conf import settings
-from django.http import JsonResponse
+from django.http import JsonResponse, HttpResponseForbidden
 from django.views.generic import TemplateView
 
 
@@ -36,9 +36,20 @@ class InternalServerErrorView(TemplateView):
     template_name = "http_errors/500.html"
 
 
+ALLOWED_ENDPOINTS = {"covidcast/geo_coverage", "covidcast/meta"}
+
+
 def epidata(request, endpoint=""):
-    params = request.GET.dict()
+    endpoint = endpoint.strip("/")
+    if endpoint not in ALLOWED_ENDPOINTS:
+        return HttpResponseForbidden("Endpoint not allowed")
+    params = {k: v for k, v in request.GET.items() if k != "api_key"}
     params["api_key"] = settings.EPIDATA_API_KEY
-    url = f"{settings.EPIDATA_URL}{endpoint}"
-    response = requests.get(url, params=params)
-    return JsonResponse(response.json(), safe=False)
+    try:
+        response = requests.get(
+            f"{settings.EPIDATA_URL}{endpoint}", params=params, timeout=10
+        )
+        response.raise_for_status()
+    except requests.RequestException:
+        return JsonResponse({"epidata": [], "result": -1}, status=502)
+    return JsonResponse(response.json(), safe=False, status=response.status_code)

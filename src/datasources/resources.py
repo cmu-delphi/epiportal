@@ -12,9 +12,6 @@ def strip_all_string_values(row) -> None:
 
 
 class SourceSubdivisionResource(CustomModelResource):
-
-    imported_rows_pks = []
-
     name = Field(
         attribute="name",
         column_name="Source Subdivision",

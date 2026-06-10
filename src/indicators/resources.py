@@ -261,7 +261,6 @@ class PermissiveForeignKeyWidget(ForeignKeyWidget):
 
 
 class IndicatorResource(ModelResource):
-    imported_rows_pks = []
     name = Field(attribute="name", column_name="Signal")
     display_name = Field(attribute="display_name", column_name="Name")
     short_description = Field(
@@ -461,7 +460,6 @@ class IndicatorResource(ModelResource):
 
 
 class OtherEndpointIndicatorResource(ModelResource):
-    imported_rows_pks = []
     name = Field(attribute="name", column_name="Indicator")
     display_name = Field(attribute="display_name", column_name="Name")
     short_description = Field(
@@ -638,8 +636,6 @@ class OtherEndpointIndicatorResource(ModelResource):
 
 
 class NonDelphiIndicatorResource(ModelResource):
-    imported_rows_pks = []
-
     name = Field(attribute="name", column_name="Indicator Name")
     display_name = Field(attribute="display_name", column_name="Indicator Name")
     member_name = Field(attribute="member_name", column_name="Indicator API Name")
@@ -678,7 +674,6 @@ class NonDelphiIndicatorResource(ModelResource):
 
 
 class USStateIndicatorResource(ModelResource):
-    imported_rows_pks = []
     name = Field(attribute="name", column_name="Indicator Name")
     indicator_set = Field(
         attribute="indicator_set",

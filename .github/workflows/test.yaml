@@ -1,0 +1,19 @@
+name: Test
+
+on:
+  push:
+  pull_request:
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repo
+        uses: actions/checkout@v4
+
+      - name: Create CI env file
+        run: cp ./.ci.env ./.env
+
+      - name: Run unit tests in Docker
+        run: |
+          docker compose --profile test run --rm --build test

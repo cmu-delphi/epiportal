@@ -59,7 +59,10 @@ class SourceSubdivisionAdmin(ImportExportModelAdmin):
 
     def download_source_subdivision(self, request):
         return download_source_file(
-            settings.SPREADSHEET_URLS["source_subdivisions"], "Source_Subdivisions.csv"
+            self,
+            request,
+            settings.SPREADSHEET_URLS["source_subdivisions"],
+            "Source_Subdivisions.csv",
         )
 
 
@@ -111,6 +114,8 @@ class OtherEndpointSourceSubdivisionAdmin(ImportExportModelAdmin):
 
     def download_other_endpoint_sourcesubdivision(self, request):
         return download_source_file(
+            self,
+            request,
             settings.SPREADSHEET_URLS["other_endpoint_source_subdivisions"],
             "Other_Endpoint_Source_Subdivisions.csv",
         )

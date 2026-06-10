@@ -1,4 +1,4 @@
-import import_export
+from import_export.resources import ModelResource
 
 GEOGRAPHIC_GRANULARITY_MAPPING = {
     "nation": {
@@ -67,7 +67,7 @@ GEOGRAPHIC_GRANULARITY_MAPPING = {
         "short_name": "FluSurv-Net site",
     },
     "facility": {
-        "display_name": "Facility",
+        "display_name": 'Facility',
         "display_order_number": 14,
         "short_name": "Facility",
     },
@@ -101,19 +101,16 @@ def get_geographic_mapping_by_name(name):
     return None
 
 
-class CustomModelResource(import_export.resources.ModelResource):
+class CustomModelResource(ModelResource):
+    def before_import(self, dataset, **kwargs):
+        self.imported_rows_pks: list[int] = []
 
     def after_import_row(self, row, row_result, **kwargs):
-        """For each row in the import file, add the pk to the list."""
-        if row_result.instance and row_result.instance.pk:
-            self.imported_rows_pks.append(row_result.instance.pk)
+        pk = getattr(row_result.instance, "pk", None) or row_result.object_id
+        if pk:
+            self.imported_rows_pks.append(pk)
         super().after_import_row(row, row_result, **kwargs)
 
     def after_import(self, dataset, result, **kwargs):
-        """
-        Delete all rows not in the import data set.
-        Then call the same method in the parent to still sequence the DB.
-        """
-        if self.imported_rows_pks:
-            self.Meta.model.objects.exclude(pk__in=self.imported_rows_pks).delete()
-        super().after_import(dataset, result, **kwargs)
+        if not kwargs.get("dry_run", False):
+            self._meta.model.objects.exclude(pk__in=self.imported_rows_pks).delete()
