@@ -1066,7 +1066,8 @@ def get_num_locations_from_meta(indicators):
                 f"{settings.EPIDATA_URL}covidcast_meta/", timeout=(5, 30)
             )
             response.raise_for_status()
-            metadata = response.json()
+            data = response.json()
+            metadata = data["epidata"]
             cache.set("covidcast_meta", metadata, 60 * 60 * 24)
         except requests.RequestException:
             logger.error("Error fetching covidcast metadata")
@@ -1075,7 +1076,8 @@ def get_num_locations_from_meta(indicators):
             logger.error(f"Error fetching covidcast metadata: {e}")
             return 0
 
-    for r in metadata["epidata"]:
+    epidata = metadata["epidata"] if isinstance(metadata, dict) else metadata
+    for r in epidata:
         if (r["data_source"], r["signal"]) in indicators:
             timeseries_count += r["num_locations"]
     return timeseries_count
