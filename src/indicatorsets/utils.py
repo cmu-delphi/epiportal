@@ -86,6 +86,14 @@ def get_epiweek(start_date, end_date):
     return [start_date, end_date]
 
 
+def sort_data_providers(providers):
+    """Sort providers alphabetically, with names containing 'other' at the end."""
+    sorted_providers = sorted(providers)
+    tail = [provider for provider in sorted_providers if "other" in provider.lower()]
+    head = [provider for provider in sorted_providers if "other" not in provider.lower()]
+    return head + tail
+
+
 def get_original_data_provider_choices():
     """
     Returns flat list of choices for form compatibility.
@@ -125,18 +133,18 @@ def get_grouped_original_data_provider_choices():
     main_providers = [provider for provider in all_providers if provider not in [*us_states_providers, *us_government_providers]]
 
     return {
-        "main": sorted(main_providers),
+        "main": sort_data_providers(main_providers),
         "groups": [
             {
                 "label": "U.S. Government",
-                "providers": sorted(us_government_providers)
+                "providers": sort_data_providers(us_government_providers)
             },
             {
                 "label": "U.S. States",
-                "providers": sorted(us_states_providers),
+                "providers": sort_data_providers(us_states_providers),
             }
         ],
-        "all": sorted(all_providers),  # Keep flat list for form compatibility
+        "all": sort_data_providers(all_providers),  # Keep flat list for form compatibility
     }
 
 
