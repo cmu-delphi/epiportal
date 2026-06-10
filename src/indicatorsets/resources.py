@@ -124,9 +124,26 @@ def process_data_use_terms(row) -> None:
 
 
 class IndicatorSetBaseResource(CustomModelResource):
+    import_source_types: tuple[str, ...] = ()
+
+    def get_import_deletion_queryset(self):
+        queryset = IndicatorSet.objects.all()
+        if self.import_source_types:
+            queryset = queryset.filter(source_type__in=self.import_source_types)
+        return queryset
+
+    def after_import(self, dataset, result, **kwargs):
+        if not kwargs.get("dry_run", False):
+            self.get_import_deletion_queryset().exclude(
+                pk__in=self.imported_rows_pks
+            ).delete()
+
     def skip_row(self, instance, original, row, import_validation_errors=None):
+        if "Include in indicator app" not in row:
+            return False
+
         if not row["Include in indicator app"]:
-            indicator_sets = IndicatorSet.objects.filter(
+            indicator_sets = self.get_import_deletion_queryset().filter(
                 name=row["Indicator Set name* "],
                 original_data_provider=row["Original Data Provider"],
             )
@@ -137,9 +154,12 @@ class IndicatorSetBaseResource(CustomModelResource):
                     indicators.delete()
                     indicator_set.delete()
             return True
+        return False
 
 
 class IndicatorSetResource(IndicatorSetBaseResource):
+    import_source_types = ("covidcast", "other_endpoint")
+
     name = Field(attribute="name", column_name="Indicator Set name* ")
     short_name = Field(attribute="short_name", column_name="Indicator Set Short Name")
     description = Field(
@@ -296,6 +316,8 @@ class IndicatorSetResource(IndicatorSetBaseResource):
 
 
 class NonDelphiIndicatorSetResource(IndicatorSetBaseResource):
+    import_source_types = ("non_delphi",)
+
     name = Field(attribute="name", column_name="Indicator Set name* ")
     short_name = Field(attribute="short_name", column_name="Indicator Set Short Name")
     description = Field(
@@ -434,6 +456,8 @@ class NonDelphiIndicatorSetResource(IndicatorSetBaseResource):
 
 
 class USStateIndicatorSetResource(IndicatorSetBaseResource):
+    import_source_types = ("us_state",)
+
     name = Field(attribute="name", column_name="Indicator Set name* ")
     state = Field(attribute="state", column_name="State")
     description = Field(

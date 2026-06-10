@@ -13,6 +13,8 @@ from indicators.models import (
     USStateIndicator,
 )
 from indicators.resources import (
+    IndicatorResource,
+    NonDelphiIndicatorResource,
     fix_boolean_fields,
     process_category,
     process_format_type,
@@ -154,6 +156,72 @@ class IndicatorProxyModelTests(TestCase):
         proxy = USStateIndicator.objects.get(pk=indicator.pk)
         self.assertIsInstance(proxy, USStateIndicator)
         self.assertEqual(proxy.source_type, "us_state")
+
+
+class IndicatorImportResourceTests(TestCase):
+    @classmethod
+    def setUpTestData(cls):
+        cls.source = SourceSubdivision.objects.create(name="import_src")
+        cls.indicator_set = IndicatorSet.objects.create(
+            name="Import test set",
+            source_type="covidcast",
+        )
+
+    def test_non_delphi_import_only_deletes_other_non_delphi_indicators(self):
+        covidcast_indicator = Indicator.objects.create(
+            name="covidcast_sig",
+            source=self.source,
+            indicator_set=self.indicator_set,
+            source_type="covidcast",
+        )
+        kept_non_delphi = Indicator.objects.create(
+            name="kept_non_delphi",
+            source=self.source,
+            indicator_set=self.indicator_set,
+            source_type="non_delphi",
+        )
+        removed_non_delphi = Indicator.objects.create(
+            name="removed_non_delphi",
+            source=self.source,
+            indicator_set=self.indicator_set,
+            source_type="non_delphi",
+        )
+
+        resource = NonDelphiIndicatorResource()
+        resource.imported_rows_pks = [kept_non_delphi.pk]
+        resource.after_import(None, None, dry_run=False)
+
+        self.assertTrue(Indicator.objects.filter(pk=covidcast_indicator.pk).exists())
+        self.assertTrue(Indicator.objects.filter(pk=kept_non_delphi.pk).exists())
+        self.assertFalse(Indicator.objects.filter(pk=removed_non_delphi.pk).exists())
+
+    def test_covidcast_import_only_deletes_other_covidcast_indicators(self):
+        non_delphi_indicator = Indicator.objects.create(
+            name="non_delphi_sig",
+            source=self.source,
+            indicator_set=self.indicator_set,
+            source_type="non_delphi",
+        )
+        kept_covidcast = Indicator.objects.create(
+            name="kept_covidcast",
+            source=self.source,
+            indicator_set=self.indicator_set,
+            source_type="covidcast",
+        )
+        removed_covidcast = Indicator.objects.create(
+            name="removed_covidcast",
+            source=self.source,
+            indicator_set=self.indicator_set,
+            source_type="covidcast",
+        )
+
+        resource = IndicatorResource()
+        resource.imported_rows_pks = [kept_covidcast.pk]
+        resource.after_import(None, None, dry_run=False)
+
+        self.assertTrue(Indicator.objects.filter(pk=non_delphi_indicator.pk).exists())
+        self.assertTrue(Indicator.objects.filter(pk=kept_covidcast.pk).exists())
+        self.assertFalse(Indicator.objects.filter(pk=removed_covidcast.pk).exists())
 
 
 class IndicatorCategoryTests(TestCase):

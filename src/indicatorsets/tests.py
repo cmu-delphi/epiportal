@@ -25,6 +25,10 @@ from indicatorsets.utils import (
 )
 from indicatorsets.views import get_related_indicators
 from indicatorsets.filters import IndicatorSetFilter
+from indicatorsets.resources import (
+    IndicatorSetResource,
+    NonDelphiIndicatorSetResource,
+)
 from base.models import Pathogen
 from datasources.models import SourceSubdivision
 from indicators.models import Indicator
@@ -253,6 +257,52 @@ class IndicatorSetFilterTests(TestCase):
         self.assertFalse(
             IndicatorSetFilter.include_fluview("['country:us']")
         )
+
+
+class IndicatorSetImportResourceTests(TestCase):
+    def test_non_delphi_import_only_deletes_other_non_delphi_sets(self):
+        delphi_set = IndicatorSet.objects.create(
+            name="Delphi set",
+            source_type="covidcast",
+        )
+        kept_non_delphi = IndicatorSet.objects.create(
+            name="Kept non-delphi set",
+            source_type="non_delphi",
+        )
+        removed_non_delphi = IndicatorSet.objects.create(
+            name="Removed non-delphi set",
+            source_type="non_delphi",
+        )
+
+        resource = NonDelphiIndicatorSetResource()
+        resource.imported_rows_pks = [kept_non_delphi.pk]
+        resource.after_import(None, None, dry_run=False)
+
+        self.assertTrue(IndicatorSet.objects.filter(pk=delphi_set.pk).exists())
+        self.assertTrue(IndicatorSet.objects.filter(pk=kept_non_delphi.pk).exists())
+        self.assertFalse(IndicatorSet.objects.filter(pk=removed_non_delphi.pk).exists())
+
+    def test_delphi_import_only_deletes_other_delphi_sets(self):
+        non_delphi_set = IndicatorSet.objects.create(
+            name="Non-delphi set",
+            source_type="non_delphi",
+        )
+        kept_delphi = IndicatorSet.objects.create(
+            name="Kept delphi set",
+            source_type="covidcast",
+        )
+        removed_delphi = IndicatorSet.objects.create(
+            name="Removed delphi set",
+            source_type="other_endpoint",
+        )
+
+        resource = IndicatorSetResource()
+        resource.imported_rows_pks = [kept_delphi.pk]
+        resource.after_import(None, None, dry_run=False)
+
+        self.assertTrue(IndicatorSet.objects.filter(pk=non_delphi_set.pk).exists())
+        self.assertTrue(IndicatorSet.objects.filter(pk=kept_delphi.pk).exists())
+        self.assertFalse(IndicatorSet.objects.filter(pk=removed_delphi.pk).exists())
 
 
 class IndicatorSetProxyModelTests(TestCase):

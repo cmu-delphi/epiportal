@@ -12,6 +12,20 @@ def strip_all_string_values(row) -> None:
 
 
 class SourceSubdivisionResource(CustomModelResource):
+    import_source_types = ("covidcast",)
+
+    def get_import_deletion_queryset(self):
+        queryset = SourceSubdivision.objects.all()
+        if self.import_source_types:
+            queryset = queryset.filter(source_type__in=self.import_source_types)
+        return queryset
+
+    def after_import(self, dataset, result, **kwargs):
+        if not kwargs.get("dry_run", False):
+            self.get_import_deletion_queryset().exclude(
+                pk__in=self.imported_rows_pks
+            ).delete()
+
     name = Field(
         attribute="name",
         column_name="Source Subdivision",
@@ -59,6 +73,8 @@ class SourceSubdivisionResource(CustomModelResource):
 
 
 class OtherEndpointSourceSubdivisionResource(SourceSubdivisionResource):
+    import_source_types = ("other_endpoint",)
+
     class Meta:
         model = OtherEndpointSourceSubdivision
         import_id_fields = ("name",)

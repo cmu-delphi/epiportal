@@ -78,6 +78,32 @@ class SourceSubdivisionResourceTests(TestCase):
 
 
 class OtherEndpointSourceSubdivisionResourceTests(TestCase):
+    def test_import_only_deletes_other_other_endpoint_sources(self):
+        covidcast_source = SourceSubdivision.objects.create(
+            name="covidcast_src",
+            source_type="covidcast",
+        )
+        kept_other_endpoint = SourceSubdivision.objects.create(
+            name="kept_other_endpoint",
+            source_type="other_endpoint",
+        )
+        removed_other_endpoint = SourceSubdivision.objects.create(
+            name="removed_other_endpoint",
+            source_type="other_endpoint",
+        )
+
+        resource = OtherEndpointSourceSubdivisionResource()
+        resource.imported_rows_pks = [kept_other_endpoint.pk]
+        resource.after_import(None, None, dry_run=False)
+
+        self.assertTrue(SourceSubdivision.objects.filter(pk=covidcast_source.pk).exists())
+        self.assertTrue(
+            SourceSubdivision.objects.filter(pk=kept_other_endpoint.pk).exists()
+        )
+        self.assertFalse(
+            SourceSubdivision.objects.filter(pk=removed_other_endpoint.pk).exists()
+        )
+
     def test_import_sets_other_endpoint_source_type(self):
         resource = OtherEndpointSourceSubdivisionResource()
         dataset = Dataset(headers=["Source Subdivision", "External Name"])

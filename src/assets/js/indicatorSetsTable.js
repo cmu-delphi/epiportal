@@ -108,7 +108,6 @@ var table = new DataTable("#indicatorSetsTable", {
             indicatorSetsInfo.className = 'table-stats-info';
             indicatorSetsInfo.id = 'indicatorSetsInfo';
             $.ajax({
-                
                 url: "get_table_stats_info/" + window.location.search,
                 method: "GET",
                 success: function (response) {

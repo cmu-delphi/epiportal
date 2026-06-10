@@ -201,6 +201,21 @@ def process_indicator_geography(row):
 
 
 class ModelResource(CustomModelResource):
+    import_source_types: tuple[str, ...] = ()
+    skip_row_name_column = "Signal"
+
+    def get_import_deletion_queryset(self):
+        queryset = Indicator.objects.all()
+        if self.import_source_types:
+            queryset = queryset.filter(source_type__in=self.import_source_types)
+        return queryset
+
+    def after_import(self, dataset, result, **kwargs):
+        if not kwargs.get("dry_run", False):
+            self.get_import_deletion_queryset().exclude(
+                pk__in=self.imported_rows_pks
+            ).delete()
+
     def get_field_names(self):
         names = []
         for field in list(self.fields.values()):
@@ -233,15 +248,18 @@ class ModelResource(CustomModelResource):
         return import_result
 
     def skip_row(self, instance, original, row, import_validation_errors=None):
-        if not row["Include in indicator app"]:
-            ind = Indicator.objects.filter(
-                name=row["Signal"], source=row["Source Subdivision"]
-            )
-            if ind.exists():
-                ind.delete()
+        if "Include in indicator app" in row:
+            if not row["Include in indicator app"]:
+                indicators = self.get_import_deletion_queryset().filter(
+                    name=row[self.skip_row_name_column],
+                    source=row["Source Subdivision"],
+                )
+                if indicators.exists():
+                    indicators.delete()
+                return True
+        if row.get("Indicator Set") is None:
             return True
-        if row["Indicator Set"] is None:
-            return True
+        return False
 
 
 def strip_all_string_values(row) -> None:
@@ -261,6 +279,7 @@ class PermissiveForeignKeyWidget(ForeignKeyWidget):
 
 
 class IndicatorResource(ModelResource):
+    import_source_types = ("covidcast",)
     imported_rows_pks = []
     name = Field(attribute="name", column_name="Signal")
     display_name = Field(attribute="display_name", column_name="Name")
@@ -461,6 +480,8 @@ class IndicatorResource(ModelResource):
 
 
 class OtherEndpointIndicatorResource(ModelResource):
+    import_source_types = ("other_endpoint",)
+    skip_row_name_column = "Indicator"
     imported_rows_pks = []
     name = Field(attribute="name", column_name="Indicator")
     display_name = Field(attribute="display_name", column_name="Name")
@@ -638,6 +659,8 @@ class OtherEndpointIndicatorResource(ModelResource):
 
 
 class NonDelphiIndicatorResource(ModelResource):
+    import_source_types = ("non_delphi",)
+
     name = Field(attribute="name", column_name="Indicator Name")
     display_name = Field(attribute="display_name", column_name="Indicator Name")
     member_name = Field(attribute="member_name", column_name="Indicator API Name")
@@ -676,6 +699,7 @@ class NonDelphiIndicatorResource(ModelResource):
 
 
 class USStateIndicatorResource(ModelResource):
+    import_source_types = ("us_state",)
     imported_rows_pks = []
     name = Field(attribute="name", column_name="Indicator Name")
     indicator_set = Field(
