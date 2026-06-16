@@ -9,6 +9,7 @@ SOURCE_TYPES = [
     ("covidcast", "Covidcast"),
     ("other_endpoint", "Other Endpoint"),
     ("non_delphi", "Non Delphi"),
+    ("us_state", "US State"),
 ]
 
 
@@ -105,7 +106,7 @@ class Geography(models.Model):
     class Meta:
         verbose_name = "Geography"
         verbose_name_plural = "Geographies"
-        ordering = ["name"]
+        ordering = ['display_order_number']
         indexes = [
             models.Index(fields=["name"], name="geography_name_idx"),
         ]

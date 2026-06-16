@@ -1,31 +1,136 @@
 import base64
 import json
-import logging
-import requests
+import sys
+from datetime import datetime
 from textwrap import dedent
 
-
+import requests
+from delphi_utils import get_structured_logger
 from django.conf import settings
+from django.db.models import Case, IntegerField, Value, When
 from django.http import JsonResponse
 from django.views.generic import ListView
-from django.db.models import Case, When, Value, IntegerField
+from epiweeks import Week
+from django.core.cache import cache
 
-from base.models import Geography, GeographyUnit
+from base.models import GeographyUnit
 from indicatorsets.filters import IndicatorSetFilter
 from indicatorsets.forms import IndicatorSetFilterForm
-from indicatorsets.models import IndicatorSet, FilterDescription, ColumnDescription
+from indicatorsets.models import ColumnDescription, FilterDescription, IndicatorSet
 from indicatorsets.utils import (
-    generate_epivis_custom_title,
-    generate_random_color,
-    get_epiweek,
+    InvalidApiKeyError,
+    generate_covidcast_dataset_epivis,
+    generate_covidcast_indicators_export_url,
+    generate_flusurv_dataset_epivis,
+    generate_flusurv_export_url,
+    generate_fluview_dataset_epivis,
+    generate_fluview_indicators_export_url,
+    generate_nidss_dengue_dataset_epivis,
+    generate_nidss_dengue_export_url,
+    generate_nidss_flu_dataset_epivis,
+    generate_nidss_flu_export_url,
+    generate_query_code_covidcast,
+    generate_query_code_flusurv,
+    generate_query_code_fluview,
+    generate_query_code_nidss_dengue,
+    generate_query_code_nidss_flu,
+    get_grouped_original_data_provider_choices,
     group_by_property,
+    parse_original_data_provider_ids,
+    log_form_data,
+    log_form_stats,
+    preview_covidcast_data,
+    preview_flusurv_data,
+    preview_fluview_data,
+    preview_nidss_dengue_data,
+    preview_nidss_flu_data,
+    get_num_locations_from_meta,
+    generate_pophive_dataset_epivis,
+    generate_nwss_dataset_epivis,
+    generate_pophive_export_url,
+    generate_nwss_export_url,
+    preview_pophive_data,
+    preview_nwss_data,
+    generate_query_code_pophive,
+    generate_query_code_nwss,
 )
 
-logger = logging.getLogger(__name__)
+
+logger = get_structured_logger("indicatorsets.views")
+indicatorsets_logger = get_structured_logger("indicatorsets_logger")
+
 
 HEADER_DESCRIPTION = "Discover, display and download real-time infectious disease indicators (time series) that track a variety of pathogens, diseases and syndromes in a variety of locations (primarily within the USA). Browse the list, or filter it first by locations and pathogens of interest, by surveillance categories, and more. Expand any row to expose and select from a set of related indicators, then hit 'Show Selected Indicators' at bottom to plot or export your selected indicators, or to generate code snippets to retrieve them from the Delphi Epidata API. Most indicators are served from the Delphi Epidata real-time repository, but some may be available only from third parties or may require prior approval."
 
-FLUVIEW_INDICATORS_MAPPING = {"wili": "%wILI", "ili": "%ILI"}
+
+def get_related_indicators(queryset, indicator_set_ids: list):
+    related_indicators = []
+    indicators_data = queryset.filter(indicator_set__id__in=indicator_set_ids).values(
+        "id",
+        "display_name",
+        "member_name",
+        "member_short_name",
+        "name",
+        "indicator_set__id",
+        "indicator_set__name",
+        "indicator_set__short_name",
+        "indicator_set__epidata_endpoint",
+        "source__name",
+        "time_type",
+        "description",
+        "member_description",
+        "indicator_set__dua_required",
+        "source_type",
+    )
+
+    for item in indicators_data:
+        display_name = item["display_name"]
+        if not display_name:
+            if item["member_name"]:
+                display_name = item["member_name"]
+            else:
+                display_name = item["name"]
+
+        member_description = (
+            item["member_description"]
+            if item["member_description"]
+            else item["description"]
+        )
+
+        related_indicators.append(
+            {
+                "id": item["id"],
+                "display_name": display_name,
+                "member_name": item["member_name"] if item["member_name"] else "",
+                "member_short_name": (
+                    item["member_short_name"] if item["member_short_name"] else ""
+                ),
+                "name": item["name"] if item["name"] else "",
+                "indicator_set": item["indicator_set__id"],
+                "indicator_set_name": item["indicator_set__name"],
+                "indicator_set_short_name": (
+                    item["indicator_set__short_name"]
+                    if item["indicator_set__short_name"]
+                    else ""
+                ),
+                "endpoint": (
+                    item["indicator_set__epidata_endpoint"]
+                    if item["indicator_set__epidata_endpoint"]
+                    else ""
+                ),
+                "source": item["source__name"] if item["source__name"] else "",
+                "time_type": item["time_type"] if item["time_type"] else "",
+                "description": item["description"] if item["description"] else "",
+                "member_description": member_description,
+                "restricted": (
+                    item["indicator_set__dua_required"]
+                    if item["indicator_set__dua_required"]
+                    else ""
+                ),
+                "source_type": item["source_type"],
+            }
+        )
+    return related_indicators
 
 
 class IndicatorSetListView(ListView):
@@ -35,68 +140,17 @@ class IndicatorSetListView(ListView):
 
     def get_queryset(self):
         try:
-            return IndicatorSet.objects.all().prefetch_related(
+            return IndicatorSet.objects.all().select_related(
+                "original_data_provider",
+            ).prefetch_related(
                 "geographic_scope",
+                "pathogens",
+                "severity_pyramid_rungs",
+                "geographic_levels",
             )
         except Exception as e:
-            logger.error(f"Error fetching indicator sets: {e}")
+            indicatorsets_logger.error(f"Error fetching indicator sets: {e}")
             return IndicatorSet.objects.none()
-
-    def get_related_indicators(self, queryset, indicator_set_ids: list):
-        related_indicators = []
-        for indicator in queryset.filter(
-            indicator_set__id__in=indicator_set_ids
-        ).prefetch_related("indicator_set", "source", "severity_pyramid_rungs"):
-            related_indicators.append(
-                {
-                    "id": indicator.id,
-                    "display_name": (
-                        indicator.get_display_name if indicator.get_display_name else ""
-                    ),
-                    "member_name": (
-                        indicator.member_name if indicator.member_name else ""
-                    ),
-                    "member_short_name": (
-                        indicator.member_short_name
-                        if indicator.member_short_name
-                        else ""
-                    ),
-                    "name": indicator.name if indicator.name else "",
-                    "indicator_set": (
-                        indicator.indicator_set.id if indicator.indicator_set else ""
-                    ),
-                    "indicator_set_name": (
-                        indicator.indicator_set.name if indicator.indicator_set else ""
-                    ),
-                    "indicator_set_short_name": (
-                        indicator.indicator_set.short_name
-                        if indicator.indicator_set
-                        else ""
-                    ),
-                    "endpoint": (
-                        indicator.indicator_set.epidata_endpoint
-                        if indicator.indicator_set
-                        else ""
-                    ),
-                    "source": indicator.source.name if indicator.source else "",
-                    "time_type": indicator.time_type if indicator.time_type else "",
-                    "description": (
-                        indicator.description if indicator.description else ""
-                    ),
-                    "member_description": (
-                        indicator.member_description
-                        if indicator.member_description
-                        else indicator.description
-                    ),
-                    "restricted": (
-                        indicator.indicator_set.dua_required
-                        if indicator.indicator_set
-                        else ""
-                    ),
-                    "source_type": indicator.source_type,
-                }
-            )
-        return related_indicators
 
     def get_url_params(self):
         url_params_dict = {
@@ -115,9 +169,7 @@ class IndicatorSetListView(ListView):
                 if self.request.GET.get("severity_pyramid_rungs")
                 else ""
             ),
-            "original_data_provider": [
-                el for el in self.request.GET.getlist("original_data_provider")
-            ],
+            "odp": parse_original_data_provider_ids(self.request.GET),
             "temporal_granularity": (
                 [el for el in self.request.GET.getlist("temporal_granularity")]
                 if self.request.GET.get("temporal_granularity")
@@ -133,6 +185,14 @@ class IndicatorSetListView(ListView):
                 if self.request.GET.get("temporal_scope_end")
                 else ""
             ),
+            "hosted_by_delphi": (
+                str(
+                    self.request.GET.get("hosted_by_delphi")
+                    in ["True", "true", "on", "1"]
+                ).lower()
+                if self.request.GET.get("hosted_by_delphi")
+                else "false"
+            ),
             "location_search": (
                 [el for el in self.request.GET.getlist("location_search")]
                 if self.request.GET.get("location_search")
@@ -142,24 +202,30 @@ class IndicatorSetListView(ListView):
         url_params_str = ""
         for param_name, param_value in url_params_dict.items():
             if isinstance(param_value, list):
-                for value in param_value:
-                    url_params_str = f"{url_params_str}&{param_name}={value}"
+                if param_name == "odp" and param_value:
+                    url_params_str = (
+                        f"{url_params_str}&odp={','.join(str(v) for v in param_value)}"
+                    )
+                else:
+                    for value in param_value:
+                        url_params_str = f"{url_params_str}&{param_name}={value}"
             else:
                 if param_value not in ["", None]:
                     url_params_str = f"{url_params_str}&{param_name}={param_value}"
         return url_params_dict, url_params_str
 
     def get_grouped_geographic_granularities(self):
+        geo_units = GeographyUnit.objects.prefetch_related("geo_level").values(
+            "geo_level__name", "id", "display_name", "geo_level__display_name"
+        )
         geographic_granularities = [
             {
-                "id": f"{geo_unit.geo_level.name}:{geo_unit.geo_id}",
-                "geoType": geo_unit.geo_level.name,
-                "text": geo_unit.display_name,
-                "geoTypeDisplayName": geo_unit.geo_level.display_name,
+                "id": f"{geo_unit['geo_level__name']}:{geo_unit['id']}",
+                "geoType": geo_unit["geo_level__name"],
+                "text": geo_unit["display_name"],
+                "geoTypeDisplayName": geo_unit["geo_level__display_name"],
             }
-            for geo_unit in GeographyUnit.objects.all()
-            .prefetch_related("geo_level")
-            .order_by("level")
+            for geo_unit in geo_units
         ]
         geographic_granularities = group_by_property(
             geographic_granularities, "geoTypeDisplayName"
@@ -174,6 +240,86 @@ class IndicatorSetListView(ListView):
             )
         return grouped_geographic_granularities
 
+    def render_to_response(self, context, **response_kwargs):
+        if self.request.GET.get("format") == "json":
+            return self.render_to_json_response(context, **response_kwargs)
+        return super().render_to_response(context, **response_kwargs)
+
+    def render_to_json_response(self, context, **response_kwargs):
+        data = []
+        for indicator_set in context["indicator_sets"]:
+            data.append(
+                {
+                    "DT_RowId": indicator_set.id,
+                    "name": indicator_set.name,
+                    "short_name": indicator_set.short_name,
+                    "description": indicator_set.description,
+                    "maintainer_name": indicator_set.maintainer_name,
+                    "maintainer_email": indicator_set.maintainer_email,
+                    "organization": indicator_set.organization,
+                    "original_data_provider": indicator_set.original_data_provider.name if indicator_set.original_data_provider else "",
+                    "epidata_endpoint": indicator_set.epidata_endpoint,
+                    "language": indicator_set.language,
+                    "version_number": indicator_set.version_number,
+                    "origin_datasource": indicator_set.origin_datasource,
+                    "pathogens": [
+                        {
+                            "name": p.name,
+                            "display_name": p.display_name,
+                        }
+                        for p in indicator_set.pathogens.all()
+                    ],
+                    "data_type": indicator_set.data_type,
+                    "geographic_scope": (
+                        indicator_set.geographic_scope.name
+                        if indicator_set.geographic_scope
+                        else ""
+                    ),
+                    "geographic_levels": [
+                        {
+                            "name": g.name,
+                            "display_name": g.display_name,
+                            "short_name": g.short_name,
+                        }
+                        for g in indicator_set.geographic_levels.all()
+                    ],
+                    "preprocessing_description": indicator_set.preprocessing_description,
+                    "temporal_scope_start": indicator_set.temporal_scope_start,
+                    "temporal_scope_end": indicator_set.temporal_scope_end,
+                    "temporal_granularity": indicator_set.temporal_granularity,
+                    "reporting_cadence": indicator_set.reporting_cadence,
+                    "reporting_lag": indicator_set.reporting_lag,
+                    "revision_cadence": indicator_set.revision_cadence,
+                    "demographic_scope": indicator_set.demographic_scope,
+                    "demographic_granularity": indicator_set.demographic_granularity,
+                    "severity_pyramid_rungs": [
+                        {
+                            "name": s.name,
+                            "display_name": s.display_name,
+                        }
+                        for s in indicator_set.severity_pyramid_rungs.all()
+                    ],
+                    "censoring": indicator_set.censoring,
+                    "missingness": indicator_set.missingness,
+                    "dua_required": indicator_set.dua_required,
+                    "license": indicator_set.license,
+                    "dataset_location": indicator_set.dataset_location,
+                    "documentation_link": indicator_set.documentation_link,
+                    "source_type": indicator_set.source_type,
+                    "state": indicator_set.state,
+                    "is_top_priority": indicator_set.is_top_priority,
+                    "delphi_hosted": "Yes" if indicator_set.delphi_hosted else "No",
+                }
+            )
+        return JsonResponse(
+            {
+                "draw": 1,
+                "recordsTotal": len(data),
+                "recordsFiltered": len(data),
+                "data": data,
+            }
+        )
+
     def get_context_data(self, **kwargs):
         context = super().get_context_data(**kwargs)
         queryset = self.get_queryset()
@@ -182,32 +328,43 @@ class IndicatorSetListView(ListView):
         context["url_params_dict"] = url_params_dict
         context["epivis_url"] = settings.EPIVIS_URL
         context["epidata_url"] = settings.EPIDATA_URL
-        context["form"] = IndicatorSetFilterForm(initial=url_params_dict)
+        # Convert hosted_by_delphi string back to boolean for form initialization
+        form_initial = url_params_dict.copy()
+        if "hosted_by_delphi" in form_initial:
+            form_initial["hosted_by_delphi"] = (
+                form_initial["hosted_by_delphi"] == "true"
+            )
+        context["form"] = IndicatorSetFilterForm(initial=form_initial)
         context["filter"] = filter
         context["APP_VERSION"] = settings.APP_VERSION
-        context["indicator_sets"] = filter.qs.annotate(
-            is_ongoing=Case(
-                When(
-                    temporal_scope_end="Ongoing",
-                    then=Value(1),
+        context["indicator_sets"] = (
+            filter.qs.prefetch_related(
+                "pathogens", "geographic_levels", "severity_pyramid_rungs"
+            ).annotate(
+                is_top_priority=Case(
+                    When(
+                        temporal_scope_end="Ongoing",
+                        dua_required__in=["No", "Unknown", "Sensor-dependent", ""],
+                        source_type__in=["covidcast", "other_endpoint"],
+                        then=Value(1),
+                    ),
+                    default=Value(0),
+                    output_field=IntegerField(),
                 ),
-                default=Value(0),
-                output_field=IntegerField(),
-            ),
-            is_dua_required=Case(
-                When(
-                    dua_required="No",
-                    then=Value(1),
+                beta_last=Case(
+                    When(name__istartswith="beta", then=Value(sys.maxsize)),
+                    default=Value(0),
+                    output_field=IntegerField(),
                 ),
-                default=Value(0),
-                output_field=IntegerField(),
-            ),
-        ).order_by("-is_ongoing", "-is_dua_required", "name")
-        context["related_indicators"] = json.dumps(
-            self.get_related_indicators(
-                filter.indicators_qs, filter.qs.values_list("id", flat=True)
+                delphi_hosted=Case(
+                    When(
+                        source_type__in=["covidcast", "other_endpoint"], then=Value(1)
+                    ),
+                    default=Value(0),
+                    output_field=IntegerField(),
+                ),
             )
-        )
+        ).order_by("beta_last", "-is_top_priority", "-delphi_hosted", "name")
         context["filters_descriptions"] = (
             FilterDescription.get_all_descriptions_as_dict()
         )
@@ -215,12 +372,14 @@ class IndicatorSetListView(ListView):
             ColumnDescription.get_all_descriptions_as_dict()
         )
         context["header_description"] = HEADER_DESCRIPTION
-        context["available_geographies"] = Geography.objects.filter(
-            used_in="indicators"
-        )
-        context["geographic_granularities"] = (
-            self.get_grouped_geographic_granularities()
-        )
+        geographic_granularities = cache.get("geographic_granularities")
+        if not geographic_granularities:
+            geographic_granularities = self.get_grouped_geographic_granularities()
+            cache.set(
+                "geographic_granularities", geographic_granularities, 60 * 60 * 24
+            )
+        context["geographic_granularities"] = geographic_granularities
+        context["grouped_data_providers"] = get_grouped_original_data_provider_choices()
         return context
 
 
@@ -230,53 +389,66 @@ def epivis(request):
         data = json.loads(request.body)
         indicators = data.get("indicators", [])
         covidcast_geos = data.get("covidCastGeographicValues", [])
-        fluview_geos = data.get("fluviewRegions", [])
+        fluview_geos = data.get("fluviewLocations", [])
+        nidss_flu_locations = data.get("nidssFluLocations", [])
+        nidss_dengue_locations = data.get("nidssDengueLocations", [])
+        flusurv_locations = data.get("flusurvLocations", [])
+        pophive_geos = data.get("pophiveLocations", [])
+        pophive_age_group = data.get("pophiveAgeGroup", [])
+        nwss_pcr_target = data.get("nwssPcrTarget", [])
+        nwss_source = data.get("nwssSource", [])
+        nwss_geographic_value = data.get("nwssGeographicValue", "")
+        nwss_fill_method = data.get("nwssFillMethod", "source")
+        log_form_stats(request, data, "epivis")
+        log_form_data(request, data, "epivis")
         for indicator in indicators:
             if indicator["_endpoint"] == "covidcast":
-                for geo in covidcast_geos:
-                    geo_value = (
-                        geo["id"].split(":")[1].lower()
-                        if geo["geoType"] in ["nation", "state"]
-                        else geo["id"].split(":")[1]
-                    )
-                    datasets.append(
-                        {
-                            "color": generate_random_color(),
-                            "title": "value",
-                            "params": {
-                                "_endpoint": indicator["_endpoint"],
-                                "data_source": indicator["data_source"],
-                                "signal": indicator["indicator"],
-                                "time_type": indicator["time_type"],
-                                "geo_type": geo["geoType"],
-                                "geo_value": geo_value,
-                                "custom_title": generate_epivis_custom_title(
-                                    indicator, geo["text"]
-                                ),
-                            },
-                        }
-                    )
+                datasets.extend(
+                    generate_covidcast_dataset_epivis(indicator, covidcast_geos)
+                )
             elif indicator["_endpoint"] == "fluview":
-                for geo in fluview_geos:
-                    datasets.append(
-                        {
-                            "color": generate_random_color(),
-                            "title": FLUVIEW_INDICATORS_MAPPING.get(
-                                indicator["indicator"], indicator["indicator"]
-                            ),
-                            "params": {
-                                "_endpoint": indicator["_endpoint"] if indicator["data_source"] == "fluview" else "fluview_clinical",
-                                "regions": geo["id"],
-                                "custom_title": generate_epivis_custom_title(
-                                    indicator, geo["text"]
-                                ),
-                            },
-                        }
+                datasets.extend(
+                    generate_fluview_dataset_epivis(indicator, fluview_geos)
+                )
+            elif indicator["_endpoint"] == "nidss_flu":
+                datasets.extend(
+                    generate_nidss_flu_dataset_epivis(indicator, nidss_flu_locations)
+                )
+            elif indicator["_endpoint"] == "nidss_dengue":
+                datasets.extend(
+                    generate_nidss_dengue_dataset_epivis(
+                        indicator, nidss_dengue_locations
                     )
-        datasets_json = json.dumps({"datasets": datasets})
-        datasets_b64 = base64.b64encode(datasets_json.encode("ascii")).decode("ascii")
-        response = {"epivis_url": f"{settings.EPIVIS_URL}#{datasets_b64}"}
-        return JsonResponse(response)
+                )
+            elif indicator["_endpoint"] == "flusurv":
+                datasets.extend(
+                    generate_flusurv_dataset_epivis(indicator, flusurv_locations)
+                )
+            elif indicator["_endpoint"] == "pophive":
+                datasets.extend(
+                    generate_pophive_dataset_epivis(
+                        indicator, pophive_geos, pophive_age_group
+                    )
+                )
+            elif indicator["_endpoint"] == "nwss":
+                datasets.extend(
+                    generate_nwss_dataset_epivis(
+                        indicator,
+                        "sewershed",
+                        nwss_geographic_value,
+                        nwss_pcr_target,
+                        nwss_source,
+                        nwss_fill_method,
+                    )
+                )
+        if datasets:
+            datasets_json = json.dumps({"datasets": datasets})
+            datasets_b64 = base64.b64encode(datasets_json.encode("ascii")).decode(
+                "ascii"
+            )
+            return JsonResponse({"epivis_url": f"{settings.EPIVIS_URL}#{datasets_b64}"})
+        else:
+            return JsonResponse({"epivis_url": settings.EPIVIS_URL})
 
 
 def generate_export_data_url(request):
@@ -287,38 +459,74 @@ def generate_export_data_url(request):
         start_date = data.get("start_date", "")
         end_date = data.get("end_date", "")
         indicators = data.get("indicators", [])
-        covidcast_geos = data.get("covidCastGeographicValues", {})
-        fluview_geos = data.get("fluviewRegions", [])
+        covidcast_geos = data.get("covidCastGeographicValues", [])
+        fluview_geos = data.get("fluviewLocations", [])
+        nidss_flu_locations = data.get("nidssFluLocations", [])
+        nidss_dengue_locations = data.get("nidssDengueLocations", [])
+        flusurv_locations = data.get("flusurvLocations", [])
         api_key = data.get("apiKey", None)
 
-        for indicator in indicators:
-            if indicator["_endpoint"] == "covidcast":
-                dates = get_epiweek(start_date, end_date) if indicator["time_type"] == "week" else [start_date, end_date]  # fmt: skip
-                for type, values in covidcast_geos.items():
-                    geo_values = ",".join(
-                        [
-                            (
-                                value["id"].split(":")[1].lower()
-                                if value["geoType"] in ["nation", "state"]
-                                else value["id"].split(":")[1]
-                            )
-                            for value in values
-                        ]
-                    )
-                    data_export_url = f"{settings.EPIDATA_URL}covidcast/csv?signal={indicator['data_source']}:{indicator['indicator']}&start_day={dates[0]}&end_day={dates[1]}&geo_type={type}&geo_values={geo_values}"
-                    if api_key:
-                        data_export_url += f"&api_key={api_key}"
-                    data_export_commands.append(
-                        f'wget --content-disposition <a href="{data_export_url}">{data_export_url}</a>'
-                    )
+        pophive_geos = data.get("pophiveLocations", [])
+        pophive_age_group = data.get("pophiveAgeGroup", [])
+        nwss_geographic_value = data.get("nwssGeographicValue", "")
+        nwss_pcr_target = data.get("nwssPcrTarget", [])
+        nwss_source = data.get("nwssSource", [])
+        nwss_fill_method = data.get("nwssFillMethod", "source")
+
+        log_form_stats(request, data, "export")
+        log_form_data(request, data, "export")
+        data_export_commands.extend(
+            generate_covidcast_indicators_export_url(
+                indicators, start_date, end_date, covidcast_geos, api_key
+            )
+        )
         if fluview_geos:
-            regions = ",".join([region["id"] for region in fluview_geos])
-            date_from, date_to = get_epiweek(start_date, end_date)
-            data_export_url = f"{settings.EPIDATA_URL}fluview/?regions={regions}&epiweeks={date_from}-{date_to}&format=csv"
-            if api_key:
-                data_export_url += f"&api_key={api_key}"
-            data_export_commands.append(
-                f'wget --content-disposition <a href="{data_export_url}">{data_export_url}</a>'
+            data_export_commands.extend(
+                generate_fluview_indicators_export_url(
+                    fluview_geos, start_date, end_date, api_key
+                )
+            )
+        if nidss_flu_locations:
+            data_export_commands.extend(
+                generate_nidss_flu_export_url(
+                    nidss_flu_locations, start_date, end_date, api_key
+                )
+            )
+        if nidss_dengue_locations:
+            data_export_commands.extend(
+                generate_nidss_dengue_export_url(
+                    nidss_dengue_locations, start_date, end_date, api_key
+                )
+            )
+        if flusurv_locations:
+            data_export_commands.extend(
+                generate_flusurv_export_url(
+                    flusurv_locations, start_date, end_date, api_key
+                )
+            )
+        if pophive_geos:
+            data_export_commands.extend(
+                generate_pophive_export_url(
+                    indicators,
+                    start_date,
+                    end_date,
+                    pophive_geos,
+                    pophive_age_group,
+                    api_key,
+                )
+            )
+        if nwss_geographic_value:
+            data_export_commands.extend(
+                generate_nwss_export_url(
+                    indicators,
+                    start_date,
+                    end_date,
+                    nwss_geographic_value,
+                    nwss_pcr_target,
+                    nwss_source,
+                    nwss_fill_method,
+                    api_key,
+                )
             )
         data_export_block = data_export_block.format("<br>".join(data_export_commands))
         response = {
@@ -331,99 +539,105 @@ def generate_export_data_url(request):
 def preview_data(request):
     if request.method == "POST":
         data = json.loads(request.body)
+        log_form_stats(request, data, "preview")
+        log_form_data(request, data, "preview")
         start_date = data.get("start_date", "")
         end_date = data.get("end_date", "")
         indicators = data.get("indicators", [])
         covidcast_geos = data.get("covidCastGeographicValues", {})
-        fluview_geos = data.get("fluviewRegions", [])
+        fluview_geos = data.get("fluviewLocations", [])
+        nidss_flu_locations = data.get("nidssFluLocations", [])
+        nidss_dengue_locations = data.get("nidssDengueLocations", [])
+        flusurv_locations = data.get("flusurvLocations", [])
+        pophive_geos = data.get("pophiveLocations", [])
+        pophive_age_group = data.get("pophiveAgeGroup", [])
+        nwss_pcr_target = data.get("nwssPcrTarget", [])
+        nwss_source = data.get("nwssSource", [])
+        nwss_geographic_value = data.get("nwssGeographicValue", "")
+        nwss_fill_method = data.get("nwssFillMethod", "source")
         api_key = data.get("apiKey", None)
 
         preview_data = []
-
-        for indicator in indicators:
-            if indicator["_endpoint"] == "covidcast":
-                time_values = f"{start_date}--{end_date}"
-                if indicator["time_type"] == "week":
-                    start_day, end_day = get_epiweek(start_date, end_date)
-                    time_values = f"{start_day}-{end_day}"
-                for geo_type, values in covidcast_geos.items():
-                    geo_values = ",".join(
-                        [
-                            (
-                                value["id"].split(":")[1].lower()
-                                if value["geoType"] in ["nation", "state"]
-                                else value["id"].split(":")[1]
-                            )
-                            for value in values
-                        ]
+        try:
+            preview_data.extend(
+                preview_covidcast_data(
+                    indicators, start_date, end_date, covidcast_geos, api_key
+                )
+            )
+            if fluview_geos:
+                preview_data.extend(
+                    preview_fluview_data(fluview_geos, start_date, end_date, api_key)
+                )
+            if nidss_flu_locations:
+                preview_data.extend(
+                    preview_nidss_flu_data(
+                        nidss_flu_locations, start_date, end_date, api_key
                     )
-                    params = {
-                        "time_type": indicator["time_type"],
-                        "time_values": time_values,
-                        "data_source": indicator["data_source"],
-                        "signal": indicator["indicator"],
-                        "geo_type": geo_type,
-                        "geo_values": geo_values,
-                        "api_key": api_key if api_key else settings.EPIDATA_API_KEY,
-                    }
-                    response = requests.get(
-                        f"{settings.EPIDATA_URL}covidcast", params=params
+                )
+            if nidss_dengue_locations:
+                preview_data.extend(
+                    preview_nidss_dengue_data(
+                        nidss_dengue_locations, start_date, end_date, api_key
                     )
-                    if response.status_code == 200:
-                        data = response.json()
-                        if len(data["epidata"]):
-                            preview_data.append(
-                                {
-                                    "epidata": data["epidata"][0],
-                                    "result": data["result"],
-                                    "message": data["message"],
-                                }
-                            )
-                    elif response.status_code == 401:
-                        preview_data = {
-                            "epidata": [],
-                            "result": -2,
-                            "message": "API key does not exist. Register a new key at https://api.delphi.cmu.edu/epidata/admin/registration_form or contact delphi-support+privacy@andrew.cmu.edu to troubleshoot",
-                        }
-                        return JsonResponse(preview_data, safe=False)
-        if fluview_geos:
-            regions = ",".join([region["id"] for region in fluview_geos])
-            date_from, date_to = get_epiweek(start_date, end_date)
-            params = {
-                "regions": regions,
-                "epiweeks": f"{date_from}-{date_to}",
-                "api_key": api_key if api_key else settings.EPIDATA_API_KEY,
-            }
-            response = requests.get(f"{settings.EPIDATA_URL}fluview", params=params)
-            if response.status_code == 200:
-                data = response.json()
-                if len(data["epidata"]):
-                    preview_data.append(
-                        {
-                            "epidata": data["epidata"][0],
-                            "result": data["result"],
-                            "message": data["message"],
-                        }
+                )
+            if flusurv_locations:
+                preview_data.extend(
+                    preview_flusurv_data(
+                        flusurv_locations, start_date, end_date, api_key
                     )
-            elif response.status_code == 401:
-                preview_data = {
-                    "epidata": [],
-                    "result": -2,
-                    "message": "API key does not exist. Register a new key at https://api.delphi.cmu.edu/epidata/admin/registration_form or contact delphi-support+privacy@andrew.cmu.edu to troubleshoot",
-                }
-                return JsonResponse(preview_data, safe=False)
+                )
+            if pophive_geos and pophive_age_group:
+                preview_data.extend(
+                    preview_pophive_data(
+                        indicators,
+                        start_date,
+                        end_date,
+                        pophive_geos,
+                        pophive_age_group,
+                        api_key,
+                    )
+                )
+            if nwss_geographic_value and nwss_pcr_target and nwss_source:
+                preview_data.extend(
+                    preview_nwss_data(
+                        indicators,
+                        start_date,
+                        end_date,
+                        nwss_geographic_value,
+                        nwss_pcr_target,
+                        nwss_source,
+                        nwss_fill_method,
+                        api_key,
+                    )
+                )
+        except InvalidApiKeyError as e:
+            return JsonResponse(
+                {"epidata": [], "result": -2, "message": str(e)},
+                safe=False,
+                status=401,
+            )
         return JsonResponse(preview_data, safe=False)
 
 
 def create_query_code(request):
     if request.method == "POST":
         data = json.loads(request.body)
+        log_form_stats(request, data, "code")
+        log_form_data(request, data, "code")
         start_date = data.get("start_date", "")
         end_date = data.get("end_date", "")
         indicators = data.get("indicators", [])
         covidcast_geos = data.get("covidCastGeographicValues", {})
-        fluview_geos = data.get("fluviewRegions", [])
-        api_key = data.get("apiKey", None)
+        fluview_geos = data.get("fluviewLocations", [])
+        nidss_flu_locations = data.get("nidssFluLocations", [])
+        nidss_dengue_locations = data.get("nidssDengueLocations", [])
+        flusurv_locations = data.get("flusurvLocations", [])
+        pophive_geos = data.get("pophiveLocations", [])
+        pophive_age_group = data.get("pophiveAgeGroup", [])
+        nwss_pcr_target = data.get("nwssPcrTarget", [])
+        nwss_source = data.get("nwssSource", [])
+        nwss_geographic_value = data.get("nwssGeographicValue", "")
+        nwss_fill_method = data.get("nwssFillMethod", "source")
         python_code_blocks = [
             dedent(
                 """\
@@ -443,98 +657,65 @@ def create_query_code(request):
             """
             )
         ]
+        all_indicators = indicators
         grouped_indicators = group_by_property(indicators, "data_source")
         for data_source, indicators in grouped_indicators.items():
             indicators_str = ",".join(
                 [indicator["indicator"] for indicator in indicators]
             )
             if indicators[0].get("_endpoint") == "covidcast":
-                time_type = indicators[0].get("time_type")
-                for geo_type, values in covidcast_geos.items():
-                    geo_values = [
-                        (
-                            value["id"].split(":")[1].lower()
-                            if value["geoType"] in ["nation", "state"]
-                            else value["id"].split(":")[1]
-                        )
-                        for value in values
-                    ]
-                    if time_type == "week":
-                        start_week, end_week = get_epiweek(start_date, end_date)
-                        python_code_block = dedent(
-                            f"""\
-                            {data_source.replace('-', '_')}_{geo_type}_df = epidata.pub_covidcast(
-                                data_source="{data_source}",
-                                signals="{indicators_str}",
-                                geo_type="{geo_type}",
-                                time_type="{time_type}",
-                                geo_values="{','.join(geo_values)}",
-                                time_values=EpiRange({start_week}, {end_week}),
-                            ).df()
-                        """
-                        )
-                        python_code_blocks.append(python_code_block)
-                        r_code_block = dedent(
-                            f"""\
-                            epidata_{data_source.replace("-", "_")}_{geo_type} <- pub_covidcast(
-                                source = "{data_source}",
-                                signals = "{indicators_str}",
-                                geo_type = "{geo_type}",
-                                time_type = "{time_type}",
-                                geo_values = "{','.join(geo_values)}",
-                                time_values = epirange({start_week}, {end_week})
-                            )
-                        """
-                        )
-                        r_code_blocks.append(r_code_block)
-                    else:
-                        python_code_block = dedent(
-                            f"""\
-                            {data_source.replace('-', '_')}_{geo_type}_df = epidata.pub_covidcast(
-                                data_source="{data_source}",
-                                signals="{indicators_str}",
-                                geo_type="{geo_type}",
-                                time_type="{time_type}",
-                                geo_values="{','.join(geo_values)}",
-                                time_values=EpiRange({start_date.replace("-", "")}, {end_date.replace("-", "")}),
-                            ).df()
-                        """
-                        )
-                        python_code_blocks.append(python_code_block)
-                        r_code_block = dedent(
-                            f"""\
-                            epidata_{data_source.replace("-", "_")}_{geo_type} <- pub_covidcast(
-                                source = "{data_source}",
-                                signals = "{indicators_str}",
-                                geo_type = "{geo_type}",
-                                time_type = "{time_type}",
-                                geo_values = "{','.join(geo_values)}",
-                                time_values = epirange({start_date.replace("-", "")}, {end_date.replace("-", "")})
-                            )
-                        """
-                        )
-                        r_code_blocks.append(r_code_block)
-        if fluview_geos:
-            regions = ",".join([region["id"] for region in fluview_geos])
-            start_week, end_week = get_epiweek(start_date, end_date)
-            python_code_block = dedent(
-                f"""\
-                fluview_df = epidata.pub_fluview(
-                    regions="{regions}",
-                    epiweeks="{start_week}-{end_week}",
-                ).df()
-            """
-            )
-            python_code_blocks.append(python_code_block)
-            r_code_block = dedent(
-                f"""\
-                epidata_{data_source.replace("-", "_")} <- pub_fluview(
-                    regions = "{regions}",
-                    epiweeks = epirange({start_week}, {end_week})
+                python_code_block, r_code_block = generate_query_code_covidcast(
+                    indicators,
+                    covidcast_geos,
+                    start_date,
+                    end_date,
+                    data_source,
+                    indicators_str,
                 )
-            """
+                python_code_blocks.extend(python_code_block)
+                r_code_blocks.extend(r_code_block)
+        if fluview_geos:
+            python_code_block, r_code_block = generate_query_code_fluview(
+                fluview_geos, start_date, end_date
             )
-            r_code_blocks.append(r_code_block)
+            python_code_blocks.extend(python_code_block)
+            r_code_blocks.extend(r_code_block)
+        if nidss_flu_locations:
+            python_code_block, r_code_block = generate_query_code_nidss_flu(
+                nidss_flu_locations, start_date, end_date
+            )
+            python_code_blocks.extend(python_code_block)
+            r_code_blocks.extend(r_code_block)
+        if nidss_dengue_locations:
+            python_code_block, r_code_block = generate_query_code_nidss_dengue(
+                nidss_dengue_locations, start_date, end_date
+            )
+            python_code_blocks.extend(python_code_block)
+            r_code_blocks.extend(r_code_block)
+        if flusurv_locations:
+            python_code_block, r_code_block = generate_query_code_flusurv(
+                flusurv_locations, start_date, end_date
+            )
+            python_code_blocks.extend(python_code_block)
+            r_code_blocks.extend(r_code_block)
+        if pophive_geos and pophive_age_group:
+            python_code_block, r_code_block = generate_query_code_pophive(
+                all_indicators, start_date, end_date, pophive_geos, pophive_age_group
+            )
+            python_code_blocks.extend(python_code_block)
+            r_code_blocks.extend(r_code_block)
+        if nwss_geographic_value and nwss_pcr_target and nwss_source:
+            python_code_block, r_code_block = generate_query_code_nwss(
+                all_indicators,
+                start_date,
+                end_date,
+                nwss_geographic_value,
+                nwss_pcr_target,
+                nwss_source,
+                nwss_fill_method,
+            )
+            python_code_blocks.extend(python_code_block)
+            r_code_blocks.extend(r_code_block)
         python_code_blocks.append("</code></pre>")
         r_code_blocks.append("</code></pre>")
         return JsonResponse(
@@ -550,12 +731,26 @@ def get_available_geos(request):
         indicators = data.get("indicators", [])
         grouped_indicators = group_by_property(indicators, "data_source")
         for data_source, indicators in grouped_indicators.items():
-            indicators_str = ",".join(indicator["indicator"] for indicator in indicators)
-            response = requests.get(f"{settings.EPIDATA_URL}covidcast/geo_indicator_coverage", params={"data_source": data_source, "signals": indicators_str}, auth=("epidata", settings.EPIDATA_API_KEY))
-            if response.status_code == 200:
-                data = response.json()
-                if len(data["epidata"]):
-                    geo_values.extend(data["epidata"])
+            indicators_str = ",".join(
+                indicator["indicator"] for indicator in indicators
+            )
+            try:
+                response = requests.get(
+                    f"{settings.EPIDATA_URL}covidcast/geo_indicator_coverage",
+                    params={"data_source": data_source, "signals": indicators_str},
+                    auth=("epidata", settings.EPIDATA_API_KEY),
+                    timeout=(5, 30),
+                )
+                response.raise_for_status()
+            except requests.RequestException:
+                logger.exception(
+                    "Error getting geo indicator coverage",
+                    extra={"data_source": data_source, "signals": indicators_str},
+                )
+                continue
+            data = response.json()
+            if len(data["epidata"]):
+                geo_values.extend(data["epidata"])
         unique_values = set(geo_values)
         geo_levels = set([el.split(":")[0] for el in unique_values])
         geo_unit_ids = set([geo_value.split(":")[1] for geo_value in unique_values])
@@ -566,7 +761,8 @@ def get_available_geos(request):
                 "text": geo_unit.display_name,
                 "geoTypeDisplayName": geo_unit.geo_level.display_name,
             }
-            for geo_unit in GeographyUnit.objects.filter(geo_level__name__in=geo_levels).filter(geo_id__in=geo_unit_ids)
+            for geo_unit in GeographyUnit.objects.filter(geo_level__name__in=geo_levels)
+            .filter(geo_id__in=geo_unit_ids)
             .prefetch_related("geo_level")
             .order_by("level")
         ]
@@ -575,8 +771,149 @@ def get_available_geos(request):
         )
         geographic_granularities = []
         for key, value in grouped_geographic_granularities.items():
-            geographic_granularities.append({
-                "text": key,
-                "children": value,
-            })
-        return JsonResponse({"geographic_granularities": geographic_granularities}, safe=False)
+            geographic_granularities.append(
+                {
+                    "text": key,
+                    "children": value,
+                }
+            )
+        return JsonResponse(
+            {"geographic_granularities": geographic_granularities}, safe=False
+        )
+
+
+def get_table_stats_info(request):
+    try:
+        queryset = IndicatorSet.objects.all()
+    except Exception as e:
+        indicatorsets_logger.error(f"Error fetching indicator sets: {e}")
+        queryset = IndicatorSet.objects.none()
+
+    filter = IndicatorSetFilter(request.GET, queryset=queryset)
+    related_indicators = filter.indicators_qs.filter(
+        indicator_set__id__in=filter.qs.values_list("id", flat=True)
+    )
+    num_locations = get_num_locations_from_meta(
+        related_indicators.values("source__name", "name").distinct()
+    )
+    return JsonResponse(
+        {
+            "num_of_indicator_sets": filter.qs.count(),
+            "num_of_indicators": related_indicators.count(),
+            "num_of_locations": num_locations,
+        }
+    )
+
+
+def get_related_indicators_json(request):
+    try:
+        queryset = IndicatorSet.objects.all().prefetch_related(
+            "geographic_scope",
+            "pathogens",
+            "severity_pyramid_rungs",
+            "geographic_levels",
+        )
+    except Exception as e:
+        indicatorsets_logger.error(f"Error fetching indicator sets: {e}")
+        queryset = IndicatorSet.objects.none()
+
+    filter = IndicatorSetFilter(request.GET, queryset=queryset)
+    related_indicators = get_related_indicators(
+        filter.indicators_qs.select_related("indicator_set", "source"),
+        filter.qs.values_list("id", flat=True),
+    )
+    return JsonResponse({"related_indicators": related_indicators})
+
+
+def check_fluview_geo_coverage(request):
+    null_data_indicators = []
+    if request.method == "GET":
+        geo_value = request.GET.get("geo")
+        indicators = request.GET.get("indicators")
+        start_date = 199740
+        end_date = Week.fromdate(datetime.today())
+        end_date = f"{end_date.year}{end_date.week if end_date.week >= 10 else '0' + str(end_date.week)}"
+        indicators = json.loads(indicators)
+
+        fluview_indicators = {}
+        fluview_clinical_indicators = {}
+        for indicator in indicators:
+            if indicator["data_source"] == "fluview":
+                fluview_indicators[indicator["indicator"]] = 0
+            elif indicator["data_source"] == "fluview_clinical":
+                fluview_clinical_indicators[indicator["indicator"]] = 0
+
+        params = {
+            "regions": geo_value,
+            "epiweeks": f"{start_date}-{end_date}",
+            "api_key": settings.EPIDATA_API_KEY,
+        }
+
+        if fluview_indicators:
+            try:
+                response = requests.get(
+                    f"{settings.EPIDATA_URL}fluview", params=params, timeout=(5, 30)
+                )
+                response.raise_for_status()
+            except requests.RequestException:
+                logger.exception(
+                    "Error getting fluview data", extra={"geo_value": geo_value}
+                )
+            else:
+                data = response.json()
+                if len(data["epidata"]):
+                    for el in data["epidata"]:
+                        for indicator in fluview_indicators.keys():
+                            fluview_indicators[indicator] += (
+                                el[indicator] if el[indicator] else 0
+                            )
+        if fluview_clinical_indicators:
+            try:
+                response = requests.get(
+                    f"{settings.EPIDATA_URL}fluview_clinical",
+                    params=params,
+                    timeout=(5, 30),
+                )
+                response.raise_for_status()
+            except requests.RequestException:
+                logger.exception(
+                    "Error getting fluview clinical data",
+                    extra={"geo_value": geo_value},
+                )
+            else:
+                data = response.json()
+                if len(data["epidata"]):
+                    for el in data["epidata"]:
+                        for indicator in fluview_clinical_indicators.keys():
+                            fluview_clinical_indicators[indicator] += el[indicator]
+
+        for indicator in fluview_indicators.keys():
+            if fluview_indicators[indicator] == 0:
+                null_data_indicators.append(indicator)
+        for indicator in fluview_clinical_indicators.keys():
+            if fluview_clinical_indicators[indicator] == 0:
+                null_data_indicators.append(indicator)
+        not_covered_indicators = [
+            indicator
+            for indicator in indicators
+            if indicator["indicator"] in null_data_indicators
+        ]
+        return JsonResponse(
+            {"not_covered_indicators": not_covered_indicators}, safe=False
+        )
+
+
+def get_pophive_age_groups(request):
+    pophive_age_groups = cache.get("pophive_age_groups") or []
+    if not pophive_age_groups:
+        try:
+            response = requests.get(
+                settings.EPIDATA_V5_URL + "metadata/extra_key_values/?source=pophive",
+                timeout=(5, 30),
+            )
+            response.raise_for_status()
+            pophive_age_groups = response.json().get("epidata", [])
+            cache.set("pophive_age_groups", pophive_age_groups, 60 * 60 * 24)
+        except requests.RequestException:
+            logger.exception("Error getting pophive age groups")
+    return JsonResponse({"age_groups": pophive_age_groups})

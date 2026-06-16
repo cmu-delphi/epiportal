@@ -74,7 +74,7 @@ class GeographyUnitAdmin(admin.ModelAdmin):
     Admin interface for GeographyUnit model.
     """
 
-    list_display = ["name", "display_name"]
+    list_display = ["name", "display_name", "geo_id", "geo_level"]
     search_fields = ["name", "display_name"]
     ordering = ["name"]
     list_per_page = 20

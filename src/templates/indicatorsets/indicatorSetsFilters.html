@@ -2,7 +2,7 @@
 {% load crispy_forms_tags %}
 {% load static %}
 {% load dict_get %}
-<div class="col-2">
+<div class="h-100 p-2 d-flex flex-column">
     <form method="GET" id="filterIndicatorSetsForm">
         <div class="card">
             <div class="card-body no-padding-top-bottom">
@@ -88,14 +88,14 @@
                     </div>
                     <div class="accordion-item">
                         <h2 class="accordion-header"
-                            id="flush-heading_{{ form.original_data_provider.auto_id }}">
+                            id="flush-heading_id_original_data_provider">
                             <button data-mdb-collapse-init
                                     class="accordion-button collapsed"
                                     type="button"
                                     data-mdb-toggle="collapse"
-                                    data-mdb-target="#flush-collapse_{{ form.original_data_provider.auto_id }}"
+                                    data-mdb-target="#flush-collapse_id_original_data_provider"
                                     aria-expanded="false"
-                                    aria-controls="flush-collapse_{{ form.original_data_provider.auto_id }}">
+                                    aria-controls="flush-collapse_id_original_data_provider">
                                 Original Data Provider
                                 <a tabindex="0"
                                    type="button"
@@ -110,16 +110,103 @@
                                 </a>
                             </button>
                         </h2>
-                        <div id="flush-collapse_{{ form.original_data_provider.auto_id }}"
-                             class="accordion-collapse {% if form.original_data_provider.value %} {% else %}collapse{% endif %}"
-                             aria-labelledby="flush-heading_{{ form.original_data_provider.auto_id }}"
+                        <div id="flush-collapse_id_original_data_provider"
+                             class="accordion-collapse {% if url_params_dict.odp %} {% else %}collapse{% endif %}"
+                             aria-labelledby="flush-heading_id_original_data_provider"
                              data-mdb-parent="#accordionIndicatorSetFilters">
                             <div class="accordion-body margin-top-1rem">
                                 <div class="bulk-select form-check">
-                                    <input type="checkbox" class="form-check-input" id="select-all" />
-                                    <label class="form-check-label" for="select-all">Select all</label>
+                                    <input type="checkbox" class="form-check-input" id="select-all-original-data-provider" />
+                                    <label class="form-check-label" for="select-all-original-data-provider">Select all</label>
                                 </div>
-                                {{ form.original_data_provider|as_crispy_field }}
+                                <div class="original-data-provider-checkboxes">
+                                    {% with selected_providers=url_params_dict.odp|default:"" %}
+                                        {% if grouped_data_providers.groups %}
+                                            {# Render main providers first #}
+                                            {% if grouped_data_providers.main %}
+                                                <div class="data-provider-main-list">
+                                                    {% for provider in grouped_data_providers.main %}
+                                                        {% if provider %}
+                                                            <div class="form-check">
+                                                                <input class="form-check-input original-data-provider-checkbox" 
+                                                                       type="checkbox" 
+                                                                       name="odp" 
+                                                                       value="{{ provider.id }}" 
+                                                                       id="provider_main_{{ forloop.counter }}"
+                                                                       {% if selected_providers and provider.id in selected_providers %}checked{% endif %}>
+                                                                <label class="form-check-label" for="provider_main_{{ forloop.counter }}">
+                                                                    {{ provider.name }}
+                                                                </label>
+                                                            </div>
+                                                        {% endif %}
+                                                    {% endfor %}
+                                                </div>
+                                            {% endif %}
+                                            {# Render grouped providers #}
+                                            {% for group in grouped_data_providers.groups %}
+                                                {% if group.providers %}
+                                                    <div class="data-provider-group" style="margin-top: 10px;">
+                                                        <div class="form-check d-flex align-items-center">
+                                                            <input class="form-check-input original-data-provider-group-checkbox" 
+                                                                   type="checkbox" 
+                                                                   id="group_{{ forloop.counter }}"
+                                                                   data-group-id="group_{{ forloop.counter }}">
+                                                            <label class="form-check-label flex-grow-1" for="group_{{ forloop.counter }}" style="font-weight: 600; cursor: pointer;">
+                                                                {{ group.label }}
+                                                            </label>
+                                                            <button class="btn btn-link btn-sm p-0 ms-2 expand-collapse-btn" 
+                                                                    type="button" 
+                                                                    data-mdb-collapse-init
+                                                                    data-mdb-toggle="collapse" 
+                                                                    data-mdb-target="#group_sublist_{{ forloop.counter }}" 
+                                                                    aria-expanded="false" 
+                                                                    aria-controls="group_sublist_{{ forloop.counter }}"
+                                                                    style="text-decoration: none; min-width: 20px;">
+                                                                <i class="fas fa-chevron-down expand-icon"></i>
+                                                                <i class="fas fa-chevron-up collapse-icon" style="display: none;"></i>
+                                                            </button>
+                                                        </div>
+                                                        <div class="collapse data-provider-sublist" id="group_sublist_{{ forloop.counter }}" style="margin-left: 20px; margin-top: 5px;">
+                                                            {% for provider in group.providers %}
+                                                                {% if provider %}
+                                                                    <div class="form-check">
+                                                                        <input class="form-check-input original-data-provider-checkbox group_{{ forloop.parentloop.counter }}_checkbox" 
+                                                                               type="checkbox" 
+                                                                               name="odp" 
+                                                                               value="{{ provider.id }}" 
+                                                                               id="provider_group_{{ forloop.parentloop.counter }}_{{ forloop.counter }}"
+                                                                               data-group-id="group_{{ forloop.parentloop.counter }}"
+                                                                               {% if selected_providers and provider.id in selected_providers %}checked{% endif %}>
+                                                                        <label class="form-check-label" for="provider_group_{{ forloop.parentloop.counter }}_{{ forloop.counter }}">
+                                                                            {{ provider.name }}
+                                                                        </label>
+                                                                    </div>
+                                                                {% endif %}
+                                                            {% endfor %}
+                                                        </div>
+                                                    </div>
+                                                {% endif %}
+                                            {% endfor %}
+                                        {% else %}
+                                            {# Fallback to regular rendering if no groups configured #}
+                                            {% for provider in grouped_data_providers.all %}
+                                                {% if provider %}
+                                                    <div class="form-check">
+                                                        <input class="form-check-input original-data-provider-checkbox" 
+                                                               type="checkbox" 
+                                                               name="odp" 
+                                                               value="{{ provider.id }}" 
+                                                               id="provider_{{ forloop.counter }}"
+                                                               {% if selected_providers and provider.id in selected_providers %}checked{% endif %}>
+                                                        <label class="form-check-label" for="provider_{{ forloop.counter }}">
+                                                            {{ provider.name }}
+                                                        </label>
+                                                    </div>
+                                                {% endif %}
+                                            {% endfor %}
+                                        {% endif %}
+                                    {% endwith %}
+                                </div>
                             </div>
                         </div>
                     </div>
@@ -134,6 +221,20 @@
                            data-mdb-trigger="hover"
                            data-mdb-placement="right"
                            data-mdb-content="{{ filters_descriptions|dict_get:"temporal_scope_end" }}">
+                            <i class="far fa-circle-question"></i>
+                        </a>
+                    </div>
+                    <div class="input-group margin-top-1rem">
+                        {{ form.hosted_by_delphi|as_crispy_field }}
+                        <a tabindex="0"
+                           type="button"
+                           class="info-button filter-description-popover margin-left-10"
+                           data-mdb-container="body"
+                           data-mdb-ripple-init
+                           data-mdb-popover-init
+                           data-mdb-trigger="hover"
+                           data-mdb-placement="right"
+                           data-mdb-content="{{ filters_descriptions|dict_get:"hosted_by_delphi" }}">
                             <i class="far fa-circle-question"></i>
                         </a>
                     </div>
@@ -267,13 +368,13 @@
                     <hr />
                     <div class="d-grid gap-2 mt-3 smaller-font-size">
                         <div>
-                            <a href="https://forms.gle/WV4Ndhc3ftvkkgVCA">Report a Data Problem</a>
+                            <a href="https://forms.gle/WV4Ndhc3ftvkkgVCA" target="_blank" rel="noopener noreferrer">Report a Data Problem</a>
                         </div>
                         <div>
-                            <a href="https://forms.gle/cMG7v7uUrnLVszRu5">Suggest a New Data Source</a>
+                            <a href="https://forms.gle/cMG7v7uUrnLVszRu5" target="_blank" rel="noopener noreferrer">Suggest a New Data Source</a>
                         </div>
                         <div>
-                            <a href="https://docs.google.com/forms/d/e/1FAIpQLScqgT1fKZr5VWBfsaSp-DNaN03aV6EoZU4YljIzHJ1Wl_zmtg/viewform">Other Feedback or Suggestion</a>
+                            <a href="https://docs.google.com/forms/d/e/1FAIpQLScqgT1fKZr5VWBfsaSp-DNaN03aV6EoZU4YljIzHJ1Wl_zmtg/viewform" target="_blank" rel="noopener noreferrer">Other Feedback or Suggestion</a>
                         </div>
                     </div>
                     <div class="margin-top-1rem text-center smaller-font-size">
@@ -288,16 +389,8 @@
 <script src="{% static 'js/indicatorSetsFilters.js' %}"></script>
 <script>
     $(document).ready(function() {
-        const geoValues = {{ geographic_granularities|safe }};
         var urlParams = JSON.parse(JSON.stringify({{ url_params_dict|safe }}));
-        const locationSearchValues = geoValues.map(group => ({
-            ...group,
-            children: group.children.map(child => ({
-                ...child,
-                id: child.id
-            }))
-        }));
-        initSelect2('location_search', locationSearchValues);
+        initSelect2('location_search', geoValues);
         if (urlParams.location_search != "") {
             var locationSearch = urlParams.location_search; 
             $("#location_search").val(locationSearch).trigger("change.select2");

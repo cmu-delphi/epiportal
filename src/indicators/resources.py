@@ -1,13 +1,12 @@
 import logging
 
 from django.db.models import Max
-from import_export import resources
 from import_export.fields import Field
 from import_export.results import RowResult
 from import_export.widgets import ForeignKeyWidget, ManyToManyWidget
 
 from base.models import GeographicScope, Geography, Pathogen, SeverityPyramidRung
-from base.resources import GEOGRAPHIC_GRANULARITY_MAPPING
+from base.resources import GEOGRAPHIC_GRANULARITY_MAPPING, CustomModelResource
 from datasources.models import SourceSubdivision
 from indicators.models import (
     Category,
@@ -17,6 +16,7 @@ from indicators.models import (
     IndicatorType,
     NonDelphiIndicator,
     OtherEndpointIndicator,
+    USStateIndicator,
 )
 from indicatorsets.models import IndicatorSet, NonDelphiIndicatorSet
 
@@ -32,6 +32,7 @@ def fix_boolean_fields(row) -> None:
         "Has StdErr",
         "Has Sample Size",
         "Include in indicator app",
+        "Include in express app",
     ]
 
     for field in fields:
@@ -44,7 +45,8 @@ def fix_boolean_fields(row) -> None:
     return row
 
 
-def process_pathogen(row) -> None:
+def process_pathogens(row) -> None:
+    pathogen_ids = []
     if row["Pathogen/\nDisease Area"]:
         pathogens = row["Pathogen/\nDisease Area"].split(",")
         for pathogen in pathogens:
@@ -57,6 +59,20 @@ def process_pathogen(row) -> None:
                     "used_in": "indicators",
                 },
             )
+            pathogen_ids.append(pathogen_obj.id)
+    row["Pathogen/\nDisease Area"] = ",".join(str(el) for el in pathogen_ids)
+
+
+def process_indicator_set(row) -> None:
+    indicator_set_id = None
+    if row["Indicator Set"]:
+        indicator_set_name = row["Indicator Set"].strip()
+        try:
+            indicator_set_obj = IndicatorSet.objects.get(name=indicator_set_name)
+            indicator_set_id = indicator_set_obj.id
+        except IndicatorSet.DoesNotExist:
+            logger.warning(f"Indicator Set '{indicator_set_name}' not found.")
+    row["Indicator Set"] = indicator_set_id
 
 
 def process_indicator_type(row) -> None:
@@ -184,21 +200,22 @@ def process_indicator_geography(row):
                 indicator_geography_obj.save()
 
 
-def process_base(row) -> None:
-    if row["Signal BaseName"]:
-        source = SourceSubdivision.objects.get(name=row["Source Subdivision"])
+class ModelResource(CustomModelResource):
+    import_source_types: tuple[str, ...] = ()
+    skip_row_name_column = "Signal"
 
-        try:
-            base_indicator_obj = Indicator.objects.get(
-                name=row["Signal BaseName"], source=source
-            )
-        except Indicator.DoesNotExist:
-            return
+    def get_import_deletion_queryset(self):
+        queryset = Indicator.objects.all()
+        if self.import_source_types:
+            queryset = queryset.filter(source_type__in=self.import_source_types)
+        return queryset
 
-        row["base"] = base_indicator_obj.id
+    def after_import(self, dataset, result, **kwargs):
+        if not kwargs.get("dry_run", False):
+            self.get_import_deletion_queryset().exclude(
+                pk__in=self.imported_rows_pks
+            ).delete()
 
-
-class ModelResource(resources.ModelResource):
     def get_field_names(self):
         names = []
         for field in list(self.fields.values()):
@@ -230,6 +247,27 @@ class ModelResource(resources.ModelResource):
 
         return import_result
 
+    def skip_row(self, instance, original, row, import_validation_errors=None):
+        if "Include in indicator app" in row:
+            if not row["Include in indicator app"]:
+                indicators = self.get_import_deletion_queryset().filter(
+                    name=row[self.skip_row_name_column],
+                    source=row["Source Subdivision"],
+                )
+                if indicators.exists():
+                    indicators.delete()
+                return True
+        if row.get("Indicator Set") is None:
+            return True
+        return False
+
+
+def strip_all_string_values(row) -> None:
+    for key, value in row.items():
+        # Check if the value is a string and not None
+        if isinstance(value, str):
+            row[key] = value.strip()
+
 
 class PermissiveForeignKeyWidget(ForeignKeyWidget):
 
@@ -240,31 +278,9 @@ class PermissiveForeignKeyWidget(ForeignKeyWidget):
             logger.warning(f"instance matching '{value}' does not exist")
 
 
-class IndicatorBaseResource(ModelResource):
-    name = Field(attribute="name", column_name="Signal")
-    display_name = Field(attribute="display_name", column_name="Name")
-    base = Field(
-        attribute="base",
-        column_name="base",
-        widget=PermissiveForeignKeyWidget(Indicator, field="id"),
-    )
-    source = Field(
-        attribute="source",
-        column_name="Source Subdivision",
-        widget=PermissiveForeignKeyWidget(SourceSubdivision, field="name"),
-    )
-
-    class Meta:
-        model = Indicator
-        fields: list[str] = ["base", "name", "source", "display_name"]
-        import_id_fields: list[str] = ["name", "source"]
-
-    def before_import_row(self, row, **kwargs) -> None:
-        """Post-processes each row after importing."""
-        process_base(row)
-
-
 class IndicatorResource(ModelResource):
+    import_source_types = ("covidcast",)
+    imported_rows_pks = []
     name = Field(attribute="name", column_name="Signal")
     display_name = Field(attribute="display_name", column_name="Name")
     short_description = Field(
@@ -281,7 +297,7 @@ class IndicatorResource(ModelResource):
     pathogens = Field(
         attribute="pathogens",
         column_name="Pathogen/\nDisease Area",
-        widget=ManyToManyWidget(Pathogen, field="name", separator=","),
+        widget=ManyToManyWidget(Pathogen),
     )
     indicator_type = Field(
         attribute="indicator_type",
@@ -364,7 +380,10 @@ class IndicatorResource(ModelResource):
     indicator_set = Field(
         attribute="indicator_set",
         column_name="Indicator Set",
-        widget=PermissiveForeignKeyWidget(IndicatorSet, field="name"),
+        widget=PermissiveForeignKeyWidget(IndicatorSet),
+    )
+    use_in_express_interface = Field(
+        attribute="use_in_express_interface", column_name="Include in express app"
     )
 
     class Meta:
@@ -409,14 +428,39 @@ class IndicatorResource(ModelResource):
             "license",
             "restrictions",
             "indicator_set",
+            "use_in_express_interface",
         ]
-        import_id_fields: list[str] = ["name", "source"]
+        import_id_fields: list[str] = ["name", "indicator_set", "source"]
         skip_unchanged = True
+
+    def get_instance(self, instance_loader, row):
+        name = row.get("Signal")
+        source = row.get("Source Subdivision")
+        indicator_set = row.get("Indicator Set")
+
+        # Try to match by (name, source)
+        if name and source:
+            try:
+                return self._meta.model.objects.get(name=name, source__id=source)
+            except self._meta.model.DoesNotExist:
+                pass
+
+        # Try to match by (name, indicator_set)
+        if name and indicator_set:
+            try:
+                return self._meta.model.objects.get(
+                    name=name, indicator_set__id=indicator_set
+                )
+            except self._meta.model.DoesNotExist:
+                pass
+
+        return None
 
     def before_import_row(self, row, **kwargs) -> None:
         """Post-processes each row after importing."""
+        strip_all_string_values(row)
         fix_boolean_fields(row)
-        process_pathogen(row)
+        process_pathogens(row)
         process_indicator_type(row)
         process_format_type(row)
         process_category(row)
@@ -424,20 +468,21 @@ class IndicatorResource(ModelResource):
         process_source(row)
         process_severity_pyramid_rungs(row)
         process_available_geographies(row)
+        process_indicator_set(row)
 
     def after_import_row(self, row, row_result, **kwargs):
         process_indicator_geography(row)
+        super().after_import_row(row, row_result, **kwargs)
 
     def after_save_instance(self, instance, row, **kwargs):
         instance.source_type = "covidcast"
         instance.save()
 
-    def skip_row(self, instance, original, row, import_validation_errors=None):
-        if not row["Include in indicator app"]:
-            return True
-
 
 class OtherEndpointIndicatorResource(ModelResource):
+    import_source_types = ("other_endpoint",)
+    skip_row_name_column = "Indicator"
+    imported_rows_pks = []
     name = Field(attribute="name", column_name="Indicator")
     display_name = Field(attribute="display_name", column_name="Name")
     short_description = Field(
@@ -454,7 +499,7 @@ class OtherEndpointIndicatorResource(ModelResource):
     pathogens = Field(
         attribute="pathogens",
         column_name="Pathogen/\nDisease Area",
-        widget=ManyToManyWidget(Pathogen, field="name", separator=","),
+        widget=ManyToManyWidget(Pathogen),
     )
     indicator_type = Field(
         attribute="indicator_type",
@@ -537,7 +582,10 @@ class OtherEndpointIndicatorResource(ModelResource):
     indicator_set = Field(
         attribute="indicator_set",
         column_name="Indicator Set",
-        widget=PermissiveForeignKeyWidget(IndicatorSet, field="name"),
+        widget=PermissiveForeignKeyWidget(IndicatorSet),
+    )
+    use_in_express_interface = Field(
+        attribute="use_in_express_interface", column_name="Include in express app"
     )
 
     class Meta:
@@ -582,35 +630,36 @@ class OtherEndpointIndicatorResource(ModelResource):
             "license",
             "restrictions",
             "indicator_set",
+            "use_in_express_interface",
         ]
         import_id_fields: list[str] = ["name", "source"]
         skip_unchanged = True
 
     def before_import_row(self, row, **kwargs) -> None:
         """Post-processes each row after importing."""
+        strip_all_string_values(row)
         fix_boolean_fields(row)
         process_source(row)
-        process_pathogen(row)
+        process_pathogens(row)
         process_indicator_type(row)
         process_format_type(row)
         process_category(row)
         process_geographic_scope(row)
         process_severity_pyramid_rungs(row)
         process_available_geographies(row)
-
-    def skip_row(self, instance, original, row, import_validation_errors=None):
-        if not row["Include in indicator app"]:
-            return True
+        process_indicator_set(row)
 
     def after_import_row(self, row, row_result, **kwargs):
         process_indicator_geography(row)
+        super().after_import_row(row, row_result, **kwargs)
 
     def after_save_instance(self, instance, row, **kwargs):
         instance.source_type = "other_endpoint"
         instance.save()
 
 
-class NonDelphiIndicatorResource(resources.ModelResource):
+class NonDelphiIndicatorResource(ModelResource):
+    import_source_types = ("non_delphi",)
 
     name = Field(attribute="name", column_name="Indicator Name")
     display_name = Field(attribute="display_name", column_name="Indicator Name")
@@ -619,7 +668,10 @@ class NonDelphiIndicatorResource(resources.ModelResource):
     indicator_set = Field(
         attribute="indicator_set",
         column_name="Indicator Set",
-        widget=PermissiveForeignKeyWidget(NonDelphiIndicatorSet, field="name"),
+        widget=PermissiveForeignKeyWidget(NonDelphiIndicatorSet),
+    )
+    use_in_express_interface = Field(
+        attribute="use_in_express_interface", column_name="Include in express app"
     )
 
     class Meta:
@@ -630,18 +682,47 @@ class NonDelphiIndicatorResource(resources.ModelResource):
             "member_name",
             "description",
             "indicator_set",
+            "use_in_express_interface",
         ]
-        import_id_fields: list[str] = ["name"]
+        import_id_fields: list[str] = ["name", "indicator_set"]
         skip_unchanged = True
 
     def before_import_row(self, row, **kwargs) -> None:
         """Post-processes each row after importing."""
+        strip_all_string_values(row)
         fix_boolean_fields(row)
-
-    def skip_row(self, instance, original, row, import_validation_errors=None):
-        if not row["Include in indicator app"]:
-            return True
+        process_indicator_set(row)
 
     def after_save_instance(self, instance, row, **kwargs):
         instance.source_type = "non_delphi"
+        instance.save()
+
+
+class USStateIndicatorResource(ModelResource):
+    import_source_types = ("us_state",)
+    imported_rows_pks = []
+    name = Field(attribute="name", column_name="Indicator Name")
+    indicator_set = Field(
+        attribute="indicator_set",
+        column_name="Indicator Set",
+        widget=PermissiveForeignKeyWidget(IndicatorSet),
+    )
+
+    class Meta:
+        model = USStateIndicator
+        fields: list[str] = [
+            "name",
+            "indicator_set",
+        ]
+        import_id_fields: list[str] = ["name", "indicator_set"]
+        skip_unchanged = True
+
+    def before_import_row(self, row, **kwargs) -> None:
+        """Post-processes each row after importing."""
+        strip_all_string_values(row)
+        fix_boolean_fields(row)
+        process_indicator_set(row)
+
+    def after_save_instance(self, instance, row, **kwargs):
+        instance.source_type = "us_state"
         instance.save()

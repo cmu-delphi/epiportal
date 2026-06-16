@@ -1,0 +1,50 @@
+from django.db import models
+
+
+class ExpressViewIndicator(models.Model):
+    menu_item = models.CharField(
+        verbose_name="Menu Item",
+        max_length=255,
+    )
+    indicator = models.ForeignKey(
+        "indicators.Indicator",
+        verbose_name="Indicator",
+        on_delete=models.PROTECT,
+    )
+    display_name = models.CharField(
+        verbose_name="Display Name",
+        max_length=255,
+    )
+
+    grouping_key: models.CharField = models.CharField(
+        verbose_name="Grouping Key",
+        max_length=255,
+        blank=True,
+        help_text="Key to group indicators for scaling",
+    )
+
+    display_order: models.IntegerField = models.IntegerField(
+        verbose_name="Display Order",
+        default=0,
+        help_text="Order to display the indicator in the legend",
+    )
+
+    class Meta:
+        verbose_name = "Express View Indicator"
+        verbose_name_plural = "Express View Indicators"
+        ordering = ["menu_item", "indicator"]
+        indexes = [
+            models.Index(
+                fields=["menu_item", "indicator"],
+                name="expr_view_ind_menu_idx",
+            ),
+        ]
+        constraints = [
+            models.UniqueConstraint(
+                fields=["menu_item", "indicator"],
+                name="uniq_expr_view_menu_ind",
+            ),
+        ]
+
+    def __str__(self):
+        return self.display_name
