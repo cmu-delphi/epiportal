@@ -1,5 +1,5 @@
-# Repair migration for staging: runs on deploy when 0010 is recorded but the DB
-# schema is still partial (e.g. orphan provider table, char column not converted).
+# Drops and recreates indicatorsets_originaldataprovider if 0010 was recorded
+# but the database schema is still broken (common after partial MySQL deploys).
 
 from django.db import migrations
 
