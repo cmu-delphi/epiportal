@@ -36,6 +36,7 @@ from indicatorsets.utils import (
     generate_query_code_nidss_flu,
     get_grouped_original_data_provider_choices,
     group_by_property,
+    parse_original_data_provider_ids,
     log_form_data,
     log_form_stats,
     preview_covidcast_data,
@@ -139,7 +140,9 @@ class IndicatorSetListView(ListView):
 
     def get_queryset(self):
         try:
-            return IndicatorSet.objects.all().prefetch_related(
+            return IndicatorSet.objects.all().select_related(
+                "original_data_provider",
+            ).prefetch_related(
                 "geographic_scope",
                 "pathogens",
                 "severity_pyramid_rungs",
@@ -166,9 +169,7 @@ class IndicatorSetListView(ListView):
                 if self.request.GET.get("severity_pyramid_rungs")
                 else ""
             ),
-            "original_data_provider": [
-                el for el in self.request.GET.getlist("original_data_provider")
-            ],
+            "odp": parse_original_data_provider_ids(self.request.GET),
             "temporal_granularity": (
                 [el for el in self.request.GET.getlist("temporal_granularity")]
                 if self.request.GET.get("temporal_granularity")
@@ -201,8 +202,13 @@ class IndicatorSetListView(ListView):
         url_params_str = ""
         for param_name, param_value in url_params_dict.items():
             if isinstance(param_value, list):
-                for value in param_value:
-                    url_params_str = f"{url_params_str}&{param_name}={value}"
+                if param_name == "odp" and param_value:
+                    url_params_str = (
+                        f"{url_params_str}&odp={','.join(str(v) for v in param_value)}"
+                    )
+                else:
+                    for value in param_value:
+                        url_params_str = f"{url_params_str}&{param_name}={value}"
             else:
                 if param_value not in ["", None]:
                     url_params_str = f"{url_params_str}&{param_name}={param_value}"
@@ -251,7 +257,7 @@ class IndicatorSetListView(ListView):
                     "maintainer_name": indicator_set.maintainer_name,
                     "maintainer_email": indicator_set.maintainer_email,
                     "organization": indicator_set.organization,
-                    "original_data_provider": indicator_set.original_data_provider,
+                    "original_data_provider": indicator_set.original_data_provider.name if indicator_set.original_data_provider else "",
                     "epidata_endpoint": indicator_set.epidata_endpoint,
                     "language": indicator_set.language,
                     "version_number": indicator_set.version_number,

@@ -11,7 +11,7 @@ from epiportal.utils import get_client_ip
 from epiweeks import Week
 from delphi_utils import get_structured_logger
 
-from indicatorsets.models import IndicatorSet
+from indicatorsets.models import IndicatorSet, OriginalDataProvider
 
 FLUVIEW_INDICATORS_MAPPING = {"wili": "%wILI", "ili": "%ILI"}
 
@@ -86,67 +86,55 @@ def get_epiweek(start_date, end_date):
     return [start_date, end_date]
 
 
+def parse_original_data_provider_ids(query_dict):
+    raw_values = []
+
+    for odp_value in query_dict.getlist("odp"):
+        raw_values.extend(v.strip() for v in odp_value.split(",") if v.strip())
+
+    raw_values.extend(query_dict.getlist("original_data_provider"))
+
+    ids = []
+    names = []
+    for value in raw_values:
+        if str(value).isdigit():
+            ids.append(int(value))
+        elif value:
+            names.append(value)
+
+    if names:
+        ids.extend(
+            OriginalDataProvider.objects.filter(name__in=names).values_list("id", flat=True)
+        )
+
+    # dedupe, preserve order
+    seen = set()
+    return [i for i in ids if not (i in seen or seen.add(i))]
+
 def sort_data_providers(providers):
     """Sort providers alphabetically, with names containing 'other' at the end."""
-    sorted_providers = sorted(providers)
-    tail = [provider for provider in sorted_providers if "other" in provider.lower()]
-    head = [provider for provider in sorted_providers if "other" not in provider.lower()]
+    sorted_providers = sorted(providers, key=lambda p: p.name.lower())
+    tail = [provider for provider in sorted_providers if "other" in provider.name.lower()]
+    head = [provider for provider in sorted_providers if "other" not in provider.name.lower()]
     return head + tail
 
 
-def get_original_data_provider_choices():
-    """
-    Returns flat list of choices for form compatibility.
-    """
-    return [
-        (el, el)
-        for el in IndicatorSet.objects.values_list("original_data_provider", flat=True)
-        .order_by("original_data_provider")
-        .distinct()
-    ]
-
-
 def get_grouped_original_data_provider_choices():
-    """
-    Returns grouped choices with U.S. States providers in a sublist.
-    """
-
-    all_providers = set(
-        IndicatorSet.objects.values_list("original_data_provider", flat=True)
-        .order_by("original_data_provider")
+    providers = (
+        OriginalDataProvider.objects.filter(indicator_sets__isnull=False)
         .distinct()
+        .order_by("display_order", "name")
     )
-
-    # Define U.S. States providers that should be grouped under "U.S. States"
-    us_states_providers = set(
-        IndicatorSet.objects.filter(source_type="us_state")
-        .values_list("original_data_provider", flat=True)
-        .distinct()
-    )
-
-    # Define U.S. Government providers that should be grouped under "U.S. Government"
-    us_government_providers = set(
-        data_provider for data_provider in all_providers
-        if data_provider.split(" ")[0] == "US"
-    )
-
-    main_providers = [provider for provider in all_providers if provider not in [*us_states_providers, *us_government_providers]]
-
+    provider_list = list(providers)
     return {
-        "main": sort_data_providers(main_providers),
+        "main": sort_data_providers([p for p in provider_list if p.group == "individual"]),
         "groups": [
-            {
-                "label": "U.S. Government",
-                "providers": sort_data_providers(us_government_providers)
-            },
-            {
-                "label": "U.S. States",
-                "providers": sort_data_providers(us_states_providers),
-            }
+            {"label": "U.S. Government", "providers": [p for p in provider_list if p.group == "us_government"]},
+            {"label": "U.S. States", "providers": [p for p in provider_list if p.group == "us_states"]},
         ],
-        "all": sort_data_providers(all_providers),  # Keep flat list for form compatibility
+        "all": sort_data_providers(provider_list),
     }
-
+    
 
 def group_by_property(list_of_dicts, property):
     """Groups a list of dictionaries by a specified property.
