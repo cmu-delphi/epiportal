@@ -4,6 +4,29 @@ import django.db.models.deletion
 from django.db import migrations, models
 
 
+def drop_orphan_original_data_provider_table(apps, schema_editor):
+    """Clean up partial/failed deploys before CreateModel runs."""
+    with schema_editor.connection.cursor() as cursor:
+        cursor.execute("SET FOREIGN_KEY_CHECKS=0")
+        cursor.execute(
+            """
+            SELECT CONSTRAINT_NAME
+            FROM information_schema.KEY_COLUMN_USAGE
+            WHERE TABLE_SCHEMA = DATABASE()
+              AND TABLE_NAME = 'indicatorsets_indicatorset'
+              AND COLUMN_NAME = 'original_data_provider_id'
+              AND REFERENCED_TABLE_NAME IS NOT NULL
+            """
+        )
+        for (constraint_name,) in cursor.fetchall():
+            cursor.execute(
+                f"ALTER TABLE `indicatorsets_indicatorset` "
+                f"DROP FOREIGN KEY `{constraint_name}`"
+            )
+        cursor.execute("DROP TABLE IF EXISTS `indicatorsets_originaldataprovider`")
+        cursor.execute("SET FOREIGN_KEY_CHECKS=1")
+
+
 class Migration(migrations.Migration):
 
     dependencies = [
@@ -11,6 +34,10 @@ class Migration(migrations.Migration):
     ]
 
     operations = [
+        migrations.RunPython(
+            drop_orphan_original_data_provider_table,
+            migrations.RunPython.noop,
+        ),
         migrations.CreateModel(
             name="OriginalDataProvider",
             fields=[
