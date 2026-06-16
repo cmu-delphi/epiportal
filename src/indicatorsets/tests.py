@@ -5,11 +5,14 @@ from django.core.cache import cache
 from django.test import Client, TestCase, override_settings
 from django.urls import reverse
 
+from django.http import QueryDict
+
 from indicatorsets.models import (
     ColumnDescription,
     FilterDescription,
     IndicatorSet,
     NonDelphiIndicatorSet,
+    OriginalDataProvider,
     USStateIndicatorSet,
 )
 from indicatorsets.utils import (
@@ -19,9 +22,9 @@ from indicatorsets.utils import (
     get_epiweek,
     get_grouped_original_data_provider_choices,
     get_list_of_indicators_filtered_by_geo,
-    get_original_data_provider_choices,
     group_by_property,
     list_to_dict,
+    parse_original_data_provider_ids,
 )
 from indicatorsets.views import get_related_indicators
 from indicatorsets.filters import IndicatorSetFilter
@@ -103,29 +106,43 @@ class DescriptionModelTests(TestCase):
 
 
 class GroupedDataProviderChoicesTests(TestCase):
-    def test_groups_us_state_and_us_government_providers(self):
+    def test_groups_providers_by_group_field(self):
+        pa_provider = OriginalDataProvider.objects.create(
+            name="PA DOH",
+            group="us_states",
+        )
+        cdc_provider = OriginalDataProvider.objects.create(
+            name="US CDC",
+            group="us_government",
+        )
+        acme_provider = OriginalDataProvider.objects.create(
+            name="Acme Corp",
+            group="individual",
+        )
         IndicatorSet.objects.create(
             name="State set",
-            original_data_provider="PA DOH",
+            original_data_provider=pa_provider,
             source_type="us_state",
         )
         IndicatorSet.objects.create(
             name="Federal set",
-            original_data_provider="US CDC",
+            original_data_provider=cdc_provider,
             source_type="covidcast",
         )
         IndicatorSet.objects.create(
             name="Other set",
-            original_data_provider="Acme Corp",
+            original_data_provider=acme_provider,
             source_type="covidcast",
         )
 
-        from indicatorsets.utils import get_grouped_original_data_provider_choices
-
         grouped = get_grouped_original_data_provider_choices()
-        self.assertIn("PA DOH", grouped["groups"][1]["providers"])
-        self.assertIn("US CDC", grouped["groups"][0]["providers"])
-        self.assertIn("Acme Corp", grouped["main"])
+        us_government_names = [p.name for p in grouped["groups"][0]["providers"]]
+        us_state_names = [p.name for p in grouped["groups"][1]["providers"]]
+        main_names = [p.name for p in grouped["main"]]
+
+        self.assertIn("PA DOH", us_state_names)
+        self.assertIn("US CDC", us_government_names)
+        self.assertIn("Acme Corp", main_names)
 
 
 class PophiveAgeGroupsViewTests(TestCase):
@@ -177,11 +194,13 @@ class IndicatorSetListViewTests(TestCase):
         self.assertEqual(response.status_code, 200)
 
     def test_json_format_returns_datatables_shape(self):
+        provider = OriginalDataProvider.objects.create(name="Acme Labs")
         IndicatorSet.objects.create(
             name="JSON test set",
             source_type="covidcast",
             temporal_scope_end="Ongoing",
             dua_required="No",
+            original_data_provider=provider,
         )
         response = self.client.get(reverse("indicatorsets"), {"format": "json"})
         self.assertEqual(response.status_code, 200)
@@ -189,6 +208,27 @@ class IndicatorSetListViewTests(TestCase):
         self.assertIn("data", payload)
         self.assertIn("recordsTotal", payload)
         self.assertEqual(payload["recordsTotal"], 1)
+        self.assertEqual(payload["data"][0]["original_data_provider"], "Acme Labs")
+
+    def test_list_page_filters_by_odp_ids(self):
+        provider = OriginalDataProvider.objects.create(name="Filtered provider")
+        matched_set = IndicatorSet.objects.create(
+            name="Matched set",
+            source_type="covidcast",
+            original_data_provider=provider,
+        )
+        IndicatorSet.objects.create(
+            name="Other set",
+            source_type="covidcast",
+        )
+        response = self.client.get(
+            reverse("indicatorsets"),
+            {"odp": str(provider.id), "format": "json"},
+        )
+        self.assertEqual(response.status_code, 200)
+        payload = response.json()
+        self.assertEqual(payload["recordsTotal"], 1)
+        self.assertEqual(payload["data"][0]["DT_RowId"], matched_set.id)
 
 
 class GetRelatedIndicatorsTests(TestCase):
@@ -237,6 +277,24 @@ class IndicatorSetFilterTests(TestCase):
             source_type="non_delphi",
             temporal_scope_end="2020",
         )
+        cls.acme_provider = OriginalDataProvider.objects.create(
+            name="Acme Labs",
+            group="individual",
+        )
+        cls.cdc_provider = OriginalDataProvider.objects.create(
+            name="US CDC",
+            group="us_government",
+        )
+        cls.acme_set = IndicatorSet.objects.create(
+            name="Acme set",
+            source_type="covidcast",
+            original_data_provider=cls.acme_provider,
+        )
+        cls.cdc_set = IndicatorSet.objects.create(
+            name="CDC set",
+            source_type="covidcast",
+            original_data_provider=cls.cdc_provider,
+        )
 
     def test_hosted_by_delphi_filter(self):
         data = {"hosted_by_delphi": "on"}
@@ -257,6 +315,28 @@ class IndicatorSetFilterTests(TestCase):
         self.assertFalse(
             IndicatorSetFilter.include_fluview("['country:us']")
         )
+
+    def test_odp_filter_by_comma_separated_ids(self):
+        data = QueryDict(f"odp={self.acme_provider.id},{self.cdc_provider.id}")
+        filtered = IndicatorSetFilter(data=data, queryset=IndicatorSet.objects.all()).qs
+        self.assertIn(self.acme_set, filtered)
+        self.assertIn(self.cdc_set, filtered)
+        self.assertNotIn(self.covidcast_set, filtered)
+
+    def test_odp_filter_by_repeated_ids(self):
+        data = QueryDict(mutable=True)
+        data.setlist("odp", [str(self.acme_provider.id), str(self.cdc_provider.id)])
+        filtered = IndicatorSetFilter(data=data, queryset=IndicatorSet.objects.all()).qs
+        self.assertIn(self.acme_set, filtered)
+        self.assertIn(self.cdc_set, filtered)
+        self.assertNotIn(self.covidcast_set, filtered)
+
+    def test_original_data_provider_filter_accepts_legacy_names(self):
+        data = QueryDict(mutable=True)
+        data.setlist("original_data_provider", [self.acme_provider.name])
+        filtered = IndicatorSetFilter(data=data, queryset=IndicatorSet.objects.all()).qs
+        self.assertIn(self.acme_set, filtered)
+        self.assertNotIn(self.cdc_set, filtered)
 
 
 class IndicatorSetImportResourceTests(TestCase):
@@ -324,14 +404,37 @@ class IndicatorSetProxyModelTests(TestCase):
 
 
 class OriginalDataProviderUtilsTests(TestCase):
-    def test_get_original_data_provider_choices(self):
-        IndicatorSet.objects.create(
-            name="Provider set",
-            original_data_provider="Acme Labs",
-            source_type="covidcast",
+    def test_parse_original_data_provider_ids_from_comma_separated_odp(self):
+        provider = OriginalDataProvider.objects.create(name="Acme Labs")
+        query_dict = QueryDict(f"odp={provider.id},999")
+        self.assertEqual(
+            parse_original_data_provider_ids(query_dict),
+            [provider.id, 999],
         )
-        choices = get_original_data_provider_choices()
-        self.assertIn(("Acme Labs", "Acme Labs"), choices)
+
+    def test_parse_original_data_provider_ids_from_repeated_odp_params(self):
+        provider_one = OriginalDataProvider.objects.create(name="Provider One")
+        provider_two = OriginalDataProvider.objects.create(name="Provider Two")
+        query_dict = QueryDict(mutable=True)
+        query_dict.setlist(
+            "odp",
+            [str(provider_one.id), str(provider_two.id)],
+        )
+        self.assertEqual(
+            parse_original_data_provider_ids(query_dict),
+            [provider_one.id, provider_two.id],
+        )
+
+    def test_parse_original_data_provider_ids_from_legacy_names(self):
+        provider = OriginalDataProvider.objects.create(name="Acme Labs")
+        query_dict = QueryDict(mutable=True)
+        query_dict.setlist("original_data_provider", [provider.name])
+        self.assertEqual(parse_original_data_provider_ids(query_dict), [provider.id])
+
+    def test_parse_original_data_provider_ids_deduplicates(self):
+        provider = OriginalDataProvider.objects.create(name="Acme Labs")
+        query_dict = QueryDict(f"odp={provider.id},{provider.id}")
+        self.assertEqual(parse_original_data_provider_ids(query_dict), [provider.id])
 
 
 class GeoCoverageUtilsTests(TestCase):
