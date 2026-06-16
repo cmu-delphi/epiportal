@@ -14,7 +14,6 @@ from indicatorsets.models import (
     USStateIndicatorSet,
     ColumnDescription,
     FilterDescription,
-    OriginalDataProvider,
 )
 
 
@@ -124,13 +123,6 @@ def process_data_use_terms(row) -> None:
         row["Data Use Terms"] = "None found"
 
 
-def process_original_data_provider(row) -> None:
-    original_data_provider_name = row["Original Data Provider"]
-    original_data_provider_obj, _ = OriginalDataProvider.objects.get_or_create(
-        name=original_data_provider_name
-    )
-    row["Original Data Provider"] = original_data_provider_obj.id
-
 class IndicatorSetBaseResource(CustomModelResource):
     import_source_types: tuple[str, ...] = ()
 
@@ -183,7 +175,6 @@ class IndicatorSetResource(IndicatorSetBaseResource):
     original_data_provider = Field(
         attribute="original_data_provider",
         column_name="Original Data Provider",
-        widget=ForeignKeyWidget(OriginalDataProvider),
     )
     epidata_endpoint = Field(
         attribute="epidata_endpoint",
@@ -314,7 +305,6 @@ class IndicatorSetResource(IndicatorSetBaseResource):
         process_pathogens(row)
         process_available_geographies(row)
         process_data_use_terms(row)
-        process_original_data_provider(row)
 
     def after_save_instance(self, instance, row, **kwargs):
         instance.source_type = (
@@ -323,9 +313,6 @@ class IndicatorSetResource(IndicatorSetBaseResource):
             else "other_endpoint"
         )
         instance.save()
-        if instance.original_data_provider and instance.original_data_provider.name.split(" ")[0] == "US":
-            instance.original_data_provider.group = "us_government"
-            instance.original_data_provider.save()
 
 
 class NonDelphiIndicatorSetResource(IndicatorSetBaseResource):
@@ -344,7 +331,6 @@ class NonDelphiIndicatorSetResource(IndicatorSetBaseResource):
     original_data_provider = Field(
         attribute="original_data_provider",
         column_name="Original Data Provider",
-        widget=ForeignKeyWidget(OriginalDataProvider),
     )
     epidata_endpoint = Field(
         attribute="epidata_endpoint",
@@ -463,14 +449,10 @@ class NonDelphiIndicatorSetResource(IndicatorSetBaseResource):
         process_pathogens(row)
         process_available_geographies(row)
         process_data_use_terms(row)
-        process_original_data_provider(row)
 
     def after_save_instance(self, instance, row, **kwargs):
         instance.source_type = "non_delphi"
         instance.save()
-        if instance.original_data_provider:
-            instance.original_data_provider.group = "individual"
-            instance.original_data_provider.save()
 
 
 class USStateIndicatorSetResource(IndicatorSetBaseResource):
@@ -521,7 +503,6 @@ class USStateIndicatorSetResource(IndicatorSetBaseResource):
     original_data_provider = Field(
         attribute="original_data_provider",
         column_name="Original Data Provider",
-        widget=ForeignKeyWidget(OriginalDataProvider),
     )
     preprocessing_description = Field(
         attribute="preprocessing_description",
@@ -588,14 +569,10 @@ class USStateIndicatorSetResource(IndicatorSetBaseResource):
         process_available_geographies(row)
         process_severity_pyramid_rungs(row)
         process_data_use_terms(row)
-        process_original_data_provider(row)
 
     def after_save_instance(self, instance, row, **kwargs):
         instance.source_type = "us_state"
         instance.save()
-        if instance.original_data_provider:
-            instance.original_data_provider.group = "us_states"
-            instance.original_data_provider.save()
 
 
 class ColumnDescriptionResource(resources.ModelResource):

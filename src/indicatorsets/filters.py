@@ -10,7 +10,7 @@ from django_filters.widgets import QueryArrayWidget
 from indicatorsets.models import IndicatorSet
 from indicatorsets.utils import (
     get_list_of_indicators_filtered_by_geo,
-    parse_original_data_provider_ids,
+    get_original_data_provider_choices,
 )
 from indicators.models import Indicator
 from base.models import Pathogen, Geography, SeverityPyramidRung
@@ -51,19 +51,13 @@ class IndicatorSetFilter(django_filters.FilterSet):
         required=False,
     )
 
-    odp = django_filters.CharFilter(method="filter_original_data_provider", required=False)
-    
-    original_data_provider = django_filters.CharFilter(
-        method="filter_original_data_provider",
+    original_data_provider = django_filters.MultipleChoiceFilter(
+        field_name="original_data_provider",
+        choices=get_original_data_provider_choices,
         widget=QueryArrayWidget,
+        lookup_expr="exact",
         required=False,
     )
-
-    def filter_original_data_provider(self, queryset, name, value):
-        provider_ids = parse_original_data_provider_ids(self.data)
-        if not provider_ids:
-            return queryset
-        return queryset.filter(original_data_provider_id__in=provider_ids)
 
     temporal_granularity = django_filters.MultipleChoiceFilter(
         field_name="temporal_granularity",
@@ -103,7 +97,6 @@ class IndicatorSetFilter(django_filters.FilterSet):
             "pathogens",
             "geographic_levels",
             "severity_pyramid_rungs",
-            "odp",
             "original_data_provider",
             "temporal_granularity",
             "temporal_scope_end",

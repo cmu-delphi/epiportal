@@ -11,7 +11,6 @@ from indicatorsets.models import (
     IndicatorSet,
     NonDelphiIndicatorSet,
     USStateIndicatorSet,
-    OriginalDataProvider,
 )
 from indicatorsets.resources import (
     IndicatorSetResource,
@@ -331,17 +330,3 @@ class ColumnDescriptionAdmin(ImportExportModelAdmin):
             settings.SPREADSHEET_URLS["column_descriptions"],
             "Indicator_Sets_Table_Column_Descriptions.csv",
         )
-
-
-@admin.register(OriginalDataProvider)
-class OriginalDataProviderAdmin(admin.ModelAdmin):
-    """
-    Admin interface for the OriginalDataProvider model.
-    """
-
-    list_display = ("name", "group", "display_order")
-    search_fields = ("name", "group")
-    ordering = ["name"]
-    list_filter = ["group"]
-    list_editable = ("display_order",)
-    list_per_page = 50

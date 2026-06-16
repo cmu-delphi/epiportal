@@ -3,6 +3,7 @@ from django.db.models import Case, When, IntegerField
 
 from base.models import Pathogen, Geography, SeverityPyramidRung
 from indicatorsets.models import IndicatorSet
+from indicatorsets.utils import get_original_data_provider_choices
 
 
 class IndicatorSetFilterForm(forms.ModelForm):
@@ -31,6 +32,12 @@ class IndicatorSetFilterForm(forms.ModelForm):
             indicator_sets__isnull=False
         ).distinct().order_by("display_order_number"),
         widget=forms.CheckboxSelectMultiple(),
+    )
+
+    original_data_provider = forms.MultipleChoiceField(
+        choices=get_original_data_provider_choices,
+        widget=forms.CheckboxSelectMultiple(),
+        required=False,
     )
 
     temporal_granularity = forms.ChoiceField(
@@ -70,6 +77,7 @@ class IndicatorSetFilterForm(forms.ModelForm):
             "pathogens",
             "geographic_levels",
             "severity_pyramid_rungs",
+            "original_data_provider",
             "temporal_granularity",
             "temporal_scope_end",
             "hosted_by_delphi",

@@ -88,14 +88,14 @@
                     </div>
                     <div class="accordion-item">
                         <h2 class="accordion-header"
-                            id="flush-heading_id_original_data_provider">
+                            id="flush-heading_{{ form.original_data_provider.auto_id }}">
                             <button data-mdb-collapse-init
                                     class="accordion-button collapsed"
                                     type="button"
                                     data-mdb-toggle="collapse"
-                                    data-mdb-target="#flush-collapse_id_original_data_provider"
+                                    data-mdb-target="#flush-collapse_{{ form.original_data_provider.auto_id }}"
                                     aria-expanded="false"
-                                    aria-controls="flush-collapse_id_original_data_provider">
+                                    aria-controls="flush-collapse_{{ form.original_data_provider.auto_id }}">
                                 Original Data Provider
                                 <a tabindex="0"
                                    type="button"
@@ -110,9 +110,9 @@
                                 </a>
                             </button>
                         </h2>
-                        <div id="flush-collapse_id_original_data_provider"
-                             class="accordion-collapse {% if url_params_dict.odp %} {% else %}collapse{% endif %}"
-                             aria-labelledby="flush-heading_id_original_data_provider"
+                        <div id="flush-collapse_{{ form.original_data_provider.auto_id }}"
+                             class="accordion-collapse {% if form.original_data_provider.value %} {% else %}collapse{% endif %}"
+                             aria-labelledby="flush-heading_{{ form.original_data_provider.auto_id }}"
                              data-mdb-parent="#accordionIndicatorSetFilters">
                             <div class="accordion-body margin-top-1rem">
                                 <div class="bulk-select form-check">
@@ -120,7 +120,7 @@
                                     <label class="form-check-label" for="select-all-original-data-provider">Select all</label>
                                 </div>
                                 <div class="original-data-provider-checkboxes">
-                                    {% with selected_providers=url_params_dict.odp|default:"" %}
+                                    {% with selected_providers=url_params_dict.original_data_provider|default:"" %}
                                         {% if grouped_data_providers.groups %}
                                             {# Render main providers first #}
                                             {% if grouped_data_providers.main %}
@@ -130,12 +130,12 @@
                                                             <div class="form-check">
                                                                 <input class="form-check-input original-data-provider-checkbox" 
                                                                        type="checkbox" 
-                                                                       name="odp" 
-                                                                       value="{{ provider.id }}" 
+                                                                       name="original_data_provider" 
+                                                                       value="{{ provider }}" 
                                                                        id="provider_main_{{ forloop.counter }}"
-                                                                       {% if selected_providers and provider.id in selected_providers %}checked{% endif %}>
+                                                                       {% if selected_providers and provider in selected_providers %}checked{% endif %}>
                                                                 <label class="form-check-label" for="provider_main_{{ forloop.counter }}">
-                                                                    {{ provider.name }}
+                                                                    {{ provider }}
                                                                 </label>
                                                             </div>
                                                         {% endif %}
@@ -172,13 +172,13 @@
                                                                     <div class="form-check">
                                                                         <input class="form-check-input original-data-provider-checkbox group_{{ forloop.parentloop.counter }}_checkbox" 
                                                                                type="checkbox" 
-                                                                               name="odp" 
-                                                                               value="{{ provider.id }}" 
+                                                                               name="original_data_provider" 
+                                                                               value="{{ provider }}" 
                                                                                id="provider_group_{{ forloop.parentloop.counter }}_{{ forloop.counter }}"
                                                                                data-group-id="group_{{ forloop.parentloop.counter }}"
-                                                                               {% if selected_providers and provider.id in selected_providers %}checked{% endif %}>
+                                                                               {% if selected_providers and provider in selected_providers %}checked{% endif %}>
                                                                         <label class="form-check-label" for="provider_group_{{ forloop.parentloop.counter }}_{{ forloop.counter }}">
-                                                                            {{ provider.name }}
+                                                                            {{ provider }}
                                                                         </label>
                                                                     </div>
                                                                 {% endif %}
@@ -194,12 +194,12 @@
                                                     <div class="form-check">
                                                         <input class="form-check-input original-data-provider-checkbox" 
                                                                type="checkbox" 
-                                                               name="odp" 
-                                                               value="{{ provider.id }}" 
+                                                               name="original_data_provider" 
+                                                               value="{{ provider }}" 
                                                                id="provider_{{ forloop.counter }}"
-                                                               {% if selected_providers and provider.id in selected_providers %}checked{% endif %}>
+                                                               {% if selected_providers and provider in selected_providers %}checked{% endif %}>
                                                         <label class="form-check-label" for="provider_{{ forloop.counter }}">
-                                                            {{ provider.name }}
+                                                            {{ provider }}
                                                         </label>
                                                     </div>
                                                 {% endif %}
