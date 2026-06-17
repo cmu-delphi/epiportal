@@ -905,6 +905,14 @@ def check_fluview_geo_coverage(request):
         )
 
 
+def age_group_sort_key(value):
+    if value == "all":
+        return float("inf")
+    if value.endswith("+"):
+        return int(value[:-1]) + 0.5
+    return int(value.split("-", 1)[0])
+
+
 def get_pophive_age_groups(request):
     pophive_age_groups = cache.get("pophive_age_groups") or []
     if not pophive_age_groups:
@@ -914,7 +922,8 @@ def get_pophive_age_groups(request):
                 timeout=(5, 30),
             )
             response.raise_for_status()
-            pophive_age_groups = response.json().get("epidata", [])
+            pophive_age_groups = response.json().get("extra_key_values", []).get("age_group", [])
+            pophive_age_groups.sort(key=age_group_sort_key)
             cache.set("pophive_age_groups", pophive_age_groups, 60 * 60 * 24)
         except requests.RequestException:
             logger.exception("Error getting pophive age groups")
