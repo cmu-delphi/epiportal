@@ -129,8 +129,8 @@ def get_grouped_original_data_provider_choices():
     return {
         "main": sort_data_providers([p for p in provider_list if p.group == "individual"]),
         "groups": [
-            {"label": "U.S. Government", "providers": [p for p in provider_list if p.group == "us_government"]},
-            {"label": "U.S. States", "providers": [p for p in provider_list if p.group == "us_states"]},
+            {"label": "U.S. Government", "providers": sort_data_providers([p for p in provider_list if p.group == "us_government"])},
+            {"label": "U.S. States", "providers": sort_data_providers([p for p in provider_list if p.group == "us_states"])},
         ],
         "all": sort_data_providers(provider_list),
     }
