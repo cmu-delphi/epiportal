@@ -143,6 +143,32 @@ var table = new DataTable("#indicatorSetsTable", {
     },
 });
 
+function escapeAttr(str) {
+    return String(str ?? "")
+        .replace(/&/g, "&amp;")
+        .replace(/"/g, "&quot;")
+        .replace(/'/g, "&#39;")
+        .replace(/</g, "&lt;")
+        .replace(/>/g, "&gt;");
+}
+
+function initIndicatorPopovers(childContainer) {
+    if (!childContainer || typeof mdb === "undefined") {
+        return;
+    }
+    $(childContainer).find("[data-mdb-popover-init]").each(function () {
+        const existing = mdb.Popover.getInstance(this);
+        if (existing) {
+            existing.dispose();
+        }
+        new mdb.Popover(this, {
+            container: "body",
+            trigger: "hover",
+            delay: { show: 0, hide: 100 },
+        });
+    });
+}
+
 function format(indicatorSetId, relatedIndicators, indicatorSetDescription) {
     if (!relatedIndicators) {
         return '<div class="d-flex justify-content-start my-3" style="padding-left: 20px;"><div class="spinner-border text-primary" role="status"><span class="visually-hidden">Loading...</span></div></div>';
@@ -191,10 +217,11 @@ function format(indicatorSetId, relatedIndicators, indicatorSetDescription) {
                 checkboxTitle =
                     "Access to this data source is restricted. Contact delphi-support@andrew.cmu.edu for more information.";
             }
+            
             tableMarkup +=
                 "<tr>" +
                 `<td><input ${disabled} title="${checkboxTitle}" type="checkbox" name="selectedIndicator" onclick="addSelectedIndicator(this)" data-indicator-displayname='${indicator.display_name}' data-endpoint="${indicator.endpoint}" data-datasource="${indicator.source}" data-indicator="${indicator.name}" data-time-type="${indicator.time_type}" data-indicator-set="${indicator.indicator_set_name}" data-indicator-set-short-name="${indicator.indicator_set_short_name}" data-member-short-name="${indicator.member_short_name}" ${checked}></td>` +
-                `<td>${indicator.display_name}</td>` +
+                `<td><span tabindex="0" data-mdb-container="body" data-mdb-popover-init data-mdb-trigger="hover" data-mdb-placement="right" data-mdb-content="${escapeAttr(indicator.description)}">${indicator.display_name}</span></td>` +
                 `<td>${indicator.member_name}</td>` +
                 `<td>${indicator.member_description}</td>` +
                 '<td style="width: 60%"></td>' +
