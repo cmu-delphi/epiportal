@@ -922,7 +922,9 @@ def get_pophive_age_groups(request):
                 timeout=(5, 30),
             )
             response.raise_for_status()
-            pophive_age_groups = response.json().get("extra_key_values", []).get("age_group", [])
+            pophive_age_groups = response.json().get("extra_key_values", {}).get(
+                "age_group", []
+            )
             pophive_age_groups.sort(key=age_group_sort_key)
             cache.set("pophive_age_groups", pophive_age_groups, 60 * 60 * 24)
         except requests.RequestException:
