@@ -1,0 +1,101 @@
+[
+    {
+        "model": "base.GeographyUnit",
+        "fields": {
+            "geo_id": "cen1",
+            "name": "Census Region 1",
+            "display_name": "Census Region 1",
+            "level": 3,
+            "geo_level": 3
+        },
+        "pk": 4947
+    },
+    {
+        "model": "base.GeographyUnit",
+        "fields": {
+            "geo_id": "cen2",
+            "name": "Census Region 2",
+            "display_name": "Census Region 2",
+            "level": 3,
+            "geo_level": 3
+        },
+        "pk": 4948
+    },
+    {
+        "model": "base.GeographyUnit",
+        "fields": {
+            "geo_id": "cen3",
+            "name": "Census Region 3",
+            "display_name": "Census Region 3",
+            "level": 3,
+            "geo_level": 3
+        },
+        "pk": 4949
+    },
+    {
+        "model": "base.GeographyUnit",
+        "fields": {
+            "geo_id": "cen4",
+            "name": "Census Region 4",
+            "display_name": "Census Region 4",
+            "level": 3,
+            "geo_level": 3
+        },
+        "pk": 4950
+    },
+    {
+        "model": "base.GeographyUnit",
+        "fields": {
+            "geo_id": "cen5",
+            "name": "Census Region 5",
+            "display_name": "Census Region 5",
+            "level": 3,
+            "geo_level": 3
+        },
+        "pk": 4951
+    },
+    {
+        "model": "base.GeographyUnit",
+        "fields": {
+            "geo_id": "cen6",
+            "name": "Census Region 6",
+            "display_name": "Census Region 6",
+            "level": 3,
+            "geo_level": 3
+        },
+        "pk": 4952
+    },
+    {
+        "model": "base.GeographyUnit",
+        "fields": {
+            "geo_id": "cen7",
+            "name": "Census Region 7",
+            "display_name": "Census Region 7",
+            "level": 3,
+            "geo_level": 3
+        },
+        "pk": 4953
+    },
+    {
+        "model": "base.GeographyUnit",
+        "fields": {
+            "geo_id": "cen8",
+            "name": "Census Region 8",
+            "display_name": "Census Region 8",
+            "level": 3,
+            "geo_level": 3
+        },
+        "pk": 4954
+    },
+    {
+        "model": "base.GeographyUnit",
+        "fields": {
+            "geo_id": "cen9",
+            "name": "Census Region 9",
+            "display_name": "Census Region 9",
+            "level": 3,
+            "geo_level": 3
+        },
+        "pk": 4955
+    }
+]

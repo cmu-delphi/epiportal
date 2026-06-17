@@ -10575,8 +10575,8 @@
         "pk": 962,
         "fields": {
             "geo_id": "72021",
-            "name": "Bayam\u00f3n",
-            "display_name": "Bayam\u00f3n County, PR",
+            "name": "Bayamón",
+            "display_name": "Bayamón County, PR",
             "level": 6,
             "geo_level": 6
         }
@@ -10740,8 +10740,8 @@
         "pk": 977,
         "fields": {
             "geo_id": "72117",
-            "name": "Rinc\u00f3n",
-            "display_name": "Rinc\u00f3n County, PR",
+            "name": "Rincón",
+            "display_name": "Rincón County, PR",
             "level": 6,
             "geo_level": 6
         }
@@ -29957,8 +29957,8 @@
         "pk": 2724,
         "fields": {
             "geo_id": "35013",
-            "name": "Do\u00f1a Ana",
-            "display_name": "Do\u00f1a Ana County, NM",
+            "name": "Doña Ana",
+            "display_name": "Doña Ana County, NM",
             "level": 6,
             "geo_level": 6
         }
@@ -33114,8 +33114,8 @@
         "pk": 3011,
         "fields": {
             "geo_id": "72029",
-            "name": "Can\u00f3vanas",
-            "display_name": "Can\u00f3vanas County, PR",
+            "name": "Canóvanas",
+            "display_name": "Canóvanas County, PR",
             "level": 6,
             "geo_level": 6
         }
@@ -33136,8 +33136,8 @@
         "pk": 3013,
         "fields": {
             "geo_id": "72033",
-            "name": "Cata\u00f1o",
-            "display_name": "Cata\u00f1o County, PR",
+            "name": "Cataño",
+            "display_name": "Cataño County, PR",
             "level": 6,
             "geo_level": 6
         }
@@ -33180,8 +33180,8 @@
         "pk": 3017,
         "fields": {
             "geo_id": "72045",
-            "name": "Comer\u00edo",
-            "display_name": "Comer\u00edo County, PR",
+            "name": "Comerío",
+            "display_name": "Comerío County, PR",
             "level": 6,
             "geo_level": 6
         }
@@ -33466,8 +33466,8 @@
         "pk": 3043,
         "fields": {
             "geo_id": "72055",
-            "name": "Gu\u00e1nica",
-            "display_name": "Gu\u00e1nica County, PR",
+            "name": "Guánica",
+            "display_name": "Guánica County, PR",
             "level": 6,
             "geo_level": 6
         }
@@ -33554,8 +33554,8 @@
         "pk": 3051,
         "fields": {
             "geo_id": "72075",
-            "name": "Juana D\u00edaz",
-            "display_name": "Juana D\u00edaz County, PR",
+            "name": "Juana Díaz",
+            "display_name": "Juana Díaz County, PR",
             "level": 6,
             "geo_level": 6
         }
@@ -33587,8 +33587,8 @@
         "pk": 3054,
         "fields": {
             "geo_id": "72083",
-            "name": "Las Mar\u00edas",
-            "display_name": "Las Mar\u00edas County, PR",
+            "name": "Las Marías",
+            "display_name": "Las Marías County, PR",
             "level": 6,
             "geo_level": 6
         }
@@ -33598,8 +33598,8 @@
         "pk": 3055,
         "fields": {
             "geo_id": "72087",
-            "name": "Lo\u00edza",
-            "display_name": "Lo\u00edza County, PR",
+            "name": "Loíza",
+            "display_name": "Loíza County, PR",
             "level": 6,
             "geo_level": 6
         }
@@ -33609,8 +33609,8 @@
         "pk": 3056,
         "fields": {
             "geo_id": "72091",
-            "name": "Manat\u00ed",
-            "display_name": "Manat\u00ed County, PR",
+            "name": "Manatí",
+            "display_name": "Manatí County, PR",
             "level": 6,
             "geo_level": 6
         }
@@ -33631,8 +33631,8 @@
         "pk": 3058,
         "fields": {
             "geo_id": "72097",
-            "name": "Mayag\u00fcez",
-            "display_name": "Mayag\u00fcez County, PR",
+            "name": "Mayagüez",
+            "display_name": "Mayagüez County, PR",
             "level": 6,
             "geo_level": 6
         }
@@ -33961,8 +33961,8 @@
         "pk": 3088,
         "fields": {
             "geo_id": "72111",
-            "name": "Pe\u00f1uelas",
-            "display_name": "Pe\u00f1uelas County, PR",
+            "name": "Peñuelas",
+            "display_name": "Peñuelas County, PR",
             "level": 6,
             "geo_level": 6
         }
@@ -33994,8 +33994,8 @@
         "pk": 3091,
         "fields": {
             "geo_id": "72119",
-            "name": "R\u00edo Grande",
-            "display_name": "R\u00edo Grande County, PR",
+            "name": "Río Grande",
+            "display_name": "Río Grande County, PR",
             "level": 6,
             "geo_level": 6
         }
@@ -34016,8 +34016,8 @@
         "pk": 3093,
         "fields": {
             "geo_id": "72125",
-            "name": "San Germ\u00e1n",
-            "display_name": "San Germ\u00e1n County, PR",
+            "name": "San Germán",
+            "display_name": "San Germán County, PR",
             "level": 6,
             "geo_level": 6
         }
@@ -34038,8 +34038,8 @@
         "pk": 3095,
         "fields": {
             "geo_id": "72131",
-            "name": "San Sebasti\u00e1n",
-            "display_name": "San Sebasti\u00e1n County, PR",
+            "name": "San Sebastián",
+            "display_name": "San Sebastián County, PR",
             "level": 6,
             "geo_level": 6
         }
@@ -34434,8 +34434,8 @@
         "pk": 3131,
         "fields": {
             "geo_id": "72011",
-            "name": "A\u00f1asco",
-            "display_name": "A\u00f1asco County, PR",
+            "name": "Añasco",
+            "display_name": "Añasco County, PR",
             "level": 6,
             "geo_level": 6
         }

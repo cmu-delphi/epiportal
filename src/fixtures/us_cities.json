@@ -1,0 +1,35 @@
+[
+    {
+        "model": "base.GeographyUnit",
+        "pk": 4939,
+        "fields": {
+            "geo_id": "ord",
+            "name": "Chicago",
+            "display_name": "Chicago",
+            "level": 101,
+            "geo_level": 101
+        }
+    },
+    {
+        "model": "base.GeographyUnit",
+        "pk": 4940,
+        "fields": {
+            "geo_id": "lax",
+            "name": "Los Angeles",
+            "display_name": "Los Angeles",
+            "level": 101,
+            "geo_level": 101
+        }
+    },
+    {
+        "model": "base.GeographyUnit",
+        "pk": 4941,
+        "fields": {
+            "geo_id": "jfk",
+            "name": "New York City",
+            "display_name": "New York City",
+            "level": 101,
+            "geo_level": 101
+        }
+    }
+]

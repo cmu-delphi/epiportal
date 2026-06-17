@@ -10,6 +10,7 @@ For the full list of settings and their values, see
 https://docs.djangoproject.com/en/5.0/ref/settings/
 """
 
+import logging
 import os
 import sys
 from distutils.util import strtobool
@@ -24,12 +25,32 @@ import sentry_sdk
 from sentry_sdk.integrations.django import DjangoIntegration
 from sentry_sdk.integrations.redis import RedisIntegration
 
-APP_VERSION = "1.0.0"
+APP_VERSION = "1.1.1"
+ALTERNATIVE_INTERFACE_VERSION = "1.0.11"
 
 
 EPIVIS_URL = os.environ.get("EPIVIS_URL", "https://delphi.cmu.edu/epivis/")
 EPIDATA_URL = os.environ.get("EPIDATA_URL", "https://api.delphi.cmu.edu/epidata/")
+EPIDATA_V5_URL = os.environ.get("EPIDATA_V5_URL", "https://delphi.cmu.edu/epidata/v5/")
 EPIDATA_API_KEY = os.environ.get("EPIDATA_API_KEY", "")
+
+SPREADSHEET_URLS = {
+    "source_subdivisions": "https://docs.google.com/spreadsheets/d/1zb7ItJzY5oq1n-2xtvnPBiJu2L3AqmCKubrLkKJZVHs/export?format=csv&gid=0",
+    "other_endpoint_source_subdivisions": "https://docs.google.com/spreadsheets/d/1zb7ItJzY5oq1n-2xtvnPBiJu2L3AqmCKubrLkKJZVHs/export?format=csv&gid=214580132",
+    "indicator_sets": "https://docs.google.com/spreadsheets/d/1zb7ItJzY5oq1n-2xtvnPBiJu2L3AqmCKubrLkKJZVHs/export?format=csv&gid=1266808975",
+    "non_delphi_indicator_sets": "https://docs.google.com/spreadsheets/d/1zb7ItJzY5oq1n-2xtvnPBiJu2L3AqmCKubrLkKJZVHs/export?format=csv&gid=1266477926",
+    "indicators": "https://docs.google.com/spreadsheets/d/1zb7ItJzY5oq1n-2xtvnPBiJu2L3AqmCKubrLkKJZVHs/export?format=csv&gid=329338228",
+    "other_endpoint_indicators": "https://docs.google.com/spreadsheets/d/1zb7ItJzY5oq1n-2xtvnPBiJu2L3AqmCKubrLkKJZVHs/export?format=csv&gid=1364181703",
+    "non_delphi_indicators": "https://docs.google.com/spreadsheets/d/1zb7ItJzY5oq1n-2xtvnPBiJu2L3AqmCKubrLkKJZVHs/export?format=csv&gid=493612863",
+    "us_state_indicator_sets": "https://docs.google.com/spreadsheets/d/1zb7ItJzY5oq1n-2xtvnPBiJu2L3AqmCKubrLkKJZVHs/export?format=csv&gid=1635370101",
+    "us_state_indicators": "https://docs.google.com/spreadsheets/d/1zb7ItJzY5oq1n-2xtvnPBiJu2L3AqmCKubrLkKJZVHs/export?format=csv&gid=527384770",
+    "column_descriptions": "https://docs.google.com/spreadsheets/d/10BxyiLN7l9PWQuWbDeVmtzte-G9YNSuj2PzjDIy_OEc/export?format=csv&gid=1361858243#gid=1361858243",
+    "filter_descriptions": "https://docs.google.com/spreadsheets/d/10BxyiLN7l9PWQuWbDeVmtzte-G9YNSuj2PzjDIy_OEc/export?format=csv&gid=502883488#gid=502883488",
+    "express_view_indicators": "https://docs.google.com/spreadsheets/d/1zb7ItJzY5oq1n-2xtvnPBiJu2L3AqmCKubrLkKJZVHs/export?format=csv&gid=1759850611#gid=1759850611",
+}
+
+ENVIRONMENT = os.environ.get("SENTRY_ENVIRONMENT", "development")
+
 
 SENTRY_DSN = os.environ.get('SENTRY_DSN')
 if SENTRY_DSN:
@@ -51,21 +72,19 @@ BASE_DIR = Path(__file__).resolve().parent.parent
 # Quick-start development settings - unsuitable for production
 # See https://docs.djangoproject.com/en/5.0/howto/deployment/checklist/
 
-# SECURITY WARNING: keep the secret key used in production secret!
-SECRET_KEY = 'django-insecure-%1b_+70c8&mi@ma0!+st9#oz+z37m=nbv++pd^u7dev+^n27g4'
 
 # SECURITY WARNING: don't run with debug turned on in production!
 # SECURITY WARNING: don't run with debug turned on in production!
 DEBUG = bool(strtobool(os.getenv('DEBUG', 'True')))
 
+SECRET_KEY = os.environ.get('SECRET_KEY')
+if not SECRET_KEY:
+    if DEBUG:
+        from django.core.management.utils import get_random_secret_key
+        SECRET_KEY = get_random_secret_key()
+    else:
+        raise RuntimeError('SECRET_KEY env var is required in production')
 
-# SECURITY WARNING: keep the secret key used in production secret!
-if DEBUG:
-    SECRET_KEY: str = os.environ.get('SECRET_KEY', 'django-insecure-qp89p*uk4)e((599s)6p%q0ra_=j41994bge%4h)o4f=@g7s4g')
-else:
-    SECRET_KEY: str | None = os.environ.get('SECRET_KEY')   # type: ignore
-    if not SECRET_KEY:
-        raise RuntimeError('Could not find a SECRET_KEY in environment')
 
 ALLOWED_HOSTS: list[str] = os.environ.get('ALLOWED_HOSTS').split(',') if os.environ.get('ALLOWED_HOSTS') else []  # type: ignore
 
@@ -113,11 +132,13 @@ LOCAL_APPS: list[str] = [
     'base',
     'indicatorsets',
     'indicators',
+    'alternative_interface',
 ]
 
 INSTALLED_APPS: list[str] = DEFAULT_APPS + EXTERNAL_APPS + LOCAL_APPS
 
 MIDDLEWARE = [
+    'epiportal.middleware.RequestLoggingMiddleware',
     'django.middleware.security.SecurityMiddleware',
     'django.contrib.sessions.middleware.SessionMiddleware',
     'django.middleware.common.CommonMiddleware',
@@ -126,6 +147,7 @@ MIDDLEWARE = [
     'django.contrib.messages.middleware.MessageMiddleware',
     'django.middleware.clickjacking.XFrameOptionsMiddleware',
     'debug_toolbar.middleware.DebugToolbarMiddleware',
+    'epiportal.block_middleware.BlockIPRangeMiddleware',
 ]
 
 INTERNAL_IPS: list[str] = [
@@ -161,13 +183,26 @@ WSGI_APPLICATION = 'epiportal.wsgi.application'
 # Database
 # https://docs.djangoproject.com/en/5.0/ref/settings/#databases
 
+
+def _resolve_mysql_host() -> str:
+    """
+    Docker Compose uses MYSQL_HOST=db (the service name). That hostname only
+    resolves inside the compose network. When running manage.py on the host
+    (e.g. unit tests against Docker MySQL on port 3306), fall back to localhost.
+    """
+    host = os.environ.get("MYSQL_HOST", "localhost")
+    if host == "db" and not os.path.exists("/.dockerenv"):
+        return "127.0.0.1"
+    return host
+
+
 DATABASES: dict[str, dict[str, Any]] = {
     'default': {
         'ENGINE': 'django.db.backends.mysql',
         'NAME': os.environ.get('MYSQL_DATABASE', None),
         'USER': os.environ.get('MYSQL_USER', None),
         'PASSWORD': os.environ.get('MYSQL_PASSWORD', None),
-        'HOST': os.environ.get('MYSQL_HOST', 'localhost'),
+        'HOST': _resolve_mysql_host(),
         'PORT': os.environ.get('MYSQL_PORT', 3306),
     }
 }
@@ -215,6 +250,10 @@ LOGGING = {
             'format': '[%(asctime)s] %(levelname)s | %(name)s | %(message)s',
             'datefmt': '%Y-%m-%d %H:%M:%S',
         },
+        'request_verbose': {
+            'format': '[%(asctime)s] %(levelname)s | epiportal.requests | %(message)s',
+            'datefmt': '%Y-%m-%d %H:%M:%S',
+        },
     },
     'handlers': {
         'console': {
@@ -234,7 +273,13 @@ LOGGING = {
 
 if DEBUG:
     for logger in LOGGING['loggers']:
-        LOGGING['loggers'][logger]['handlers'] = ['console']
+        if logger != 'epiportal.requests':
+            LOGGING['loggers'][logger]['handlers'] = ['console']
+
+# Unit tests intentionally exercise error paths (mocked HTTP failures, timeouts, etc.).
+# Suppress expected error/info logs so test output stays readable.
+if 'test' in sys.argv:
+    logging.disable(logging.CRITICAL)
 
 
 # DRF Spectacular settings
@@ -332,3 +377,38 @@ GRAPH_MODELS: dict[str, Any] = {
 # django docs
 # https://django-docs.readthedocs.io/en/latest/
 DOCS_ROOT = os.path.join(BASE_DIR, 'docs', 'build', 'html')
+
+
+"""
+REVERSE_PROXY_DEPTH is an integer value that indicates how many "chained" and trusted reverse proxies (like nginx) this
+ server instance is running behind.  "chained" refers to proxies forwarding to other proxies, and then ultimately
+ forwarding to the app server itself.  each of these proxies appends the remote address of the request to the
+ "X-Forwarded-For" header.  in many situations, the most externally facing proxy (the first in the chain, the one that
+ faces the "open internet") can and should be set to write its own "X-Forwarded-For" header, ignoring and replacing
+ (or creating anew, if it didnt exist) such a header from the client request -- thus preserving the chain of trusted
+ proxies under our control.
+
+however, in our typical production environment, the most externally facing "proxy" is the AWS application load balancer,
+ which seemingly cannot be configured to provide this trust boundary without losing the referring client address
+ (see: https://docs.aws.amazon.com/elasticloadbalancing/latest/application/x-forwarded-headers.html ).  accordingly, in
+ our current typical production environment, REVERSE_PROXY_DEPTH should be set to "2": one for the AWS application load
+ balancer, and one for our own nginx/haproxy instance.  thus "2" is our default value.
+
+it is important that REVERSE_PROXY_DEPTH is set accurately for two reasons...
+
+setting it too high (or to -1) will respect more of the entries in the "X-Forwarded-For" header than are appropriate.
+ this can allow remote addresses to be "spoofed" when a client fakes this header, carrying security/identity
+ implications.  in dev and testing, it is not particularly dangerous for this variable to be set to -1 (special case
+ for an "infinite" depth, where any and all proxy hops will be trusted).
+
+setting it too low can hinder logging accuracy -- that can cause an intermediate proxy IP address to be used as the
+ "real" client IP address, which could cause requests to be rate-limited inappropriately.
+
+setting REVERSE_PROXY_DEPTH to "0" essentially indicates there are no proxies between this server and the outside
+ world.  in this case, the "X-Forwarded-For" header is ignored.
+"""
+REVERSE_PROXY_DEPTH = int(os.environ.get("PROXY_DEPTH", 4))
+# TODO: ^ this value should be "4" for the prod CC API server processes, and is currently unclear
+#       for prod AWS API server processes (but should be the same or lower)...  when thats properly
+#       determined, set the default to the minimum of the two environments and special case the
+#       other in conf file(s).

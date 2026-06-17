@@ -1,5 +1,7 @@
 from django.db import models
 
+from base.models import SOURCE_TYPES
+
 
 # Create your models here.
 class SourceSubdivision(models.Model):
@@ -32,6 +34,16 @@ class SourceSubdivision(models.Model):
         verbose_name="Datasource Name", max_length=255, blank=True
     )
 
+    source_type: models.CharField = models.CharField(
+        verbose_name="Source Type",
+        max_length=255,
+        choices=SOURCE_TYPES,
+        default="covidcast",
+        help_text="Type of source for the source subdivision",
+        blank=True,
+        null=True,
+    )
+
     class Meta:
         ordering = ["name"]
         verbose_name = "Source Subdivision"
@@ -50,3 +62,10 @@ class SourceSubdivision(models.Model):
 
     def get_display_name(self):
         return self.display_name if self.display_name else self.name
+
+
+class OtherEndpointSourceSubdivision(SourceSubdivision):
+    class Meta:
+        proxy = True
+        verbose_name = "Other Endpoint Source Subdivision"
+        verbose_name_plural = "Other Endpoint Source Subdivisions"

@@ -9,6 +9,36 @@ DUA_REQUIRED_CHOICES = (
     ("Sensor-dependent", "Sensor-dependent"),
 )
 
+ORIGINAL_DATA_PROVIDER_GROUP_CHOICES = (
+    ("us_government", "U.S. Government"),
+    ("us_states", "U.S. States"),
+    ("individual", "Individual providers"),
+)
+
+class OriginalDataProvider(models.Model):
+    name = models.CharField(verbose_name="Name", max_length=255, unique=True)
+    group = models.CharField(verbose_name="Group", max_length=32, choices=ORIGINAL_DATA_PROVIDER_GROUP_CHOICES, default="individual")
+    display_order = models.IntegerField(verbose_name="Display Order", default=0)
+
+
+    class Meta:
+        verbose_name = "Original Data Provider"
+        verbose_name_plural = "Original Data Providers"
+        ordering = ["display_order"]
+        indexes = [
+            models.Index(fields=["name"], name="data_provider_name_idx"),
+        ]
+        constraints = [
+            models.UniqueConstraint(fields=["name", "group"], name="unique_data_provider_name_group"),
+        ]
+    def __str__(self):
+        return self.name
+
+    @classmethod
+    def get_all_providers_as_dict(cls):
+        providers = cls.objects.values("name", "group")
+        return {provider["name"]: provider["group"] for provider in providers}
+
 
 class IndicatorSet(models.Model):
 
@@ -30,10 +60,13 @@ class IndicatorSet(models.Model):
     organization: models.CharField = models.CharField(
         verbose_name="Organization", max_length=255, blank=True
     )
-    original_data_provider: models.CharField = models.CharField(
+    original_data_provider: models.ForeignKey = models.ForeignKey(
+        "indicatorsets.OriginalDataProvider",
+        related_name="indicator_sets",
         verbose_name="Original Data Provider",
-        max_length=255,
         blank=True,
+        null=True,
+        on_delete=models.SET_NULL,
         help_text="Original data provider of the Indicator Set",
     )
     epidata_endpoint: models.CharField = models.CharField(
@@ -78,7 +111,7 @@ class IndicatorSet(models.Model):
         verbose_name="Geographic Scope",
         blank=True,
         null=True,
-        on_delete=models.PROTECT,
+        on_delete=models.RESTRICT,
         help_text="Geographic scope of the Indicator Set",
     )
     geographic_levels: models.ManyToManyField = models.ManyToManyField(
@@ -180,7 +213,7 @@ class IndicatorSet(models.Model):
     )
     documentation_link: models.CharField = models.CharField(
         verbose_name="Documentation Link",
-        max_length=255,
+        max_length=500,
         blank=True,
         help_text="Link to the documentation for the Indicator Set",
     )
@@ -190,9 +223,16 @@ class IndicatorSet(models.Model):
         max_length=255,
         choices=SOURCE_TYPES,
         default="covidcast",
-        help_text="Type of source for the indicator",
+        help_text="Type of source for the indicator set",
         blank=True,
         null=True,
+    )
+
+    state: models.CharField = models.CharField(
+        verbose_name="State",
+        max_length=255,
+        blank=True,
+        help_text="State of the indicator set",
     )
 
     class Meta:
@@ -212,10 +252,6 @@ class IndicatorSet(models.Model):
     def __str__(self):
         return self.name
 
-    @property
-    def get_geographic_levels(self):
-        return [geo.display_name for geo in self.geographic_levels.all()]
-
 
 class NonDelphiIndicatorSet(IndicatorSet):
 
@@ -223,6 +259,16 @@ class NonDelphiIndicatorSet(IndicatorSet):
         proxy = True
         verbose_name = "Non-Delphi Indicator Set"
         verbose_name_plural = "Non-Delphi Indicators Sets"
+
+
+class USStateIndicatorSet(IndicatorSet):
+    class Meta:
+        proxy = True
+        verbose_name = "US State Indicator Set"
+        verbose_name_plural = "US State Indicators Sets"
+
+    def __str__(self):
+        return self.name
 
 
 class FilterDescription(models.Model):
