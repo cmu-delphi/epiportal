@@ -26,7 +26,7 @@ from indicatorsets.utils import (
     list_to_dict,
     parse_original_data_provider_ids,
 )
-from indicatorsets.views import get_related_indicators
+from indicatorsets.views import age_group_sort_key, get_related_indicators
 from indicatorsets.filters import IndicatorSetFilter
 from indicatorsets.resources import (
     IndicatorSetResource,
@@ -164,13 +164,30 @@ class PophiveAgeGroupsViewTests(TestCase):
     def test_caches_successful_response(self, mock_get):
         mock_response = MagicMock()
         mock_response.raise_for_status = MagicMock()
-        mock_response.json.return_value = {"epidata": [{"id": "0-4"}]}
+        mock_response.json.return_value = {
+            "extra_key_values": {
+                "age_group": ["5-18", "0-1", "65+", "all", "1-5"],
+            }
+        }
         mock_get.return_value = mock_response
 
         response = self.client.get(reverse("get_pophive_age_groups"))
         self.assertEqual(response.status_code, 200)
-        self.assertEqual(response.json()["age_groups"], [{"id": "0-4"}])
-        self.assertIsNotNone(cache.get("pophive_age_groups"))
+        self.assertEqual(
+            response.json()["age_groups"],
+            ["0-1", "1-5", "5-18", "65+", "all"],
+        )
+        self.assertEqual(
+            cache.get("pophive_age_groups"),
+            ["0-1", "1-5", "5-18", "65+", "all"],
+        )
+
+    def test_age_group_sort_key(self):
+        age_groups = ["5-18", "0-1", "18-50", "65+", "all", "1-5", "50-65"]
+        self.assertEqual(
+            sorted(age_groups, key=age_group_sort_key),
+            ["0-1", "1-5", "5-18", "18-50", "50-65", "65+", "all"],
+        )
 
 
 class TableStatsViewTests(TestCase):
