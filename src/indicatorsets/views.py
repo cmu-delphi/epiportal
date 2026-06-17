@@ -79,6 +79,7 @@ def get_related_indicators(queryset, indicator_set_ids: list):
         "time_type",
         "description",
         "member_description",
+        "description",
         "indicator_set__dua_required",
         "source_type",
     )
@@ -122,6 +123,7 @@ def get_related_indicators(queryset, indicator_set_ids: list):
                 "time_type": item["time_type"] if item["time_type"] else "",
                 "description": item["description"] if item["description"] else "",
                 "member_description": member_description,
+                "description": item["description"] if item["description"] else "",
                 "restricted": (
                     item["indicator_set__dua_required"]
                     if item["indicator_set__dua_required"]
