@@ -1,3 +1,5 @@
+from import_export.resources import ModelResource
+
 GEOGRAPHIC_GRANULARITY_MAPPING = {
     "nation": {
         "display_name": "National",
@@ -65,7 +67,7 @@ GEOGRAPHIC_GRANULARITY_MAPPING = {
         "short_name": "FluSurv-Net site",
     },
     "facility": {
-        "display_name": 'Hospital ("Facility")',
+        "display_name": 'Facility',
         "display_order_number": 14,
         "short_name": "Facility",
     },
@@ -97,3 +99,18 @@ def get_geographic_mapping_by_name(name):
             return (key, value)
 
     return None
+
+
+class CustomModelResource(ModelResource):
+    def before_import(self, dataset, **kwargs):
+        self.imported_rows_pks: list[int] = []
+
+    def after_import_row(self, row, row_result, **kwargs):
+        pk = getattr(row_result.instance, "pk", None) or row_result.object_id
+        if pk:
+            self.imported_rows_pks.append(pk)
+        super().after_import_row(row, row_result, **kwargs)
+
+    def after_import(self, dataset, result, **kwargs):
+        if not kwargs.get("dry_run", False):
+            self._meta.model.objects.exclude(pk__in=self.imported_rows_pks).delete()

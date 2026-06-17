@@ -10,6 +10,7 @@ For the full list of settings and their values, see
 https://docs.djangoproject.com/en/5.0/ref/settings/
 """
 
+import logging
 import os
 import sys
 from distutils.util import strtobool
@@ -71,21 +72,19 @@ BASE_DIR = Path(__file__).resolve().parent.parent
 # Quick-start development settings - unsuitable for production
 # See https://docs.djangoproject.com/en/5.0/howto/deployment/checklist/
 
-# SECURITY WARNING: keep the secret key used in production secret!
-SECRET_KEY = 'django-insecure-%1b_+70c8&mi@ma0!+st9#oz+z37m=nbv++pd^u7dev+^n27g4'
 
 # SECURITY WARNING: don't run with debug turned on in production!
 # SECURITY WARNING: don't run with debug turned on in production!
 DEBUG = bool(strtobool(os.getenv('DEBUG', 'True')))
 
+SECRET_KEY = os.environ.get('SECRET_KEY')
+if not SECRET_KEY:
+    if DEBUG:
+        from django.core.management.utils import get_random_secret_key
+        SECRET_KEY = get_random_secret_key()
+    else:
+        raise RuntimeError('SECRET_KEY env var is required in production')
 
-# SECURITY WARNING: keep the secret key used in production secret!
-if DEBUG:
-    SECRET_KEY: str = os.environ.get('SECRET_KEY', 'django-insecure-qp89p*uk4)e((599s)6p%q0ra_=j41994bge%4h)o4f=@g7s4g')
-else:
-    SECRET_KEY: str | None = os.environ.get('SECRET_KEY')   # type: ignore
-    if not SECRET_KEY:
-        raise RuntimeError('Could not find a SECRET_KEY in environment')
 
 ALLOWED_HOSTS: list[str] = os.environ.get('ALLOWED_HOSTS').split(',') if os.environ.get('ALLOWED_HOSTS') else []  # type: ignore
 
@@ -184,13 +183,26 @@ WSGI_APPLICATION = 'epiportal.wsgi.application'
 # Database
 # https://docs.djangoproject.com/en/5.0/ref/settings/#databases
 
+
+def _resolve_mysql_host() -> str:
+    """
+    Docker Compose uses MYSQL_HOST=db (the service name). That hostname only
+    resolves inside the compose network. When running manage.py on the host
+    (e.g. unit tests against Docker MySQL on port 3306), fall back to localhost.
+    """
+    host = os.environ.get("MYSQL_HOST", "localhost")
+    if host == "db" and not os.path.exists("/.dockerenv"):
+        return "127.0.0.1"
+    return host
+
+
 DATABASES: dict[str, dict[str, Any]] = {
     'default': {
         'ENGINE': 'django.db.backends.mysql',
         'NAME': os.environ.get('MYSQL_DATABASE', None),
         'USER': os.environ.get('MYSQL_USER', None),
         'PASSWORD': os.environ.get('MYSQL_PASSWORD', None),
-        'HOST': os.environ.get('MYSQL_HOST', 'localhost'),
+        'HOST': _resolve_mysql_host(),
         'PORT': os.environ.get('MYSQL_PORT', 3306),
     }
 }
@@ -263,6 +275,11 @@ if DEBUG:
     for logger in LOGGING['loggers']:
         if logger != 'epiportal.requests':
             LOGGING['loggers'][logger]['handlers'] = ['console']
+
+# Unit tests intentionally exercise error paths (mocked HTTP failures, timeouts, etc.).
+# Suppress expected error/info logs so test output stays readable.
+if 'test' in sys.argv:
+    logging.disable(logging.CRITICAL)
 
 
 # DRF Spectacular settings

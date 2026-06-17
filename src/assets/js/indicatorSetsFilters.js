@@ -191,7 +191,31 @@ function debounce(func, wait) {
 }
 
 // Function to handle form submission with UI feedback
+function compressOriginalDataProviderParams(form) {
+    const checkedBoxes = form.querySelectorAll('input.original-data-provider-checkbox:checked');
+    const ids = Array.from(checkedBoxes).map((checkbox) => checkbox.value);
+
+    form.querySelectorAll('input[name="odp"]').forEach((input) => {
+        if (input.type === 'hidden') {
+            input.remove();
+        }
+    });
+
+    form.querySelectorAll('input.original-data-provider-checkbox').forEach((checkbox) => {
+        checkbox.disabled = true;
+    });
+
+    if (ids.length > 0) {
+        const hiddenInput = document.createElement('input');
+        hiddenInput.type = 'hidden';
+        hiddenInput.name = 'odp';
+        hiddenInput.value = ids.join(',');
+        form.appendChild(hiddenInput);
+    }
+}
+
 function submitFilterForm(form) {
+    compressOriginalDataProviderParams(form);
     persistCheckedIndicators();
     showLoader();
     form.submit();

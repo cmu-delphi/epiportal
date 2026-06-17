@@ -3,7 +3,7 @@ from django.contrib import admin
 from django.urls import path
 from import_export.admin import ImportExportModelAdmin
 
-from base.models import Geography, Pathogen, SeverityPyramidRung
+from base.models import Pathogen, SeverityPyramidRung
 from base.utils import download_source_file, import_data
 from indicators.models import (
     Category,
@@ -16,7 +16,6 @@ from indicators.models import (
     USStateIndicator,
 )
 from indicators.resources import (
-    IndicatorBaseResource,
     IndicatorResource,
     NonDelphiIndicatorResource,
     OtherEndpointIndicatorResource,
@@ -61,24 +60,16 @@ class IndicatorGeographyAdmin(admin.ModelAdmin):
 class BaseIndicatorAdmin(ImportExportModelAdmin):
     def formfield_for_manytomany(self, db_field, request, **kwargs):
         """
-        Filter geographic_levels field to show only a subset of Geography objects.
+        Filter pathogens and severity_pyramid_rungs fields to show only a subset of Pathogen and SeverityPyramidRung objects.
         Modify the filter criteria as needed.
         """
-        if db_field.name == "geographic_levels":
-            # Filter to show only geographies used in indicatorsets
-            # You can modify this filter to show a different subset
-            kwargs["queryset"] = Geography.objects.filter(
+        if db_field.name == "pathogens":
+            # Filter to show only pathogens used in indicators
+            kwargs["queryset"] = Pathogen.objects.filter(
                 used_in="indicators"
             ).order_by("display_order_number")
-        if db_field.name == "pathogens":
-            # Filter to show only geographies used in indicatorsets
-            # You can modify this filter to show a different subset
-            kwargs["queryset"] = Pathogen.objects.filter(used_in="indicators").order_by(
-                "display_order_number"
-            )
         if db_field.name == "severity_pyramid_rungs":
-            # Filter to show only geographies used in indicatorsets
-            # You can modify this filter to show a different subset
+            # Filter to show only severity pyramid rungs used in indicators
             kwargs["queryset"] = SeverityPyramidRung.objects.filter(
                 used_in="indicators"
             ).order_by("display_order_number")
@@ -93,17 +84,16 @@ class IndicatorAdmin(BaseIndicatorAdmin):
         "indicator_type",
         "format_type",
         "category",
-        "geographic_scope",
     )
     search_fields = ("name", "description")
-    list_filter = ("indicator_type", "format_type", "category", "geographic_scope")
+    list_filter = ("indicator_type", "format_type", "category")
     ordering = ("name",)
     list_per_page = 50
     list_select_related = True
-    list_editable = ("indicator_type", "format_type", "category", "geographic_scope")
+    list_editable = ("indicator_type", "format_type", "category")
     list_display_links = ("name",)
 
-    resource_classes = [IndicatorResource, IndicatorBaseResource]
+    resource_classes = [IndicatorResource]
 
     change_list_template = "admin/indicators/indicator_changelist.html"
 
@@ -135,7 +125,7 @@ class IndicatorAdmin(BaseIndicatorAdmin):
 
     def download_indicator(self, request):
         return download_source_file(
-            settings.SPREADSHEET_URLS["indicators"], "Indicators.csv"
+            self, request, settings.SPREADSHEET_URLS["indicators"], "Indicators.csv"
         )
 
 
@@ -192,6 +182,8 @@ class OtherEndpointIndicatorAdmin(BaseIndicatorAdmin):
 
     def download_other_endpoint_indicator(self, request):
         return download_source_file(
+            self,
+            request,
             settings.SPREADSHEET_URLS["other_endpoint_indicators"],
             "Other_Endpoint_Indicators.csv",
         )
@@ -244,6 +236,8 @@ class NonDelphiIndicatorAdmin(BaseIndicatorAdmin):
 
     def download_nondelphi_indicator(self, request):
         return download_source_file(
+            self,
+            request,
             settings.SPREADSHEET_URLS["non_delphi_indicators"],
             "Non_Delphi_Indicators.csv",
         )
@@ -291,6 +285,8 @@ class USStateIndicatorAdmin(BaseIndicatorAdmin):
 
     def download_us_state_indicator(self, request):
         return download_source_file(
+            self,
+            request,
             settings.SPREADSHEET_URLS["us_state_indicators"],
             "US_State_Indicators.csv",
         )

@@ -6,7 +6,7 @@ from import_export.widgets import ForeignKeyWidget, ManyToManyWidget
 
 from alternative_interface.models import ExpressViewIndicator
 from base.models import GeographicScope, Geography, Pathogen, SeverityPyramidRung
-from base.resources import get_geographic_mapping_by_name
+from base.resources import CustomModelResource, get_geographic_mapping_by_name
 from indicators.models import Indicator
 from indicatorsets.models import (
     IndicatorSet,
@@ -14,6 +14,7 @@ from indicatorsets.models import (
     USStateIndicatorSet,
     ColumnDescription,
     FilterDescription,
+    OriginalDataProvider,
 )
 
 
@@ -123,11 +124,34 @@ def process_data_use_terms(row) -> None:
         row["Data Use Terms"] = "None found"
 
 
-class IndicatorSetBaseResource(resources.ModelResource):
+def process_original_data_provider(row) -> None:
+    original_data_provider_name = row["Original Data Provider"]
+    original_data_provider_obj, _ = OriginalDataProvider.objects.get_or_create(
+        name=original_data_provider_name
+    )
+    row["Original Data Provider"] = original_data_provider_obj.id
+
+class IndicatorSetBaseResource(CustomModelResource):
+    import_source_types: tuple[str, ...] = ()
+
+    def get_import_deletion_queryset(self):
+        queryset = IndicatorSet.objects.all()
+        if self.import_source_types:
+            queryset = queryset.filter(source_type__in=self.import_source_types)
+        return queryset
+
+    def after_import(self, dataset, result, **kwargs):
+        if not kwargs.get("dry_run", False):
+            self.get_import_deletion_queryset().exclude(
+                pk__in=self.imported_rows_pks
+            ).delete()
 
     def skip_row(self, instance, original, row, import_validation_errors=None):
+        if "Include in indicator app" not in row:
+            return False
+
         if not row["Include in indicator app"]:
-            indicator_sets = IndicatorSet.objects.filter(
+            indicator_sets = self.get_import_deletion_queryset().filter(
                 name=row["Indicator Set name* "],
                 original_data_provider=row["Original Data Provider"],
             )
@@ -138,9 +162,12 @@ class IndicatorSetBaseResource(resources.ModelResource):
                     indicators.delete()
                     indicator_set.delete()
             return True
+        return False
 
 
 class IndicatorSetResource(IndicatorSetBaseResource):
+    import_source_types = ("covidcast", "other_endpoint")
+
     name = Field(attribute="name", column_name="Indicator Set name* ")
     short_name = Field(attribute="short_name", column_name="Indicator Set Short Name")
     description = Field(
@@ -156,6 +183,7 @@ class IndicatorSetResource(IndicatorSetBaseResource):
     original_data_provider = Field(
         attribute="original_data_provider",
         column_name="Original Data Provider",
+        widget=ForeignKeyWidget(OriginalDataProvider),
     )
     epidata_endpoint = Field(
         attribute="epidata_endpoint",
@@ -286,6 +314,7 @@ class IndicatorSetResource(IndicatorSetBaseResource):
         process_pathogens(row)
         process_available_geographies(row)
         process_data_use_terms(row)
+        process_original_data_provider(row)
 
     def after_save_instance(self, instance, row, **kwargs):
         instance.source_type = (
@@ -294,9 +323,14 @@ class IndicatorSetResource(IndicatorSetBaseResource):
             else "other_endpoint"
         )
         instance.save()
+        if instance.original_data_provider and instance.original_data_provider.name.split(" ")[0] == "US":
+            instance.original_data_provider.group = "us_government"
+            instance.original_data_provider.save()
 
 
 class NonDelphiIndicatorSetResource(IndicatorSetBaseResource):
+    import_source_types = ("non_delphi",)
+
     name = Field(attribute="name", column_name="Indicator Set name* ")
     short_name = Field(attribute="short_name", column_name="Indicator Set Short Name")
     description = Field(
@@ -310,6 +344,7 @@ class NonDelphiIndicatorSetResource(IndicatorSetBaseResource):
     original_data_provider = Field(
         attribute="original_data_provider",
         column_name="Original Data Provider",
+        widget=ForeignKeyWidget(OriginalDataProvider),
     )
     epidata_endpoint = Field(
         attribute="epidata_endpoint",
@@ -428,13 +463,19 @@ class NonDelphiIndicatorSetResource(IndicatorSetBaseResource):
         process_pathogens(row)
         process_available_geographies(row)
         process_data_use_terms(row)
+        process_original_data_provider(row)
 
     def after_save_instance(self, instance, row, **kwargs):
         instance.source_type = "non_delphi"
         instance.save()
+        if instance.original_data_provider:
+            instance.original_data_provider.group = "individual"
+            instance.original_data_provider.save()
 
 
 class USStateIndicatorSetResource(IndicatorSetBaseResource):
+    import_source_types = ("us_state",)
+
     name = Field(attribute="name", column_name="Indicator Set name* ")
     state = Field(attribute="state", column_name="State")
     description = Field(
@@ -480,6 +521,7 @@ class USStateIndicatorSetResource(IndicatorSetBaseResource):
     original_data_provider = Field(
         attribute="original_data_provider",
         column_name="Original Data Provider",
+        widget=ForeignKeyWidget(OriginalDataProvider),
     )
     preprocessing_description = Field(
         attribute="preprocessing_description",
@@ -523,6 +565,7 @@ class USStateIndicatorSetResource(IndicatorSetBaseResource):
             "preprocessing_description",
             "documentation_link",
             "severity_pyramid_rungs",
+            "license",
         )
 
     def get_instance(self, instance_loader, row):
@@ -545,10 +588,14 @@ class USStateIndicatorSetResource(IndicatorSetBaseResource):
         process_available_geographies(row)
         process_severity_pyramid_rungs(row)
         process_data_use_terms(row)
+        process_original_data_provider(row)
 
     def after_save_instance(self, instance, row, **kwargs):
         instance.source_type = "us_state"
         instance.save()
+        if instance.original_data_provider:
+            instance.original_data_provider.group = "us_states"
+            instance.original_data_provider.save()
 
 
 class ColumnDescriptionResource(resources.ModelResource):
