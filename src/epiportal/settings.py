@@ -133,6 +133,7 @@ LOCAL_APPS: list[str] = [
     'indicatorsets',
     'indicators',
     'alternative_interface',
+    'rest',
 ]
 
 INSTALLED_APPS: list[str] = DEFAULT_APPS + EXTERNAL_APPS + LOCAL_APPS
