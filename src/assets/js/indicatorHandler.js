@@ -430,6 +430,10 @@ class IndicatorHandler {
         if (pophiveAgeGroupData && pophiveAgeGroupData.length > 0) {
             payload.pophiveAgeGroup = pophiveAgeGroupData[0].id;
         }
+        var nwssGeographicValue = $("#nwssGeographicValue").val();
+        if (nwssGeographicValue && nwssGeographicValue.length > 0) {
+            payload.nwssGeographicValue = nwssGeographicValue;
+        }
         return payload;
 
     }
@@ -557,55 +561,69 @@ class IndicatorHandler {
                     data: ageGroups,
                     allowClear: true,
                     width: "100%",
+                    dropdownParent: $("#selectedIndicatorsModal"),
                 });
             });
         }
     }
 
+
+    // TODO: to return this fields -> move them to nwssFields below and uncomment corresponding code in showNwssFields function
+    // <div class="col-2">
+    //     <label for="nwssPcrTarget" class="col-form-label">PCR Target:</label>
+    // </div>
+    // <div class="col-10">
+    //     <select id="nwssPcrTarget" name="nwssPcrTarget" class="form-select"></select>
+    // </div>
+
+    // <div class="col-2 margin-top-1rem">
+    //     <label for="nwssSource" class="col-form-label">NWSS Source:</label>
+    // </div>
+    // <div class="col-10 margin-top-1rem">
+    //     <select id="nwssSource" name="nwssSource" class="form-select"></select>
+    // </div>
+
     showNwssFields() {
         var nwssFields = `
         <hr>
         <div class="row margin-top-1rem" id="nwssDiv">
-            <div class="col-2">
-                <label for="nwssPcrTarget" class="col-form-label">PCR Target:</label>
-            </div>
-            <div class="col-10">
-                <select id="nwssPcrTarget" name="nwssPcrTarget" class="form-select"></select>
-            </div>
-
-            <div class="col-2 margin-top-1rem">
-                <label for="nwssSource" class="col-form-label">NWSS Source:</label>
-            </div>
-            <div class="col-10 margin-top-1rem">
-                <select id="nwssSource" name="nwssSource" class="form-select"></select>
-            </div>
-
             <div class="col-2 margin-top-1rem">
                 <label for="nwssGeographicValue" class="col-form-label">Geographic Value:</label>
             </div>
             <div class="col-10 margin-top-1rem">
-                <input type="text" id="nwssGeographicValue" name="nwssGeographicValue" class="form-control" placeholder="Enter geographic value">
+                <select id="nwssGeographicValue" name="nwssGeographicValue" class="form-select"></select>
             </div>
         </div><hr>`;
         if ($("#otherEndpointLocations").length) {
             $("#otherEndpointLocations").append(nwssFields);
-            var pcrTargets = this.nwssPcrTargets.map(function (t) {
-                return { id: t, text: t };
-            });
-            $("#nwssPcrTarget").select2({
-                placeholder: "Select PCR Target",
-                data: pcrTargets,
-                allowClear: true,
-                width: "100%",
-            });
-            var sources = this.nwssSources.map(function (s) {
-                return { id: s, text: s };
-            });
-            $("#nwssSource").select2({
-                placeholder: "Select NWSS Source",
-                data: sources,
-                allowClear: true,
-                width: "100%",
+            // var pcrTargets = this.nwssPcrTargets.map(function (t) {
+            //     return { id: t, text: t };
+            // });
+            // $("#nwssPcrTarget").select2({
+            //     placeholder: "Select PCR Target",
+            //     data: pcrTargets,
+            //     allowClear: true,
+            //     width: "100%",
+            //     dropdownParent: $("#selectedIndicatorsModal"),
+            // });
+            // var sources = this.nwssSources.map(function (s) {
+            //     return { id: s, text: s };
+            // });
+            // $("#nwssSource").select2({
+            //     placeholder: "Select NWSS Source",
+            //     data: sources,
+            //     allowClear: true,
+            //     width: "100%",
+            //     dropdownParent: $("#selectedIndicatorsModal"),
+            // });
+            $.get("get_nwss_county_mapping/", function (response) {
+                $("#nwssGeographicValue").select2({
+                    placeholder: "Select Geographic Value",
+                    data: response.nwss_county_mapping,
+                    allowClear: true,
+                    width: "100%",
+                    dropdownParent: $("#selectedIndicatorsModal"),
+                });
             });
         }
     }
