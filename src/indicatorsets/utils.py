@@ -11,7 +11,7 @@ from epiportal.utils import get_client_ip
 from epiweeks import Week
 from delphi_utils import get_structured_logger
 
-from indicatorsets.models import IndicatorSet, OriginalDataProvider
+from indicatorsets.models import OriginalDataProvider
 
 FLUVIEW_INDICATORS_MAPPING = {"wili": "%wILI", "ili": "%ILI"}
 
@@ -292,14 +292,10 @@ def generate_pophive_dataset_epivis(indicator, pophive_geos, pophive_age_group):
 def generate_nwss_dataset_epivis(indicator,
     geographic_type,
     geographic_value,
-    #pcr_target,
-    #source,
+    source,
     fill_method,
 ):
     datasets = []
-    print("*****************")
-    print(geographic_value)
-    print("*****************")
     for geo_value in geographic_value.replace(" ", "").split(","):
         datasets.append(
             {
@@ -311,12 +307,11 @@ def generate_nwss_dataset_epivis(indicator,
                     "signal": indicator["indicator"],
                     "geo_type": geographic_type,
                     "geo_value": geo_value,
-                    #"pcr_target": pcr_target[0]["id"],
                     "fill_method": fill_method,
                     "custom_title": generate_epivis_custom_title(
-                        indicator, geo_value, #f"pcr_target:{pcr_target[0]['id']}"
+                        indicator, geo_value
                     ),
-                    #"extra_keys": f"nwss_source:{source[0]['id']}",
+                    "extra_keys": f"nwss_source:{source[0]['id']}",
                 }
             }
         )
@@ -423,16 +418,14 @@ def generate_nwss_export_url(
     start_date,
     end_date,
     nwss_geographic_value,
-    #nwss_pcr_target,
-    #nwss_source,
+    nwss_source,
     nwss_fill_method,
     api_key
 ):
     data_export_commands = []
     for indicator in indicators:
         if indicator["_endpoint"] == "nwss":
-            #data_export_url = f"{settings.EPIDATA_V5_URL}viz/?source=nwss&signal={indicator['indicator']}&geo_type=sewershed&geo_value={geo_value}&pcr_target={nwss_pcr_target[0]['id']}&fill_method={nwss_fill_method}&time_values={start_date}:{end_date}&extra_keys=nwss_source:{nwss_source[0]['id']}&format=json&header=false"
-            data_export_url = f"{settings.EPIDATA_V5_URL}viz/?source=nwss&signal={indicator['indicator']}&geo_type=sewershed&geo_value={nwss_geographic_value}&fill_method={nwss_fill_method}&time_values={start_date}:{end_date}&format=json&header=false"
+            data_export_url = f"{settings.EPIDATA_V5_URL}viz/?source=nwss&signal={indicator['indicator']}&geo_type=sewershed&geo_value={nwss_geographic_value}&fill_method={nwss_fill_method}&time_values={start_date}:{end_date}&extra_keys=nwss_source:{nwss_source[0]['id']}&format=json&header=false"
             if api_key:
                 data_export_url += f"&api_key={api_key}"
             data_export_commands.append(
@@ -656,8 +649,7 @@ def preview_nwss_data(
     start_date,
     end_date,
     nwss_geographic_value,
-    #nwss_pcr_target,
-    #nwss_source,
+    nwss_source,
     nwss_fill_method,
     api_key,
 ):
@@ -669,10 +661,9 @@ def preview_nwss_data(
                 "signal": indicator["indicator"],
                 "geo_type": "sewershed",
                 "geo_value": nwss_geographic_value,
-                #"pcr_target": nwss_pcr_target[0]["id"],
                 "fill_method": nwss_fill_method,
                 "time_values": f"{start_date}:{end_date}",
-                #"extra_keys": f"nwss_source:{nwss_source[0]['id']}",
+                "extra_keys": f"nwss_source:{nwss_source[0]['id']}",
                 "format": "json",
                 "header": "false",
                 "api_key": api_key if api_key else settings.EPIDATA_API_KEY,
@@ -923,16 +914,14 @@ def generate_query_code_nwss(
     start_date,
     end_date,
     nwss_geographic_value,
-    #nwss_pcr_target,
-    #nwss_source,
+    nwss_source,
     nwss_fill_method
 ):
     python_code_blocks = []
     r_code_blocks = []
     for indicator in indicators:
         if indicator["_endpoint"] == "nwss":
-            # url = f"{settings.EPIDATA_V5_URL}viz/?source=nwss&signal={indicator['indicator']}&geo_type=sewershed&geo_value={geo_value}&pcr_target={nwss_pcr_target[0]['id']}&fill_method={nwss_fill_method}&time_values={start_date}:{end_date}&extra_keys=nwss_source:{nwss_source[0]['id']}&format=json&header=false"
-            url = f"{settings.EPIDATA_V5_URL}viz/?source=nwss&signal={indicator['indicator']}&geo_type=sewershed&geo_value={nwss_geographic_value}&fill_method={nwss_fill_method}&time_values={start_date}:{end_date}&format=json&header=false"
+            url = f"{settings.EPIDATA_V5_URL}viz/?source=nwss&signal={indicator['indicator']}&geo_type=sewershed&geo_value={nwss_geographic_value}&fill_method={nwss_fill_method}&time_values={start_date}:{end_date}&extra_keys=nwss_source:{nwss_source[0]['id']}&format=json&header=false"
             python_code_block = dedent(
                 f"""\
                 import requests

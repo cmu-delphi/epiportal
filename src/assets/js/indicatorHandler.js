@@ -576,17 +576,18 @@ class IndicatorHandler {
     //     <select id="nwssPcrTarget" name="nwssPcrTarget" class="form-select"></select>
     // </div>
 
-    // <div class="col-2 margin-top-1rem">
-    //     <label for="nwssSource" class="col-form-label">NWSS Source:</label>
-    // </div>
-    // <div class="col-10 margin-top-1rem">
-    //     <select id="nwssSource" name="nwssSource" class="form-select"></select>
-    // </div>
+    
 
     showNwssFields() {
         var nwssFields = `
         <hr>
         <div class="row margin-top-1rem" id="nwssDiv">
+            <div class="col-2 margin-top-1rem">
+                <label for="nwssSource" class="col-form-label">NWSS Source:</label>
+            </div>
+            <div class="col-10 margin-top-1rem">
+                <select id="nwssSource" name="nwssSource" class="form-select"></select>
+            </div>
             <div class="col-2 margin-top-1rem">
                 <label for="nwssGeographicValue" class="col-form-label">Geographic Value:</label>
             </div>
@@ -606,16 +607,16 @@ class IndicatorHandler {
             //     width: "100%",
             //     dropdownParent: $("#selectedIndicatorsModal"),
             // });
-            // var sources = this.nwssSources.map(function (s) {
-            //     return { id: s, text: s };
-            // });
-            // $("#nwssSource").select2({
-            //     placeholder: "Select NWSS Source",
-            //     data: sources,
-            //     allowClear: true,
-            //     width: "100%",
-            //     dropdownParent: $("#selectedIndicatorsModal"),
-            // });
+            var sources = this.nwssSources.map(function (s) {
+                return { id: s, text: s };
+            });
+            $("#nwssSource").select2({
+                placeholder: "Select NWSS Source",
+                data: sources,
+                allowClear: true,
+                width: "100%",
+                dropdownParent: $("#selectedIndicatorsModal"),
+            });
             $.get("get_nwss_county_mapping/", function (response) {
                 $("#nwssGeographicValue").select2({
                     placeholder: "Select Geographic Value",
@@ -639,7 +640,6 @@ class IndicatorHandler {
         const flusurvLocations = $("#flusurvLocations").select2("data");
         const pophiveLocations = $("#pophiveLocations").select2("data");
         const pophiveAgeGroup = $("#pophiveAgeGroup").select2("data");
-        const nwssPcrTarget = $("#nwssPcrTarget").select2("data");
         const nwssSource = $("#nwssSource").select2("data");
         const nwssGeographicValue = $("#nwssGeographicValue").val();
         const submitData = {
@@ -651,7 +651,6 @@ class IndicatorHandler {
             flusurvLocations: flusurvLocations,
             pophiveLocations: pophiveLocations,
             pophiveAgeGroup: pophiveAgeGroup,
-            nwssPcrTarget: nwssPcrTarget,
             nwssSource: nwssSource,
             nwssGeographicValue: nwssGeographicValue,
             nwssFillMethod: "source",
@@ -717,7 +716,6 @@ class IndicatorHandler {
         const pophiveLocations = $("#pophiveLocations").select2("data");
         const pophiveAgeGroup = $("#pophiveAgeGroup").select2("data");
         const nwssGeographicValue = $("#nwssGeographicValue").val();
-        const nwssPcrTarget = $("#nwssPcrTarget").select2("data");
         const nwssSource = $("#nwssSource").select2("data");
         const nwssFillMethod = $("#nwssFillMethod").select2("data");
         var covidCastGeographicValues = Object.groupBy(
@@ -736,7 +734,6 @@ class IndicatorHandler {
             pophiveLocations: pophiveLocations,
             pophiveAgeGroup: pophiveAgeGroup,
             nwssGeographicValue: nwssGeographicValue,
-            nwssPcrTarget: nwssPcrTarget,
             nwssSource: nwssSource,
             nwssFillMethod: nwssFillMethod,
             apiKey: document.getElementById("apiKey").value ? document.getElementById("apiKey").value : "",
@@ -771,7 +768,6 @@ class IndicatorHandler {
         const flusurvLocations = $("#flusurvLocations").select2("data");
         const pophiveLocations = $("#pophiveLocations").select2("data");
         const pophiveAgeGroup = $("#pophiveAgeGroup").select2("data");
-        const nwssPcrTarget = $("#nwssPcrTarget").select2("data");
         const nwssSource = $("#nwssSource").select2("data");
         const nwssGeographicValue = $("#nwssGeographicValue").val();
         const covidCastGeographicValues = Object.groupBy(
@@ -789,7 +785,6 @@ class IndicatorHandler {
             flusurvLocations: flusurvLocations,
             pophiveLocations: pophiveLocations,
             pophiveAgeGroup: pophiveAgeGroup,
-            nwssPcrTarget: nwssPcrTarget,
             nwssSource: nwssSource,
             nwssGeographicValue: nwssGeographicValue,
             nwssFillMethod: "source",
@@ -819,7 +814,6 @@ class IndicatorHandler {
         const flusurvLocations = $("#flusurvLocations").select2("data");
         const pophiveLocations = $("#pophiveLocations").select2("data");
         const pophiveAgeGroup = $("#pophiveAgeGroup").select2("data");
-        const nwssPcrTarget = $("#nwssPcrTarget").select2("data");
         const nwssSource = $("#nwssSource").select2("data");
         const nwssGeographicValue = $("#nwssGeographicValue").val();
         const covidCastGeographicValues = Object.groupBy(
@@ -838,7 +832,6 @@ class IndicatorHandler {
             flusurvLocations: flusurvLocations,
             pophiveLocations: pophiveLocations,
             pophiveAgeGroup: pophiveAgeGroup,
-            nwssPcrTarget: nwssPcrTarget,
             nwssSource: nwssSource,
             nwssGeographicValue: nwssGeographicValue,
             nwssFillMethod: "source",

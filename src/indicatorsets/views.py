@@ -399,8 +399,7 @@ def epivis(request):
         flusurv_locations = data.get("flusurvLocations", [])
         pophive_geos = data.get("pophiveLocations", [])
         pophive_age_group = data.get("pophiveAgeGroup", [])
-        #nwss_pcr_target = data.get("nwssPcrTarget", [])
-        #nwss_source = data.get("nwssSource", [])
+        nwss_source = data.get("nwssSource", [])
         nwss_geographic_value = data.get("nwssGeographicValue", "")
         nwss_fill_method = data.get("nwssFillMethod", "source")
         log_form_stats(request, data, "epivis")
@@ -440,8 +439,7 @@ def epivis(request):
                         indicator,
                         "sewershed",
                         nwss_geographic_value,
-                        #nwss_pcr_target,
-                        #nwss_source,
+                        nwss_source,
                         nwss_fill_method,
                     )
                 )
@@ -473,8 +471,7 @@ def generate_export_data_url(request):
         pophive_geos = data.get("pophiveLocations", [])
         pophive_age_group = data.get("pophiveAgeGroup", [])
         nwss_geographic_value = data.get("nwssGeographicValue", "")
-        #nwss_pcr_target = data.get("nwssPcrTarget", [])
-        #nwss_source = data.get("nwssSource", [])
+        nwss_source = data.get("nwssSource", [])
         nwss_fill_method = data.get("nwssFillMethod", "source")
 
         log_form_stats(request, data, "export")
@@ -526,8 +523,7 @@ def generate_export_data_url(request):
                     start_date,
                     end_date,
                     nwss_geographic_value,
-                    #nwss_pcr_target,
-                    #nwss_source,
+                    nwss_source,
                     nwss_fill_method,
                     api_key,
                 )
@@ -555,8 +551,7 @@ def preview_data(request):
         flusurv_locations = data.get("flusurvLocations", [])
         pophive_geos = data.get("pophiveLocations", [])
         pophive_age_group = data.get("pophiveAgeGroup", [])
-        #nwss_pcr_target = data.get("nwssPcrTarget", [])
-        #nwss_source = data.get("nwssSource", [])
+        nwss_source = data.get("nwssSource", [])
         nwss_geographic_value = data.get("nwssGeographicValue", "")
         nwss_fill_method = data.get("nwssFillMethod", "source")
         api_key = data.get("apiKey", None)
@@ -601,15 +596,14 @@ def preview_data(request):
                         api_key,
                     )
                 )
-            if nwss_geographic_value: # TODO: uncomment this if we want to return source and prc_target -> and nwss_pcr_target and nwss_source:
+            if nwss_geographic_value:
                 preview_data.extend(
                     preview_nwss_data(
                         indicators,
                         start_date,
                         end_date,
                         nwss_geographic_value,
-                        #nwss_pcr_target,
-                        # nwss_source,
+                        nwss_source,
                         nwss_fill_method,
                         api_key,
                     )
@@ -638,8 +632,7 @@ def create_query_code(request):
         flusurv_locations = data.get("flusurvLocations", [])
         pophive_geos = data.get("pophiveLocations", [])
         pophive_age_group = data.get("pophiveAgeGroup", [])
-        #nwss_pcr_target = data.get("nwssPcrTarget", [])
-        #nwss_source = data.get("nwssSource", [])
+        nwss_source = data.get("nwssSource", [])
         nwss_geographic_value = data.get("nwssGeographicValue", "")
         nwss_fill_method = data.get("nwssFillMethod", "source")
         python_code_blocks = [
@@ -708,14 +701,13 @@ def create_query_code(request):
             )
             python_code_blocks.extend(python_code_block)
             r_code_blocks.extend(r_code_block)
-        if nwss_geographic_value: # TODO: uncomment this if we want to return source and prc_target -> and nwss_pcr_target and nwss_source:
+        if nwss_geographic_value:
             python_code_block, r_code_block = generate_query_code_nwss(
                 all_indicators,
                 start_date,
                 end_date,
                 nwss_geographic_value,
-                #nwss_pcr_target,
-                #nwss_source,
+                nwss_source,
                 nwss_fill_method,
             )
             python_code_blocks.extend(python_code_block)
