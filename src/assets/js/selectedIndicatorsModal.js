@@ -335,7 +335,7 @@ function showPophiveLocationSelect() {
 
 function showNwssFieldsSelect() {
     if (indicatorHandler.getNwssIndicators().length > 0) {
-        if (document.getElementsByName("nwssPcrTarget").length === 0) {
+        if (document.getElementsByName("nwssGeographicValue").length === 0) {
             indicatorHandler.showNwssFields();
         } else {
             $("#nwssDiv").show();

@@ -1,6 +1,8 @@
 import base64
 import json
 import sys
+import csv
+import io
 from datetime import datetime
 from textwrap import dedent
 
@@ -397,7 +399,6 @@ def epivis(request):
         flusurv_locations = data.get("flusurvLocations", [])
         pophive_geos = data.get("pophiveLocations", [])
         pophive_age_group = data.get("pophiveAgeGroup", [])
-        nwss_pcr_target = data.get("nwssPcrTarget", [])
         nwss_source = data.get("nwssSource", [])
         nwss_geographic_value = data.get("nwssGeographicValue", "")
         nwss_fill_method = data.get("nwssFillMethod", "source")
@@ -438,7 +439,6 @@ def epivis(request):
                         indicator,
                         "sewershed",
                         nwss_geographic_value,
-                        nwss_pcr_target,
                         nwss_source,
                         nwss_fill_method,
                     )
@@ -471,7 +471,6 @@ def generate_export_data_url(request):
         pophive_geos = data.get("pophiveLocations", [])
         pophive_age_group = data.get("pophiveAgeGroup", [])
         nwss_geographic_value = data.get("nwssGeographicValue", "")
-        nwss_pcr_target = data.get("nwssPcrTarget", [])
         nwss_source = data.get("nwssSource", [])
         nwss_fill_method = data.get("nwssFillMethod", "source")
 
@@ -524,7 +523,6 @@ def generate_export_data_url(request):
                     start_date,
                     end_date,
                     nwss_geographic_value,
-                    nwss_pcr_target,
                     nwss_source,
                     nwss_fill_method,
                     api_key,
@@ -553,7 +551,6 @@ def preview_data(request):
         flusurv_locations = data.get("flusurvLocations", [])
         pophive_geos = data.get("pophiveLocations", [])
         pophive_age_group = data.get("pophiveAgeGroup", [])
-        nwss_pcr_target = data.get("nwssPcrTarget", [])
         nwss_source = data.get("nwssSource", [])
         nwss_geographic_value = data.get("nwssGeographicValue", "")
         nwss_fill_method = data.get("nwssFillMethod", "source")
@@ -599,14 +596,13 @@ def preview_data(request):
                         api_key,
                     )
                 )
-            if nwss_geographic_value and nwss_pcr_target and nwss_source:
+            if nwss_geographic_value:
                 preview_data.extend(
                     preview_nwss_data(
                         indicators,
                         start_date,
                         end_date,
                         nwss_geographic_value,
-                        nwss_pcr_target,
                         nwss_source,
                         nwss_fill_method,
                         api_key,
@@ -636,7 +632,6 @@ def create_query_code(request):
         flusurv_locations = data.get("flusurvLocations", [])
         pophive_geos = data.get("pophiveLocations", [])
         pophive_age_group = data.get("pophiveAgeGroup", [])
-        nwss_pcr_target = data.get("nwssPcrTarget", [])
         nwss_source = data.get("nwssSource", [])
         nwss_geographic_value = data.get("nwssGeographicValue", "")
         nwss_fill_method = data.get("nwssFillMethod", "source")
@@ -706,13 +701,12 @@ def create_query_code(request):
             )
             python_code_blocks.extend(python_code_block)
             r_code_blocks.extend(r_code_block)
-        if nwss_geographic_value and nwss_pcr_target and nwss_source:
+        if nwss_geographic_value:
             python_code_block, r_code_block = generate_query_code_nwss(
                 all_indicators,
                 start_date,
                 end_date,
                 nwss_geographic_value,
-                nwss_pcr_target,
                 nwss_source,
                 nwss_fill_method,
             )
@@ -930,3 +924,39 @@ def get_pophive_age_groups(request):
         except requests.RequestException:
             logger.exception("Error getting pophive age groups")
     return JsonResponse({"age_groups": pophive_age_groups})
+
+
+def get_nwss_county_mapping(request):
+    nwss_county_mapping = cache.get("nwss_county_mapping") or []
+    nwss_county_mapping = []
+    url = settings.EPIDATA_V5_URL + "geomap/nwss_sewershed_crosswalk?other_geo_type=county"
+    if not nwss_county_mapping:
+        try:
+            response = requests.get(url, timeout=(5, 30))
+            response.raise_for_status()
+            csv_file = io.StringIO(response.text)
+            csv_reader = csv.DictReader(csv_file)
+            json_data: str = json.loads(json.dumps(list(csv_reader), indent=4))
+            nwss_county_mapping_dict = dict()
+            for el in json_data:
+                if el["to_name"] == "":
+                    continue
+                if el["to_val"] not in nwss_county_mapping_dict.keys():
+                    nwss_county_mapping_dict[el["to_val"]] = {
+                        "county": el["to_name"],
+                        "nwss": str(el["from_val"])
+                    }
+                else:
+                    nwss_county_mapping_dict[el["to_val"]]["nwss"] += f",{str(el['from_val'])}"
+            for v in nwss_county_mapping_dict.values():
+                nwss_county_mapping.append(
+                    {
+                        "id": v["nwss"],
+                        "text": v["county"],
+                    }
+                )
+                nwss_county_mapping = sorted(nwss_county_mapping, key=lambda x: x["text"])
+            cache.set("nwss_county_mapping", nwss_county_mapping, 60 * 60 * 24)
+        except requests.RequestException:
+            logger.exception("Error getting nwss county mapping")
+    return JsonResponse({"nwss_county_mapping": nwss_county_mapping})
