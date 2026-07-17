@@ -296,25 +296,27 @@ def generate_nwss_dataset_epivis(indicator,
     fill_method,
 ):
     datasets = []
-    for geo_value in geographic_value.replace(" ", "").split(","):
-        datasets.append(
-            {
-                "color": generate_random_color(),
-                "title": "value",
-                "params": {
-                    "_endpoint": indicator["_endpoint"],
-                    "source": indicator["data_source"],
-                    "signal": indicator["indicator"],
-                    "geo_type": geographic_type,
-                    "geo_value": geo_value,
-                    "fill_method": fill_method,
-                    "custom_title": generate_epivis_custom_title(
-                        indicator, geo_value
-                    ),
-                    "extra_keys": f"nwss_source:{source[0]['id']}",
+    geo_values = ",".join(geographic_value).replace(" ", "").split(",")
+    for geo_value in geo_values:
+        for s in source:
+            datasets.append(
+                {
+                    "color": generate_random_color(),
+                    "title": "value",
+                    "params": {
+                        "_endpoint": indicator["_endpoint"],
+                        "source": "nwss",
+                        "signal": indicator["indicator"],
+                        "geo_type": geographic_type,
+                        "geo_value": geo_value,
+                        "fill_method": fill_method,
+                        "custom_title": generate_epivis_custom_title(
+                            indicator, geo_value
+                        ),
+                        "extra_keys": f"nwss_source:{s['id']}",
+                    }
                 }
-            }
-        )
+            )
     return datasets
 
 
@@ -420,17 +422,19 @@ def generate_nwss_export_url(
     nwss_geographic_value,
     nwss_source,
     nwss_fill_method,
-    api_key
+    api_key 
 ):
     data_export_commands = []
+    geo_value = ",".join(nwss_geographic_value)
     for indicator in indicators:
-        if indicator["_endpoint"] == "nwss":
-            data_export_url = f"{settings.EPIDATA_V5_URL}viz/?source=nwss&signal={indicator['indicator']}&geo_type=sewershed&geo_value={nwss_geographic_value}&fill_method={nwss_fill_method}&time_values={start_date}:{end_date}&extra_keys=nwss_source:{nwss_source[0]['id']}&format=json&header=false"
-            if api_key:
-                data_export_url += f"&api_key={api_key}"
-            data_export_commands.append(
-                f'curl -o {indicator["indicator"]}_sewershed_{nwss_geographic_value}.json <a href="{data_export_url}">{data_export_url}</a>'
-            )
+        for source in nwss_source:
+            if indicator["_endpoint"] == "nwss":
+                data_export_url = f"{settings.EPIDATA_V5_URL}viz/?source=nwss&signal={indicator['indicator']}&geo_type=sewershed&geo_value={geo_value}&fill_method={nwss_fill_method}&time_values={start_date}:{end_date}&extra_keys=nwss_source:{source['id']}&format=json&header=false"
+                if api_key:
+                    data_export_url += f"&api_key={api_key}"
+                data_export_commands.append(
+                    f'curl -o {indicator["indicator"]}_source_{source["id"]}.json <a href="{data_export_url}">{data_export_url}</a>'
+                )
     return data_export_commands
 
 
@@ -654,39 +658,41 @@ def preview_nwss_data(
     api_key,
 ):
     preview_data = []
+    geo_value = ",".join(nwss_geographic_value)
     for indicator in indicators:
-        if indicator["_endpoint"] == "nwss":
-            params = {
-                "source": "nwss",
-                "signal": indicator["indicator"],
-                "geo_type": "sewershed",
-                "geo_value": nwss_geographic_value,
-                "fill_method": nwss_fill_method,
-                "time_values": f"{start_date}:{end_date}",
-                "extra_keys": f"nwss_source:{nwss_source[0]['id']}",
-                "format": "json",
-                "header": "false",
-                "api_key": api_key if api_key else settings.EPIDATA_API_KEY,
-                }                
-            try:
-                response = requests.get(
-                    f"{settings.EPIDATA_V5_URL}viz/", params=params, timeout=(5, 30)
-                )
-                if response.status_code == 401:
-                    raise InvalidApiKeyError(INVALID_API_KEY_MESSAGE)
-                response.raise_for_status()
-            except requests.RequestException:
-                logger.exception(
-                    "Error getting nwss data",
-                    extra={
-                        "signal": indicator["indicator"],
-                        "geo_value": nwss_geographic_value,
-                    },
-                )
-                continue
-            data = response.json()
-            if isinstance(data, list) and len(data):
-                preview_data.append(data[0])
+        for source in nwss_source:
+            if indicator["_endpoint"] == "nwss":
+                params = {
+                    "source": "nwss",
+                    "signal": indicator["indicator"],
+                    "geo_type": "sewershed",
+                    "geo_value": geo_value,
+                    "fill_method": nwss_fill_method,
+                    "time_values": f"{start_date}:{end_date}",
+                    "extra_keys": f"nwss_source:{source['id']}",
+                    "format": "json",
+                    "header": "false",
+                    "api_key": api_key if api_key else settings.EPIDATA_API_KEY,
+                    }                
+                try:
+                    response = requests.get(
+                        f"{settings.EPIDATA_V5_URL}viz/", params=params, timeout=(5, 30)
+                    )
+                    if response.status_code == 401:
+                        raise InvalidApiKeyError(INVALID_API_KEY_MESSAGE)
+                    response.raise_for_status()
+                except requests.RequestException:
+                    logger.exception(
+                        "Error getting nwss data",
+                        extra={
+                            "signal": indicator["indicator"],
+                            "geo_value": geo_value,
+                        },
+                    )
+                    continue
+                data = response.json()
+                if isinstance(data, list) and len(data):
+                    preview_data.append(data[0])
     return preview_data
 
 
@@ -877,16 +883,14 @@ def generate_query_code_flusurv(flusurv_geos, start_date, end_date):
 def generate_query_code_pophive(
     indicators, start_date, end_date, pophive_geos, pophive_age_group
 ):
-    python_code_blocks = []
-    r_code_blocks = []
+    python_code_blocks = ["import requests"]
+    r_code_blocks = ["library(httr)", "library(jsonlite)"]
     for indicator in indicators:
         if indicator["_endpoint"] == "pophive":
             for geo in pophive_geos:
                 url = f"{settings.EPIDATA_V5_URL}viz/?source=pophive&signal={indicator['indicator']}&geo_type={geo['geo_type']}&geo_value={geo['id']}&time_values={start_date}:{end_date}&extra_keys=age_group:{pophive_age_group[0]['id']}&format=json&header=false"
                 python_code_block = dedent(
                     f"""\
-                    import requests
-
                     pophive_{indicator['indicator']}_{geo['geo_type']}_{geo['id']}_response = requests.get(
                         "{url}"
                     )
@@ -896,9 +900,6 @@ def generate_query_code_pophive(
                 python_code_blocks.append(python_code_block)
                 r_code_block = dedent(
                     f"""\
-                    library(httr)
-                    library(jsonlite)
-
                     pophive_{indicator['indicator']}_{geo['geo_type']}_{geo['id']}_response <- GET(
                         "{url}"
                     )
@@ -917,34 +918,32 @@ def generate_query_code_nwss(
     nwss_source,
     nwss_fill_method
 ):
-    python_code_blocks = []
-    r_code_blocks = []
+    python_code_blocks = ["import requests"]
+    r_code_blocks = ["library(httr)", "library(jsonlite)"]
+    geo_value = ",".join(nwss_geographic_value)
     for indicator in indicators:
-        if indicator["_endpoint"] == "nwss":
-            url = f"{settings.EPIDATA_V5_URL}viz/?source=nwss&signal={indicator['indicator']}&geo_type=sewershed&geo_value={nwss_geographic_value}&fill_method={nwss_fill_method}&time_values={start_date}:{end_date}&extra_keys=nwss_source:{nwss_source[0]['id']}&format=json&header=false"
-            python_code_block = dedent(
-                f"""\
-                import requests
+        for source in nwss_source:
+            if indicator["_endpoint"] == "nwss":
+                url = f"{settings.EPIDATA_V5_URL}viz/?source=nwss&signal={indicator['indicator']}&geo_type=sewershed&geo_value={geo_value}&fill_method={nwss_fill_method}&time_values={start_date}:{end_date}&extra_keys=nwss_source:{source['id']}&format=json&header=false"
+                python_code_block = dedent(
+                    f"""\
 
-                nwss_{indicator['indicator']}_sewershed_{nwss_geographic_value}_response = requests.get(
-                    "{url}"
+                    nwss_{indicator['indicator']}_source_{source['id']}_response = requests.get(
+                        "{url}"
+                    )
+                    nwss_{indicator['indicator']}_source_{source['id']}_data = nwss_{indicator['indicator']}_source_{source['id']}_response.json()
+                """
                 )
-                nwss_{indicator['indicator']}_sewershed_{nwss_geographic_value}_data = nwss_{indicator['indicator']}_sewershed_{nwss_geographic_value}_response.json()
-            """
-            )
-            python_code_blocks.append(python_code_block)
-            r_code_block = dedent(
-                f"""\
-                library(httr)
-                library(jsonlite)
-
-                nwss_{indicator['indicator']}_sewershed_{nwss_geographic_value}_response <- GET(
-                    "{url}"
+                python_code_blocks.append(python_code_block)
+                r_code_block = dedent(
+                    f"""\
+                    nwss_{indicator['indicator']}_source_{source['id']}_response <- GET(
+                        "{url}"
+                    )
+                    nwss_{indicator['indicator']}_source_{source['id']}_data <- fromJSON(content(nwss_{indicator['indicator']}_source_{source['id']}_response, "text"))
+                """
                 )
-                nwss_{indicator['indicator']}_sewershed_{nwss_geographic_value}_data <- fromJSON(content(nwss_{indicator['indicator']}_sewershed_{nwss_geographic_value}_response, "text"))
-            """
-            )
-            r_code_blocks.append(r_code_block)
+                r_code_blocks.append(r_code_block)
     return python_code_blocks, r_code_blocks
 
 
