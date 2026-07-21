@@ -63,7 +63,7 @@ def get_list_of_indicators_filtered_by_geo(geos):
 
 
 def generate_epivis_custom_title(indicator, geo_value, extra_keys=None):
-    title = f"{indicator['indicator_set_short_name']}:{indicator.get('member_short_name', '')} : {geo_value}"
+    title = f"{indicator['indicator_set_short_name']}:{indicator['indicator']} : {geo_value}"
     if extra_keys:
         title += f" ({extra_keys})"
     return title
@@ -311,7 +311,7 @@ def generate_nwss_dataset_epivis(indicator,
                         "geo_value": geo_value,
                         "fill_method": fill_method,
                         "custom_title": generate_epivis_custom_title(
-                            indicator, geo_value
+                            indicator, geo_value, s["id"]
                         ),
                         "extra_keys": f"nwss_source:{s['id']}",
                     }
