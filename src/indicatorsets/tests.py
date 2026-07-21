@@ -66,11 +66,20 @@ class IndicatorsetsUtilsTests(TestCase):
     def test_generate_epivis_custom_title(self):
         indicator = {
             "indicator_set_short_name": "Set",
-            "member_short_name": "Mem",
+            "indicator": "sig",
         }
         title = generate_epivis_custom_title(indicator, "Pennsylvania")
-        self.assertIn("Set", title)
-        self.assertIn("Pennsylvania", title)
+        self.assertEqual(title, "Set:sig : Pennsylvania")
+
+    def test_generate_epivis_custom_title_with_extra_keys(self):
+        indicator = {
+            "indicator_set_short_name": "Set",
+            "indicator": "sig",
+        }
+        title = generate_epivis_custom_title(
+            indicator, "Pennsylvania", "age_group:0-1"
+        )
+        self.assertEqual(title, "Set:sig : Pennsylvania (age_group:0-1)")
 
     def test_generate_random_color_is_hex(self):
         color = generate_random_color()
