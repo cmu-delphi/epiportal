@@ -7,7 +7,6 @@ from rest.serializers import (
 )
 from indicators.models import Indicator
 from rest_framework.response import Response
-from django.conf import settings
 from rest_framework.views import APIView
 from rest.utils import get_available_indicators_for_geo
 from django.db.models import Q
