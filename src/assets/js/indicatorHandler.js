@@ -581,18 +581,22 @@ class IndicatorHandler {
     showNwssFields() {
         var nwssFields = `
         <hr>
-        <div class="row margin-top-1rem" id="nwssDiv">
-            <div class="col-2 margin-top-1rem">
-                <label for="nwssSource" class="col-form-label">NWSS Source:</label>
+        <div id="nwssDiv">
+            <div class="row margin-top-1rem">
+                <div class="col-2">
+                    <label for="nwssSource" class="col-form-label">NWSS Source:</label>
+                </div>
+                <div class="col-10">
+                    <select id="nwssSource" name="nwssSource" class="form-select" multiple="multiple"></select>
+                </div>
             </div>
-            <div class="col-10 margin-top-1rem">
-                <select id="nwssSource" name="nwssSource" class="form-select" multiple="multiple"></select>
-            </div>
-            <div class="col-2 margin-top-1rem">
-                <label for="nwssGeographicValue" class="col-form-label">Geographic Value:</label>
-            </div>
-            <div class="col-10 margin-top-1rem">
-                <select id="nwssGeographicValue" name="nwssGeographicValue" class="form-select" multiple="multiple"></select>
+            <div class="row margin-top-1rem">
+                <div class="col-2">
+                    <label for="nwssGeographicValue" class="col-form-label">Geographic Value:</label>
+                </div>
+                <div class="col-10">
+                    <select id="nwssGeographicValue" name="nwssGeographicValue" class="form-select" multiple="multiple"></select>
+                </div>
             </div>
         </div><hr>`;
         if ($("#otherEndpointLocations").length) {
@@ -617,7 +621,6 @@ class IndicatorHandler {
                 data: sources,
                 allowClear: true,
                 width: "100%",
-                dropdownParent: $("#selectedIndicatorsModal"),
             });
             $.get("get_nwss_county_mapping/", function (response) {
                 $("#nwssGeographicValue").select2({
@@ -627,7 +630,6 @@ class IndicatorHandler {
                     minimumSelectionLength: 1,
                     allowClear: true,
                     width: "100%",
-                    dropdownParent: $("#selectedIndicatorsModal"),
                 });
             });
         }
