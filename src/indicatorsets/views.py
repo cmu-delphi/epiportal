@@ -942,8 +942,9 @@ def get_nwss_county_mapping(request):
                 if el["to_name"] == "":
                     continue
                 if el["to_val"] not in nwss_county_mapping_dict.keys():
+                    county_name = f'{" ".join(el["to_name"].strip().split(" ")[:-1])}, {el["to_name"].strip().split(" ")[-1]}'
                     nwss_county_mapping_dict[el["to_val"]] = {
-                        "county": el["to_name"],
+                        "county": county_name,
                         "nwss": str(el["from_val"])
                     }
                 else:
