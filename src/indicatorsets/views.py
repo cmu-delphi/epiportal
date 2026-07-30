@@ -473,36 +473,37 @@ def generate_export_data_url(request):
         nwss_geographic_value = data.get("nwssGeographicValue", "")
         nwss_source = data.get("nwssSource", [])
         nwss_fill_method = data.get("nwssFillMethod", "source")
+        data_format = data.get("dataFormat", "json")
 
         log_form_stats(request, data, "export")
         log_form_data(request, data, "export")
         data_export_commands.extend(
             generate_covidcast_indicators_export_url(
-                indicators, start_date, end_date, covidcast_geos, api_key
+                indicators, start_date, end_date, covidcast_geos, api_key, data_format
             )
         )
         if fluview_geos:
             data_export_commands.extend(
                 generate_fluview_indicators_export_url(
-                    fluview_geos, start_date, end_date, api_key
+                    fluview_geos, start_date, end_date, api_key, data_format
                 )
             )
         if nidss_flu_locations:
             data_export_commands.extend(
                 generate_nidss_flu_export_url(
-                    nidss_flu_locations, start_date, end_date, api_key
+                    nidss_flu_locations, start_date, end_date, api_key, data_format
                 )
             )
         if nidss_dengue_locations:
             data_export_commands.extend(
                 generate_nidss_dengue_export_url(
-                    nidss_dengue_locations, start_date, end_date, api_key
+                    nidss_dengue_locations, start_date, end_date, api_key, data_format
                 )
             )
         if flusurv_locations:
             data_export_commands.extend(
                 generate_flusurv_export_url(
-                    flusurv_locations, start_date, end_date, api_key
+                    flusurv_locations, start_date, end_date, api_key, data_format
                 )
             )
         if pophive_geos:
@@ -514,6 +515,7 @@ def generate_export_data_url(request):
                     pophive_geos,
                     pophive_age_group,
                     api_key,
+                    data_format
                 )
             )
         if nwss_geographic_value:
@@ -526,6 +528,7 @@ def generate_export_data_url(request):
                     nwss_source,
                     nwss_fill_method,
                     api_key,
+                    data_format
                 )
             )
         data_export_block = data_export_block.format("<br>".join(data_export_commands))
@@ -555,34 +558,35 @@ def preview_data(request):
         nwss_geographic_value = data.get("nwssGeographicValue", "")
         nwss_fill_method = data.get("nwssFillMethod", "source")
         api_key = data.get("apiKey", None)
+        data_format = data.get("dataFormat", "json")
 
         preview_data = []
         try:
             preview_data.extend(
                 preview_covidcast_data(
-                    indicators, start_date, end_date, covidcast_geos, api_key
+                    indicators, start_date, end_date, covidcast_geos, api_key, data_format
                 )
             )
             if fluview_geos:
                 preview_data.extend(
-                    preview_fluview_data(fluview_geos, start_date, end_date, api_key)
+                    preview_fluview_data(fluview_geos, start_date, end_date, api_key, data_format)
                 )
             if nidss_flu_locations:
                 preview_data.extend(
                     preview_nidss_flu_data(
-                        nidss_flu_locations, start_date, end_date, api_key
+                        nidss_flu_locations, start_date, end_date, api_key, data_format
                     )
                 )
             if nidss_dengue_locations:
                 preview_data.extend(
                     preview_nidss_dengue_data(
-                        nidss_dengue_locations, start_date, end_date, api_key
+                        nidss_dengue_locations, start_date, end_date, api_key, data_format
                     )
                 )
             if flusurv_locations:
                 preview_data.extend(
                     preview_flusurv_data(
-                        flusurv_locations, start_date, end_date, api_key
+                        flusurv_locations, start_date, end_date, api_key, data_format
                     )
                 )
             if pophive_geos and pophive_age_group:
@@ -594,6 +598,7 @@ def preview_data(request):
                         pophive_geos,
                         pophive_age_group,
                         api_key,
+                        data_format
                     )
                 )
             if nwss_geographic_value:
@@ -606,6 +611,7 @@ def preview_data(request):
                         nwss_source,
                         nwss_fill_method,
                         api_key,
+                        data_format
                     )
                 )
         except InvalidApiKeyError as e:

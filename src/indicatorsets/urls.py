@@ -1,6 +1,7 @@
 from django.urls import path
 from django.urls.resolvers import URLPattern
 
+from indicatorsets.proxy_views import download_viz_export
 from indicatorsets.views import (
     IndicatorSetListView,
     check_fluview_geo_coverage,
@@ -46,5 +47,10 @@ urlpatterns: list[URLPattern] = [
         "get_nwss_county_mapping/",
         get_nwss_county_mapping,
         name="get_nwss_county_mapping",
+    ),
+    path(
+        "download_export/",
+        download_viz_export,
+        name="download_export",
     ),
 ]

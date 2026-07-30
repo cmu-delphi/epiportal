@@ -724,6 +724,10 @@ class IndicatorHandler {
         const nwssGeographicValue = $("#nwssGeographicValue").val();
         const nwssSource = $("#nwssSource").select2("data");
         const nwssFillMethod = $("#nwssFillMethod").select2("data");
+        let dataFormat = 'csv';
+        if ($("#data_format_json").is(":checked")) {
+            dataFormat = 'json';
+        }
         var covidCastGeographicValues = Object.groupBy(
             $("#geographic_value").select2("data"),
             ({ geoType }) => [geoType]
@@ -744,6 +748,7 @@ class IndicatorHandler {
             nwssFillMethod: nwssFillMethod,
             apiKey: document.getElementById("apiKey").value ? document.getElementById("apiKey").value : "",
             clientId: clientId ? clientId : "Not available",
+            dataFormat: dataFormat,
         }
         const csrftoken = Cookies.get("csrftoken");
         $.ajax({
@@ -766,6 +771,37 @@ class IndicatorHandler {
             });
     }
 
+    escapeHtml(value) {
+        return String(value)
+            .replace(/&/g, "&amp;")
+            .replace(/</g, "&lt;")
+            .replace(/>/g, "&gt;")
+            .replace(/"/g, "&quot;")
+            .replace(/'/g, "&#39;");
+    }
+
+    generatePreviewDataCSV(previewBlocks) {
+        if (!Array.isArray(previewBlocks) || previewBlocks.length === 0) {
+            return '<p>No preview data available.</p>';
+        }
+        const tables = previewBlocks
+            .filter((rows) => Array.isArray(rows) && rows.length > 0)
+            .map((rows) => {
+                const [header, ...dataRows] = rows;
+                const headerHtml = header
+                    .map((cell) => `<th>${this.escapeHtml(cell)}</th>`)
+                    .join('');
+                const bodyHtml = dataRows
+                    .map((row) => `<tr>${row.map((cell) => `<td>${this.escapeHtml(cell)}</td>`).join('')}</tr>`)
+                    .join('');
+                return `<table class="table table-bordered table-sm preview-table">
+                    <thead><tr>${headerHtml}</tr></thead>
+                    <tbody>${bodyHtml}</tbody>
+                </table>`;
+            });
+        return tables.length ? tables.join('') : '<p>No preview data available.</p>';
+    }
+
     previewData() {
         $('#loader').show();
         const fluviewLocations = $("#fluviewLocations").select2("data");
@@ -780,6 +816,10 @@ class IndicatorHandler {
             $("#geographic_value").select2("data"),
             ({ geoType }) => [geoType]
         );
+        let dataFormat = 'csv';
+        if ($("#data_format_json").is(":checked")) {
+            dataFormat = 'json';
+        }
         const submitData = {
             start_date: document.getElementById("start_date").value,
             end_date: document.getElementById("end_date").value,
@@ -796,20 +836,30 @@ class IndicatorHandler {
             nwssFillMethod: "source",
             apiKey: document.getElementById("apiKey").value ? document.getElementById("apiKey").value : "",
             clientId: clientId ? clientId : "Not available",
+            dataFormat: dataFormat,
         }
         const csrftoken = Cookies.get("csrftoken");
         $.ajax({
             url: "preview_data/",
             type: "POST",
-            dataType: "json",
-            contentType: "application/json",
+            dataType: 'json',
+            contentType: 'application/json',
             headers: { "X-CSRFToken": csrftoken },
             data: JSON.stringify(submitData),
         }).done((data) => {
             const payload = this.prepareDataLayerPayload("previewData");
             dataLayerPush(payload);
             $('#loader').hide();
-            $('#modeSubmitResult').html(JSON.stringify(data, null, 2));
+            if (dataFormat === 'csv') {
+                $('#modeSubmitResult').html(this.generatePreviewDataCSV(data));
+            } else {
+                $('#modeSubmitResult').html(JSON.stringify(data, null, 2));
+            }
+        }).fail(() => {
+            $('#loader').hide();
+            $('#modeSubmitResult').html(
+                '<div class="alert alert-danger" role="alert">Preview failed. Please try again.</div>'
+            );
         });
     }
 

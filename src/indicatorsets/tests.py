@@ -1,3 +1,4 @@
+import json
 from unittest.mock import MagicMock, patch
 
 import requests
@@ -22,9 +23,16 @@ from indicatorsets.utils import (
     get_epiweek,
     get_grouped_original_data_provider_choices,
     get_list_of_indicators_filtered_by_geo,
+    get_preview_data,
     group_by_property,
     list_to_dict,
     parse_original_data_provider_ids,
+    preview_flusurv_data,
+    preview_fluview_data,
+    preview_nidss_dengue_data,
+    preview_nidss_flu_data,
+    preview_nwss_data,
+    preview_pophive_data,
 )
 from indicatorsets.views import age_group_sort_key, get_related_indicators
 from indicatorsets.filters import IndicatorSetFilter
@@ -481,3 +489,261 @@ class GeoCoverageUtilsTests(TestCase):
     def test_get_list_of_indicators_filtered_by_geo_handles_errors(self, _mock_get):
         result = get_list_of_indicators_filtered_by_geo("['state:pa']")
         self.assertEqual(result, {"epidata": [], "result": -1})
+
+
+class GetPreviewDataTests(TestCase):
+    def test_json_epidata_shape_returns_first_row(self):
+        response = MagicMock()
+        response.json.return_value = {
+            "epidata": [{"value": 1}, {"value": 2}],
+            "result": 1,
+            "message": "success",
+        }
+        result = get_preview_data(response, "json")
+        self.assertEqual(
+            result, {"epidata": {"value": 1}, "result": 1, "message": "success"}
+        )
+
+    def test_json_epidata_shape_empty_returns_none(self):
+        response = MagicMock()
+        response.json.return_value = {"epidata": [], "result": -2, "message": "no results"}
+        self.assertIsNone(get_preview_data(response, "json"))
+
+    def test_json_list_shape_returns_first_item(self):
+        response = MagicMock()
+        response.json.return_value = [{"value": 1}, {"value": 2}]
+        self.assertEqual(get_preview_data(response, "json"), {"value": 1})
+
+    def test_json_list_shape_empty_returns_none(self):
+        response = MagicMock()
+        response.json.return_value = []
+        self.assertIsNone(get_preview_data(response, "json"))
+
+    def test_csv_returns_first_five_rows(self):
+        response = MagicMock()
+        rows = ["geo_value,value"] + [f"pa,{i}" for i in range(10)]
+        response.text = "\n".join(rows)
+        result = get_preview_data(response, "csv")
+        self.assertEqual(len(result), 5)
+        self.assertEqual(result[0], ["geo_value", "value"])
+        self.assertEqual(result[1], ["pa", "0"])
+
+
+class PreviewFluviewDataTests(TestCase):
+    @patch("indicatorsets.utils.requests.get")
+    def test_csv_format_returns_parsed_rows(self, mock_get):
+        mock_response = MagicMock()
+        mock_response.status_code = 200
+        mock_response.raise_for_status = MagicMock()
+        mock_response.text = "release_date,region,value\n2020-01-01,nat,1.5\n"
+        mock_get.return_value = mock_response
+
+        result = preview_fluview_data(
+            [{"id": "nat", "text": "U.S. National"}],
+            "2020-01-01",
+            "2020-01-20",
+            None,
+            "csv",
+        )
+        self.assertEqual(
+            result, [[["release_date", "region", "value"], ["2020-01-01", "nat", "1.5"]]]
+        )
+
+    @patch("indicatorsets.utils.requests.get")
+    def test_json_format_returns_first_epidata_row(self, mock_get):
+        mock_response = MagicMock()
+        mock_response.status_code = 200
+        mock_response.raise_for_status = MagicMock()
+        mock_response.json.return_value = {
+            "epidata": [{"value": 1}],
+            "result": 1,
+            "message": "success",
+        }
+        mock_get.return_value = mock_response
+
+        result = preview_fluview_data(
+            [{"id": "nat", "text": "U.S. National"}],
+            "2020-01-01",
+            "2020-01-20",
+            None,
+            "json",
+        )
+        self.assertEqual(result[0]["epidata"], {"value": 1})
+
+
+class PreviewNIDSSFluDataTests(TestCase):
+    @patch("indicatorsets.utils.requests.get")
+    def test_csv_format_returns_parsed_rows(self, mock_get):
+        mock_response = MagicMock()
+        mock_response.status_code = 200
+        mock_response.raise_for_status = MagicMock()
+        mock_response.text = "epiweek,region,ili\n202001,taipei,2\n"
+        mock_get.return_value = mock_response
+
+        result = preview_nidss_flu_data(
+            [{"id": "taipei", "text": "Taipei"}],
+            "2020-01-01",
+            "2020-01-20",
+            None,
+            "csv",
+        )
+        self.assertEqual(
+            result, [[["epiweek", "region", "ili"], ["202001", "taipei", "2"]]]
+        )
+
+
+class PreviewNIDSSDengueDataTests(TestCase):
+    @patch("indicatorsets.utils.requests.get")
+    def test_csv_format_returns_parsed_rows(self, mock_get):
+        mock_response = MagicMock()
+        mock_response.status_code = 200
+        mock_response.raise_for_status = MagicMock()
+        mock_response.text = "epiweek,location,count\n202001,taipei,3\n"
+        mock_get.return_value = mock_response
+
+        result = preview_nidss_dengue_data(
+            [{"id": "taipei", "text": "Taipei"}],
+            "2020-01-01",
+            "2020-01-20",
+            None,
+            "csv",
+        )
+        self.assertEqual(
+            result, [[["epiweek", "location", "count"], ["202001", "taipei", "3"]]]
+        )
+
+
+class PreviewFlusurvDataTests(TestCase):
+    @patch("indicatorsets.utils.requests.get")
+    def test_csv_format_returns_parsed_rows(self, mock_get):
+        mock_response = MagicMock()
+        mock_response.status_code = 200
+        mock_response.raise_for_status = MagicMock()
+        mock_response.text = "epiweek,location,rate\n202001,CA,1.1\n"
+        mock_get.return_value = mock_response
+
+        result = preview_flusurv_data(
+            [{"id": "CA", "text": "CA"}],
+            "2020-01-01",
+            "2020-01-20",
+            None,
+            "csv",
+        )
+        self.assertEqual(
+            result, [[["epiweek", "location", "rate"], ["202001", "CA", "1.1"]]]
+        )
+
+
+class PreviewPophiveDataTests(TestCase):
+    @patch("indicatorsets.utils.requests.get")
+    def test_csv_format_returns_parsed_rows(self, mock_get):
+        mock_response = MagicMock()
+        mock_response.status_code = 200
+        mock_response.raise_for_status = MagicMock()
+        mock_response.text = "geo_value,value\nca,5\n"
+        mock_get.return_value = mock_response
+
+        result = preview_pophive_data(
+            [{"_endpoint": "pophive", "indicator": "sig"}],
+            "2020-01-01",
+            "2020-01-20",
+            [{"id": "ca", "geo_type": "state", "text": "CA"}],
+            [{"id": "all"}],
+            None,
+            "csv",
+        )
+        self.assertEqual(result, [[["geo_value", "value"], ["ca", "5"]]])
+
+    @patch("indicatorsets.utils.requests.get")
+    def test_json_format_returns_first_item(self, mock_get):
+        mock_response = MagicMock()
+        mock_response.status_code = 200
+        mock_response.raise_for_status = MagicMock()
+        mock_response.json.return_value = [{"value": 5}]
+        mock_get.return_value = mock_response
+
+        result = preview_pophive_data(
+            [{"_endpoint": "pophive", "indicator": "sig"}],
+            "2020-01-01",
+            "2020-01-20",
+            [{"id": "ca", "geo_type": "state", "text": "CA"}],
+            [{"id": "all"}],
+            None,
+            "json",
+        )
+        self.assertEqual(result, [{"value": 5}])
+
+
+class PreviewNwssDataTests(TestCase):
+    @patch("indicatorsets.utils.requests.get")
+    def test_csv_format_appends_parsed_rows(self, mock_get):
+        mock_response = MagicMock()
+        mock_response.status_code = 200
+        mock_response.raise_for_status = MagicMock()
+        mock_response.text = "geo_value,value\nsewershed_1,3\n"
+        mock_get.return_value = mock_response
+
+        result = preview_nwss_data(
+            [{"_endpoint": "nwss", "indicator": "sig"}],
+            "2020-01-01",
+            "2020-01-20",
+            ["sewershed_1"],
+            [{"id": "CDC_Biobot"}],
+            "source",
+            None,
+            "csv",
+        )
+        self.assertEqual(result, [[["geo_value", "value"], ["sewershed_1", "3"]]])
+
+    @patch("indicatorsets.utils.requests.get")
+    def test_json_format_returns_first_item(self, mock_get):
+        mock_response = MagicMock()
+        mock_response.status_code = 200
+        mock_response.raise_for_status = MagicMock()
+        mock_response.json.return_value = [{"value": 3}]
+        mock_get.return_value = mock_response
+
+        result = preview_nwss_data(
+            [{"_endpoint": "nwss", "indicator": "sig"}],
+            "2020-01-01",
+            "2020-01-20",
+            ["sewershed_1"],
+            [{"id": "CDC_Biobot"}],
+            "source",
+            None,
+            "json",
+        )
+        self.assertEqual(result, [{"value": 3}])
+
+
+class PreviewDataViewTests(TestCase):
+    def setUp(self):
+        self.client = Client()
+
+    @patch("indicatorsets.utils.requests.get")
+    def test_csv_format_returns_json_response_with_parsed_rows(self, mock_get):
+        mock_response = MagicMock()
+        mock_response.status_code = 200
+        mock_response.raise_for_status = MagicMock()
+        mock_response.text = "release_date,region,value\n2020-01-01,nat,1.5\n"
+        mock_get.return_value = mock_response
+
+        payload = {
+            "start_date": "2020-01-01",
+            "end_date": "2020-01-20",
+            "indicators": [],
+            "covidCastGeographicValues": {},
+            "fluviewLocations": [{"id": "nat", "text": "U.S. National"}],
+            "dataFormat": "csv",
+        }
+        response = self.client.post(
+            reverse("preview_data"),
+            data=json.dumps(payload),
+            content_type="application/json",
+        )
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response["Content-Type"], "application/json")
+        data = response.json()
+        self.assertEqual(
+            data, [[["release_date", "region", "value"], ["2020-01-01", "nat", "1.5"]]]
+        )
