@@ -3,10 +3,15 @@ import random
 from collections import defaultdict
 from datetime import datetime as dtime
 from textwrap import dedent
+from urllib.parse import urlencode
+import csv
+import io
+from itertools import islice
 
 import requests
 from django.conf import settings
 from django.core.cache import cache
+from django.urls import reverse
 from epiportal.utils import get_client_ip
 from epiweeks import Week
 from delphi_utils import get_structured_logger
@@ -321,7 +326,7 @@ def generate_nwss_dataset_epivis(indicator,
 
 
 def generate_covidcast_indicators_export_url(
-    indicators, start_date, end_date, covidcast_geos, api_key
+    indicators, start_date, end_date, covidcast_geos, api_key, data_format
 ):
     data_export_commands = []
     for indicator in indicators:
@@ -338,7 +343,9 @@ def generate_covidcast_indicators_export_url(
                         for value in values
                     ]
                 )
-                data_export_url = f"{settings.EPIDATA_URL}covidcast/csv?signal={indicator['data_source']}:{indicator['indicator']}&start_day={dates[0]}&end_day={dates[1]}&geo_type={type}&geo_values={geo_values}"
+                data_export_url = f"{settings.EPIDATA_URL}covidcast/csv?signal={indicator['data_source']}:{indicator['indicator']}&start_day={dates[0]}&end_day={dates[1]}&geo_type={type}&geo_values={geo_values}&format={data_format}"
+                if data_format == 'csv':
+                    data_export_url += f"&header=true"
                 if api_key:
                     data_export_url += f"&api_key={api_key}"
                 data_export_commands.append(
@@ -347,11 +354,13 @@ def generate_covidcast_indicators_export_url(
     return data_export_commands
 
 
-def generate_fluview_indicators_export_url(fluview_geos, start_date, end_date, api_key):
+def generate_fluview_indicators_export_url(fluview_geos, start_date, end_date, api_key, data_format):
     data_export_commands = []
     regions = ",".join([region["id"] for region in fluview_geos])
     date_from, date_to = get_epiweek(start_date, end_date)
-    data_export_url = f"{settings.EPIDATA_URL}fluview/?regions={regions}&epiweeks={date_from}-{date_to}&format=csv"
+    data_export_url = f"{settings.EPIDATA_URL}fluview/?regions={regions}&epiweeks={date_from}-{date_to}&format={data_format}"
+    if data_format == 'csv':
+        data_export_url += f"&header=true"
     if api_key:
         data_export_url += f"&api_key={api_key}"
     data_export_commands.append(
@@ -360,11 +369,13 @@ def generate_fluview_indicators_export_url(fluview_geos, start_date, end_date, a
     return data_export_commands
 
 
-def generate_nidss_flu_export_url(nidss_flu_geos, start_date, end_date, api_key):
+def generate_nidss_flu_export_url(nidss_flu_geos, start_date, end_date, api_key, data_format):
     data_export_commands = []
     regions = ",".join([region["id"] for region in nidss_flu_geos])
     date_from, date_to = get_epiweek(start_date, end_date)
-    data_export_url = f"{settings.EPIDATA_URL}nidss_flu/?regions={regions}&epiweeks={date_from}-{date_to}&format=csv"
+    data_export_url = f"{settings.EPIDATA_URL}nidss_flu/?regions={regions}&epiweeks={date_from}-{date_to}&format={data_format}"
+    if data_format == 'csv':
+        data_export_url += f"&header=true"
     if api_key:
         data_export_url += f"&api_key={api_key}"
     data_export_commands.append(
@@ -373,11 +384,13 @@ def generate_nidss_flu_export_url(nidss_flu_geos, start_date, end_date, api_key)
     return data_export_commands
 
 
-def generate_nidss_dengue_export_url(nidss_dengue_geos, start_date, end_date, api_key):
+def generate_nidss_dengue_export_url(nidss_dengue_geos, start_date, end_date, api_key, data_format):
     data_export_commands = []
     regions = ",".join([region["id"] for region in nidss_dengue_geos])
     date_from, date_to = get_epiweek(start_date, end_date)
-    data_export_url = f"{settings.EPIDATA_URL}nidss_dengue/?locations={regions}&epiweeks={date_from}-{date_to}&format=csv"  # fmt: skip
+    data_export_url = f"{settings.EPIDATA_URL}nidss_dengue/?locations={regions}&epiweeks={date_from}-{date_to}&format={data_format}"  # fmt: skip
+    if data_format == 'csv':
+        data_export_url += f"&header=true"
     if api_key:
         data_export_url += f"&api_key={api_key}"
     data_export_commands.append(
@@ -386,11 +399,13 @@ def generate_nidss_dengue_export_url(nidss_dengue_geos, start_date, end_date, ap
     return data_export_commands
 
 
-def generate_flusurv_export_url(flusurv_geos, start_date, end_date, api_key):
+def generate_flusurv_export_url(flusurv_geos, start_date, end_date, api_key, data_format):
     data_export_commands = []
     regions = ",".join([region["id"] for region in flusurv_geos])
     date_from, date_to = get_epiweek(start_date, end_date)
-    data_export_url = f"{settings.EPIDATA_URL}flusurv/?locations={regions}&epiweeks={date_from}-{date_to}&format=csv"  # fmt: skip
+    data_export_url = f"{settings.EPIDATA_URL}flusurv/?locations={regions}&epiweeks={date_from}-{date_to}&format={data_format}"  # fmt: skip
+    if data_format == 'csv':
+        data_export_url += "&header=true"
     if api_key:
         data_export_url += f"&api_key={api_key}"
     data_export_commands.append(
@@ -400,17 +415,34 @@ def generate_flusurv_export_url(flusurv_geos, start_date, end_date, api_key):
 
 
 def generate_pophive_export_url(
-    indicators, start_date, end_date, pophive_geos, pophive_age_group, api_key
+    indicators, start_date, end_date, pophive_geos, pophive_age_group, api_key, data_format
 ):
     data_export_commands = []
     for indicator in indicators:
         if indicator["_endpoint"] == "pophive":
             for geo in pophive_geos:
-                data_export_url = f"{settings.EPIDATA_V5_URL}viz/?source=pophive&signal={indicator['indicator']}&geo_type={geo['geo_type']}&geo_value={geo['id']}&time_values={start_date}:{end_date}&extra_keys=age_group:{pophive_age_group[0]['id']}&format=json&header=false"
+                data_export_url = f"{settings.EPIDATA_V5_URL}viz/?source=pophive&signal={indicator['indicator']}&geo_type={geo['geo_type']}&geo_value={geo['id']}&time_values={start_date}:{end_date}&extra_keys=age_group:{pophive_age_group[0]['id']}&format={data_format}"
+                if data_format == 'csv':
+                    data_export_url += "&header=true"
                 if api_key:
                     data_export_url += f"&api_key={api_key}"
+                filename = f"{indicator['indicator']}_{geo['geo_type']}_{geo['id']}.{data_format}"
+                download_params = {
+                    "source": "pophive",
+                    "signal": indicator["indicator"],
+                    "geo_type": geo["geo_type"],
+                    "geo_value": geo["id"],
+                    "time_values": f"{start_date}:{end_date}",
+                    "extra_keys": f"age_group:{pophive_age_group[0]['id']}",
+                    "format": data_format,
+                    "header": "true" if data_format == "csv" else "false",
+                    "filename": filename,
+                }
+                if api_key:
+                    download_params["api_key"] = api_key
+                download_url = f"{reverse('download_export')}?{urlencode(download_params)}"
                 data_export_commands.append(
-                    f'curl -o {indicator["indicator"]}_{geo["geo_type"]}_{geo["id"]}.json <a href="{data_export_url}">{data_export_url}</a>'
+                    f'curl -o {filename} <a href="{download_url}" download="{filename}">{data_export_url}</a>'
                 )
     return data_export_commands
 
@@ -422,23 +454,64 @@ def generate_nwss_export_url(
     nwss_geographic_value,
     nwss_source,
     nwss_fill_method,
-    api_key 
+    api_key,
+    data_format
 ):
     data_export_commands = []
     geo_value = ",".join(nwss_geographic_value)
     for indicator in indicators:
         for source in nwss_source:
             if indicator["_endpoint"] == "nwss":
-                data_export_url = f"{settings.EPIDATA_V5_URL}viz/?source=nwss&signal={indicator['indicator']}&geo_type=sewershed&geo_value={geo_value}&fill_method={nwss_fill_method}&time_values={start_date}:{end_date}&extra_keys=nwss_source:{source['id']}&format=json&header=false"
+                data_export_url = f"{settings.EPIDATA_V5_URL}viz/?source=nwss&signal={indicator['indicator']}&geo_type=sewershed&geo_value={geo_value}&fill_method={nwss_fill_method}&time_values={start_date}:{end_date}&extra_keys=nwss_source:{source['id']}&format={data_format}"
+                if data_format == 'csv':
+                    data_export_url += "&header=true"
                 if api_key:
                     data_export_url += f"&api_key={api_key}"
+                filename = f"{indicator['indicator']}_source_{source['id']}.{data_format}"
+                download_params = {
+                    "source": "nwss",
+                    "signal": indicator["indicator"],
+                    "geo_type": "sewershed",
+                    "geo_value": geo_value,
+                    "fill_method": nwss_fill_method,
+                    "time_values": f"{start_date}:{end_date}",
+                    "extra_keys": f"nwss_source:{source['id']}",
+                    "format": data_format,
+                    "header": "true" if data_format == "csv" else "false",
+                    "filename": filename,
+                }
+                if api_key:
+                    download_params["api_key"] = api_key
+                download_url = f"{reverse('download_export')}?{urlencode(download_params)}"
                 data_export_commands.append(
-                    f'curl -o {indicator["indicator"]}_source_{source["id"]}.json <a href="{data_export_url}">{data_export_url}</a>'
+                    f'curl -o {filename} <a href="{download_url}" download="{filename}">{data_export_url}</a>'
                 )
     return data_export_commands
 
 
-def preview_covidcast_data(indicators, start_date, end_date, covidcast_geos, api_key):
+def get_preview_data(response, data_format):
+    if data_format == 'json':
+        data = response.json()
+        if isinstance(data, dict) and "epidata" in data:
+            if data["epidata"]:
+                return {
+                    "epidata": data["epidata"][0],
+                    "result": data["result"],
+                    "message": data["message"],
+                }
+            return None
+        if isinstance(data, list):
+            return data[0] if data else None
+        return None
+    elif data_format == 'csv':
+        csv_file = io.StringIO(response.text)
+        csv_reader = csv.reader(csv_file, delimiter=',')
+        data = [row for row in islice(csv_reader, 5)]
+        return data
+
+
+
+def preview_covidcast_data(indicators, start_date, end_date, covidcast_geos, api_key, data_format):
     preview_data = []
     for indicator in indicators:
         if indicator["_endpoint"] == "covidcast":
@@ -465,6 +538,8 @@ def preview_covidcast_data(indicators, start_date, end_date, covidcast_geos, api
                     "geo_type": geo_type,
                     "geo_values": geo_values,
                     "api_key": api_key if api_key else settings.EPIDATA_API_KEY,
+                    "format": data_format,
+                    "header": "true" if data_format == "csv" else "false",
                 }
                 try:
                     response = requests.get(
@@ -479,19 +554,12 @@ def preview_covidcast_data(indicators, start_date, end_date, covidcast_geos, api
                         extra={"signal": indicator["indicator"], "geo_type": geo_type},
                     )
                     continue
-                data = response.json()
-                if len(data["epidata"]):
-                    preview_data.append(
-                        {
-                            "epidata": data["epidata"][0],
-                            "result": data["result"],
-                            "message": data["message"],
-                        }
-                    )
+
+                preview_data.append(get_preview_data(response, data_format))
     return preview_data
 
 
-def preview_fluview_data(fluview_geos, start_date, end_date, api_key):
+def preview_fluview_data(fluview_geos, start_date, end_date, api_key, data_format):
     preview_data = []
     regions = ",".join([region["id"] for region in fluview_geos])
     date_from, date_to = get_epiweek(start_date, end_date)
@@ -499,6 +567,8 @@ def preview_fluview_data(fluview_geos, start_date, end_date, api_key):
         "regions": regions,
         "epiweeks": f"{date_from}-{date_to}",
         "api_key": api_key if api_key else settings.EPIDATA_API_KEY,
+        "format": data_format,
+        "header": "true" if data_format == "csv" else "false",
     }
     try:
         response = requests.get(f"{settings.EPIDATA_URL}fluview", params=params, timeout=(5, 30))
@@ -508,19 +578,11 @@ def preview_fluview_data(fluview_geos, start_date, end_date, api_key):
     except requests.RequestException:
         logger.exception("Error getting fluview data", extra={"regions": regions})
         return preview_data
-    data = response.json()
-    if len(data["epidata"]):
-        preview_data.append(
-            {
-                "epidata": data["epidata"][0],
-                "result": data["result"],
-                "message": data["message"],
-            }
-        )
+    preview_data.append(get_preview_data(response, data_format))
     return preview_data
 
 
-def preview_nidss_flu_data(nidss_flu_geos, start_date, end_date, api_key):
+def preview_nidss_flu_data(nidss_flu_geos, start_date, end_date, api_key, data_format):
     preview_data = []
     regions = ",".join([region["id"] for region in nidss_flu_geos])
     date_from, date_to = get_epiweek(start_date, end_date)
@@ -528,6 +590,8 @@ def preview_nidss_flu_data(nidss_flu_geos, start_date, end_date, api_key):
         "regions": regions,
         "epiweeks": f"{date_from}-{date_to}",
         "api_key": api_key if api_key else settings.EPIDATA_API_KEY,
+        "format": data_format,
+        "header": "true" if data_format == "csv" else "false",
     }
     try:
         response = requests.get(f"{settings.EPIDATA_URL}nidss_flu", params=params, timeout=(5, 30))
@@ -537,19 +601,11 @@ def preview_nidss_flu_data(nidss_flu_geos, start_date, end_date, api_key):
     except requests.RequestException:
         logger.exception("Error getting nidss_flu data", extra={"regions": regions})
         return preview_data
-    data = response.json()
-    if len(data["epidata"]):
-        preview_data.append(
-            {
-                "epidata": data["epidata"][0],
-                "result": data["result"],
-                "message": data["message"],
-            }
-        )
+    preview_data.append(get_preview_data(response, data_format))
     return preview_data
 
 
-def preview_nidss_dengue_data(nidss_dengue_geos, start_date, end_date, api_key):
+def preview_nidss_dengue_data(nidss_dengue_geos, start_date, end_date, api_key, data_format):
     preview_data = []
     regions = ",".join([region["id"] for region in nidss_dengue_geos])
     date_from, date_to = get_epiweek(start_date, end_date)
@@ -557,6 +613,8 @@ def preview_nidss_dengue_data(nidss_dengue_geos, start_date, end_date, api_key):
         "locations": regions,
         "epiweeks": f"{date_from}-{date_to}",
         "api_key": api_key if api_key else settings.EPIDATA_API_KEY,
+        "format": data_format,
+        "header": "true" if data_format == "csv" else "false",
     }
     try:
         response = requests.get(f"{settings.EPIDATA_URL}nidss_dengue", params=params, timeout=(5, 30))
@@ -566,19 +624,11 @@ def preview_nidss_dengue_data(nidss_dengue_geos, start_date, end_date, api_key):
     except requests.RequestException:
         logger.exception("Error getting nidss_dengue data", extra={"regions": regions})
         return preview_data
-    data = response.json()
-    if len(data["epidata"]):
-        preview_data.append(
-            {
-                "epidata": data["epidata"][0],
-                "result": data["result"],
-                "message": data["message"],
-            }
-        )
+    preview_data.append(get_preview_data(response, data_format))
     return preview_data
 
 
-def preview_flusurv_data(flusurv_geos, start_date, end_date, api_key):
+def preview_flusurv_data(flusurv_geos, start_date, end_date, api_key, data_format):
     preview_data = []
     regions = ",".join([region["id"] for region in flusurv_geos])
     date_from, date_to = get_epiweek(start_date, end_date)
@@ -586,6 +636,8 @@ def preview_flusurv_data(flusurv_geos, start_date, end_date, api_key):
         "locations": regions,
         "epiweeks": f"{date_from}-{date_to}",
         "api_key": api_key if api_key else settings.EPIDATA_API_KEY,
+        "format": data_format,
+        "header": "true" if data_format == "csv" else "false",
     }
     try:
         response = requests.get(f"{settings.EPIDATA_URL}flusurv", params=params, timeout=(5, 30))
@@ -595,20 +647,12 @@ def preview_flusurv_data(flusurv_geos, start_date, end_date, api_key):
     except requests.RequestException:
         logger.exception("Error getting flusurv data", extra={"regions": regions})
         return preview_data
-    data = response.json()
-    if len(data["epidata"]):
-        preview_data.append(
-            {
-                "epidata": data["epidata"][0],
-                "result": data["result"],
-                "message": data["message"],
-            }
-        )
+    preview_data.append(get_preview_data(response, data_format))
     return preview_data
 
 
 def preview_pophive_data(
-    indicators, start_date, end_date, pophive_geos, pophive_age_group, api_key
+    indicators, start_date, end_date, pophive_geos, pophive_age_group, api_key, data_format
 ):
     preview_data = []
     for indicator in indicators:
@@ -621,8 +665,8 @@ def preview_pophive_data(
                     "geo_value": geo["id"],
                     "time_values": f"{start_date}:{end_date}",
                     "extra_keys": f"age_group:{pophive_age_group[0]['id']}",
-                    "format": "json",
-                    "header": "false",
+                    "format": data_format,
+                    "header": "true" if data_format == "csv" else "false",
                     "api_key": api_key if api_key else settings.EPIDATA_API_KEY,
                 }
                 try:
@@ -642,9 +686,7 @@ def preview_pophive_data(
                         },
                     )
                     continue
-                data = response.json()
-                if isinstance(data, list) and len(data):
-                    preview_data.append(data[0])
+                preview_data.append(get_preview_data(response, data_format))
     return preview_data
 
 
@@ -656,6 +698,7 @@ def preview_nwss_data(
     nwss_source,
     nwss_fill_method,
     api_key,
+    data_format
 ):
     preview_data = []
     geo_value = ",".join(nwss_geographic_value)
@@ -670,8 +713,8 @@ def preview_nwss_data(
                     "fill_method": nwss_fill_method,
                     "time_values": f"{start_date}:{end_date}",
                     "extra_keys": f"nwss_source:{source['id']}",
-                    "format": "json",
-                    "header": "false",
+                    "format": data_format,
+                    "header": "true" if data_format == "csv" else "false",
                     "api_key": api_key if api_key else settings.EPIDATA_API_KEY,
                     }                
                 try:
@@ -690,9 +733,7 @@ def preview_nwss_data(
                         },
                     )
                     continue
-                data = response.json()
-                if isinstance(data, list) and len(data):
-                    preview_data.append(data[0])
+                preview_data.append(get_preview_data(response, data_format))
     return preview_data
 
 

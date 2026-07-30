@@ -105,30 +105,32 @@ function handleModeChange(mode) {
     $('#modeSubmitResult').html('');
 
     var choose_dates = document.getElementsByName('choose_date');
+    var data_format_div = document.getElementsByName('data_format_div');
+
+    currentMode = mode;
 
     if (mode === 'epivis') {
-        currentMode = 'epivis';
         choose_dates.forEach((el) => {
             el.style.display = 'none';
-        });
-        $('#modeSubmitResult').html('');
-    } else if (mode === 'export') {
-        currentMode = 'export';
+        })
+    } else {
         choose_dates.forEach((el) => {
             el.style.display = 'flex';
-        });
-        $('#modeSubmitResult').html('');
-    } else if (mode === 'preview') {
-        currentMode = 'preview';
-        choose_dates.forEach((el) => {
-            el.style.display = 'flex';
-        });
-    } else if (mode === 'create_query_code') {
-        currentMode = 'create_query_code'
-        choose_dates.forEach((el) => {
-            el.style.display = 'flex';
-        });
+        })
     }
+
+    if (mode === 'export' || mode === 'preview') {
+        data_format_div.forEach((el) => {
+            el.style.display = 'flex';
+        })
+    } else {
+        data_format_div.forEach((el) => {
+            el.style.display = 'none';
+        })
+    }
+    $('#modeSubmitResult').html('');
+
+    
     document.getElementsByName("modes").forEach((el) => {
         if (currentMode === el.value) {
             el.checked = true;
