@@ -353,8 +353,7 @@ function showNwssFieldsSelect() {
 
 function showNonDelphiIndicatorSetsLocations() {
     if (indicatorHandler.nonCovidcastIndicatorSets.length > 0) {
-
-        var otherEndpointIndicatorSetsLocationMessage = `<div class="alert alert-info" data-mdb-alert-init role="alert">For indicator set(s) ${indicatorHandler.nonCovidcastIndicatorSets.join(", ")}, please use the Location menu(s) below:</div>`
+        var otherEndpointIndicatorSetsLocationMessage = `<div class="alert alert-info" data-mdb-alert-init role="alert">For indicator set(s): ${indicatorHandler.nonCovidcastIndicatorSets.join(", ")}, instead of the Location(s) menu, please use the Geographic Value menu below.</div>`
         $("#differentLocationNote").html(otherEndpointIndicatorSetsLocationMessage);
         showFluviewLocationSelect();
         showNIDSSFluLocationSelect();
