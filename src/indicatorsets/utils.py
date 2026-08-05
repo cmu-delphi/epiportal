@@ -31,6 +31,11 @@ INVALID_API_KEY_MESSAGE = (
     "delphi-support+privacy@andrew.cmu.edu to troubleshoot"
 )
 
+NO_DATA_MESSAGE = (
+    "No data found for the selected parameters. Try adjusting the date range, "
+    "indicators, or locations."
+)
+
 
 class InvalidApiKeyError(Exception):
     """Raised when an Epidata request returns 401 Unauthorized."""
@@ -331,7 +336,12 @@ def generate_covidcast_indicators_export_url(
     data_export_commands = []
     for indicator in indicators:
         if indicator["_endpoint"] == "covidcast":
-            dates = get_epiweek(start_date, end_date) if indicator["time_type"] == "week" else [start_date, end_date]  # fmt: skip
+            if indicator["time_type"] == "week":
+                dates = get_epiweek(start_date, end_date)
+                time_values = f"{dates[0]}-{dates[1]}"
+            else:
+                dates = [start_date, end_date]
+                time_values = f"{start_date}--{end_date}"
             for type, values in covidcast_geos.items():
                 geo_values = ",".join(
                     [
@@ -343,6 +353,21 @@ def generate_covidcast_indicators_export_url(
                         for value in values
                     ]
                 )
+                label = f"{indicator.get('display_name') or indicator['indicator']} ({type})"
+                check_params = {
+                    "time_type": indicator["time_type"],
+                    "time_values": time_values,
+                    "data_source": indicator["data_source"],
+                    "signal": indicator["indicator"],
+                    "geo_type": type,
+                    "geo_values": geo_values,
+                    "api_key": api_key if api_key else settings.EPIDATA_API_KEY,
+                }
+                if not has_epidata_results(f"{settings.EPIDATA_URL}covidcast", check_params):
+                    data_export_commands.append(
+                        f'<span class="text-muted">No data found for {label}. Export skipped.</span>'
+                    )
+                    continue
                 data_export_url = f"{settings.EPIDATA_URL}covidcast/csv?signal={indicator['data_source']}:{indicator['indicator']}&start_day={dates[0]}&end_day={dates[1]}&geo_type={type}&geo_values={geo_values}&format={data_format}"
                 if data_format == 'csv':
                     data_export_url += f"&header=true"
@@ -421,6 +446,21 @@ def generate_pophive_export_url(
     for indicator in indicators:
         if indicator["_endpoint"] == "pophive":
             for geo in pophive_geos:
+                label = f"{indicator.get('display_name') or indicator['indicator']} ({geo['text']})"
+                check_params = {
+                    "source": "pophive",
+                    "signal": indicator["indicator"],
+                    "geo_type": geo["geo_type"],
+                    "geo_value": geo["id"],
+                    "time_values": f"{start_date}:{end_date}",
+                    "extra_keys": f"age_group:{pophive_age_group[0]['id']}",
+                    "api_key": api_key if api_key else settings.EPIDATA_API_KEY,
+                }
+                if not has_epidata_results(f"{settings.EPIDATA_V5_URL}viz/", check_params):
+                    data_export_commands.append(
+                        f'<span class="text-muted">No data found for {label}. Export skipped.</span>'
+                    )
+                    continue
                 data_export_url = f"{settings.EPIDATA_V5_URL}viz/?source=pophive&signal={indicator['indicator']}&geo_type={geo['geo_type']}&geo_value={geo['id']}&time_values={start_date}:{end_date}&extra_keys=age_group:{pophive_age_group[0]['id']}&format={data_format}"
                 if data_format == 'csv':
                     data_export_url += "&header=true"
@@ -462,6 +502,25 @@ def generate_nwss_export_url(
     for indicator in indicators:
         for source in nwss_source:
             if indicator["_endpoint"] == "nwss":
+                label = (
+                    f"{indicator.get('display_name') or indicator['indicator']} "
+                    f"(source: {source['id']})"
+                )
+                check_params = {
+                    "source": "nwss",
+                    "signal": indicator["indicator"],
+                    "geo_type": "sewershed",
+                    "geo_value": geo_value,
+                    "fill_method": nwss_fill_method,
+                    "time_values": f"{start_date}:{end_date}",
+                    "extra_keys": f"nwss_source:{source['id']}",
+                    "api_key": api_key if api_key else settings.EPIDATA_API_KEY,
+                }
+                if not has_epidata_results(f"{settings.EPIDATA_V5_URL}viz/", check_params):
+                    data_export_commands.append(
+                        f'<span class="text-muted">No data found for {label}. Export skipped.</span>'
+                    )
+                    continue
                 data_export_url = f"{settings.EPIDATA_V5_URL}viz/?source=nwss&signal={indicator['indicator']}&geo_type=sewershed&geo_value={geo_value}&fill_method={nwss_fill_method}&time_values={start_date}:{end_date}&extra_keys=nwss_source:{source['id']}&format={data_format}"
                 if data_format == 'csv':
                     data_export_url += "&header=true"
@@ -489,7 +548,7 @@ def generate_nwss_export_url(
     return data_export_commands
 
 
-def get_preview_data(response, data_format):
+def get_preview_data(response, data_format, no_data_message=NO_DATA_MESSAGE):
     if data_format == 'json':
         data = response.json()
         if isinstance(data, dict) and "epidata" in data:
@@ -499,16 +558,36 @@ def get_preview_data(response, data_format):
                     "result": data["result"],
                     "message": data["message"],
                 }
-            return None
+            return {"message": no_data_message}
         if isinstance(data, list):
-            return data[0] if data else None
-        return None
+            return data[0] if data else {"message": no_data_message}
+        return {"message": no_data_message}
     elif data_format == 'csv':
         csv_file = io.StringIO(response.text)
         csv_reader = csv.reader(csv_file, delimiter=',')
         data = [row for row in islice(csv_reader, 5)]
+        if len(data) <= 1:
+            return {"message": no_data_message}
         return data
 
+
+def has_epidata_results(url, params):
+    """Check whether an Epidata endpoint has any results for the given params."""
+    check_params = {**params, "format": "json"}
+    try:
+        response = requests.get(url, params=check_params, timeout=(5, 30))
+        if response.status_code == 401:
+            raise InvalidApiKeyError(INVALID_API_KEY_MESSAGE)
+        response.raise_for_status()
+    except requests.RequestException:
+        logger.exception("Error checking data availability", extra={"url": url})
+        return False
+    data = response.json()
+    if isinstance(data, dict) and "epidata" in data:
+        return bool(data["epidata"])
+    if isinstance(data, list):
+        return bool(data)
+    return False
 
 
 def preview_covidcast_data(indicators, start_date, end_date, covidcast_geos, api_key, data_format):
@@ -555,7 +634,12 @@ def preview_covidcast_data(indicators, start_date, end_date, covidcast_geos, api
                     )
                     continue
 
-                preview_data.append(get_preview_data(response, data_format))
+                label = f"{indicator.get('display_name') or indicator['indicator']} ({geo_type})"
+                preview_data.append(
+                    get_preview_data(
+                        response, data_format, no_data_message=f"No data found for {label}."
+                    )
+                )
     return preview_data
 
 
@@ -686,7 +770,12 @@ def preview_pophive_data(
                         },
                     )
                     continue
-                preview_data.append(get_preview_data(response, data_format))
+                label = f"{indicator.get('display_name') or indicator['indicator']} ({geo['text']})"
+                preview_data.append(
+                    get_preview_data(
+                        response, data_format, no_data_message=f"No data found for {label}."
+                    )
+                )
     return preview_data
 
 
@@ -733,7 +822,15 @@ def preview_nwss_data(
                         },
                     )
                     continue
-                preview_data.append(get_preview_data(response, data_format))
+                label = (
+                    f"{indicator.get('display_name') or indicator['indicator']} "
+                    f"(source: {source['id']})"
+                )
+                preview_data.append(
+                    get_preview_data(
+                        response, data_format, no_data_message=f"No data found for {label}."
+                    )
+                )
     return preview_data
 
 

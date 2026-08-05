@@ -784,10 +784,17 @@ class IndicatorHandler {
         if (!Array.isArray(previewBlocks) || previewBlocks.length === 0) {
             return '<p>No preview data available.</p>';
         }
-        const tables = previewBlocks
-            .filter((rows) => Array.isArray(rows) && rows.length > 0)
-            .map((rows) => {
-                const [header, ...dataRows] = rows;
+        const blocks = previewBlocks
+            .filter((block) => block !== null && block !== undefined)
+            .map((block) => {
+                if (!Array.isArray(block)) {
+                    const message = (block && block.message) || 'No preview data available.';
+                    return `<p class="preview-no-data">${this.escapeHtml(message)}</p>`;
+                }
+                if (block.length === 0) {
+                    return '';
+                }
+                const [header, ...dataRows] = block;
                 const headerHtml = header
                     .map((cell) => `<th>${this.escapeHtml(cell)}</th>`)
                     .join('');
@@ -798,8 +805,9 @@ class IndicatorHandler {
                     <thead><tr>${headerHtml}</tr></thead>
                     <tbody>${bodyHtml}</tbody>
                 </table>`;
-            });
-        return tables.length ? tables.join('') : '<p>No preview data available.</p>';
+            })
+            .filter((html) => html !== '');
+        return blocks.length ? blocks.join('') : '<p>No preview data available.</p>';
     }
 
     previewData() {
