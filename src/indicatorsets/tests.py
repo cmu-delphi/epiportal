@@ -17,8 +17,12 @@ from indicatorsets.models import (
     USStateIndicatorSet,
 )
 from indicatorsets.utils import (
+    NO_DATA_MESSAGE,
     dict_to_geo_string,
+    generate_covidcast_indicators_export_url,
     generate_epivis_custom_title,
+    generate_nwss_export_url,
+    generate_pophive_export_url,
     generate_random_color,
     get_epiweek,
     get_grouped_original_data_provider_choices,
@@ -27,6 +31,7 @@ from indicatorsets.utils import (
     group_by_property,
     list_to_dict,
     parse_original_data_provider_ids,
+    preview_covidcast_data,
     preview_flusurv_data,
     preview_fluview_data,
     preview_nidss_dengue_data,
@@ -504,20 +509,20 @@ class GetPreviewDataTests(TestCase):
             result, {"epidata": {"value": 1}, "result": 1, "message": "success"}
         )
 
-    def test_json_epidata_shape_empty_returns_none(self):
+    def test_json_epidata_shape_empty_returns_no_data_message(self):
         response = MagicMock()
         response.json.return_value = {"epidata": [], "result": -2, "message": "no results"}
-        self.assertIsNone(get_preview_data(response, "json"))
+        self.assertEqual(get_preview_data(response, "json"), {"message": NO_DATA_MESSAGE})
 
     def test_json_list_shape_returns_first_item(self):
         response = MagicMock()
         response.json.return_value = [{"value": 1}, {"value": 2}]
         self.assertEqual(get_preview_data(response, "json"), {"value": 1})
 
-    def test_json_list_shape_empty_returns_none(self):
+    def test_json_list_shape_empty_returns_no_data_message(self):
         response = MagicMock()
         response.json.return_value = []
-        self.assertIsNone(get_preview_data(response, "json"))
+        self.assertEqual(get_preview_data(response, "json"), {"message": NO_DATA_MESSAGE})
 
     def test_csv_returns_first_five_rows(self):
         response = MagicMock()
@@ -527,6 +532,96 @@ class GetPreviewDataTests(TestCase):
         self.assertEqual(len(result), 5)
         self.assertEqual(result[0], ["geo_value", "value"])
         self.assertEqual(result[1], ["pa", "0"])
+
+    def test_csv_header_only_returns_no_data_message(self):
+        response = MagicMock()
+        response.text = "geo_value,value"
+        self.assertEqual(get_preview_data(response, "csv"), {"message": NO_DATA_MESSAGE})
+
+    def test_csv_empty_returns_no_data_message(self):
+        response = MagicMock()
+        response.text = ""
+        self.assertEqual(get_preview_data(response, "csv"), {"message": NO_DATA_MESSAGE})
+
+    def test_json_empty_uses_custom_no_data_message(self):
+        response = MagicMock()
+        response.json.return_value = {"epidata": [], "result": -2, "message": "no results"}
+        result = get_preview_data(response, "json", no_data_message="No data for signal X.")
+        self.assertEqual(result, {"message": "No data for signal X."})
+
+    def test_csv_empty_uses_custom_no_data_message(self):
+        response = MagicMock()
+        response.text = "geo_value,value"
+        result = get_preview_data(response, "csv", no_data_message="No data for signal X.")
+        self.assertEqual(result, {"message": "No data for signal X."})
+
+
+class PreviewCovidcastDataTests(TestCase):
+    @patch("indicatorsets.utils.requests.get")
+    def test_no_data_message_names_indicator_and_geo_type(self, mock_get):
+        mock_response = MagicMock()
+        mock_response.status_code = 200
+        mock_response.raise_for_status = MagicMock()
+        mock_response.json.return_value = {"epidata": [], "result": -2, "message": "no results"}
+        mock_get.return_value = mock_response
+
+        result = preview_covidcast_data(
+            [
+                {
+                    "_endpoint": "covidcast",
+                    "data_source": "src",
+                    "indicator": "sig",
+                    "time_type": "day",
+                    "display_name": "My Signal",
+                }
+            ],
+            "2020-01-01",
+            "2020-01-20",
+            {"state": [{"id": "state:pa", "geoType": "state"}]},
+            None,
+            "json",
+        )
+        self.assertEqual(result, [{"message": "No data found for My Signal (state)."}])
+
+    @patch("indicatorsets.utils.requests.get")
+    def test_shows_data_for_available_geo_and_message_for_unavailable_geo(self, mock_get):
+        def fake_get(url, params=None, timeout=None):
+            response = MagicMock()
+            response.status_code = 200
+            response.raise_for_status = MagicMock()
+            if params["geo_type"] == "state":
+                response.json.return_value = {
+                    "epidata": [{"value": 1}],
+                    "result": 1,
+                    "message": "success",
+                }
+            else:
+                response.json.return_value = {"epidata": [], "result": -2, "message": "no results"}
+            return response
+
+        mock_get.side_effect = fake_get
+
+        result = preview_covidcast_data(
+            [
+                {
+                    "_endpoint": "covidcast",
+                    "data_source": "src",
+                    "indicator": "sig",
+                    "time_type": "day",
+                    "display_name": "My Signal",
+                }
+            ],
+            "2020-01-01",
+            "2020-01-20",
+            {
+                "state": [{"id": "state:pa", "geoType": "state"}],
+                "county": [{"id": "county:42003", "geoType": "county"}],
+            },
+            None,
+            "json",
+        )
+        self.assertIn({"epidata": {"value": 1}, "result": 1, "message": "success"}, result)
+        self.assertIn({"message": "No data found for My Signal (county)."}, result)
 
 
 class PreviewFluviewDataTests(TestCase):
@@ -673,6 +768,25 @@ class PreviewPophiveDataTests(TestCase):
         )
         self.assertEqual(result, [{"value": 5}])
 
+    @patch("indicatorsets.utils.requests.get")
+    def test_no_data_message_names_indicator_and_geo(self, mock_get):
+        mock_response = MagicMock()
+        mock_response.status_code = 200
+        mock_response.raise_for_status = MagicMock()
+        mock_response.json.return_value = []
+        mock_get.return_value = mock_response
+
+        result = preview_pophive_data(
+            [{"_endpoint": "pophive", "indicator": "sig", "display_name": "My Signal"}],
+            "2020-01-01",
+            "2020-01-20",
+            [{"id": "ca", "geo_type": "state", "text": "CA"}],
+            [{"id": "all"}],
+            None,
+            "json",
+        )
+        self.assertEqual(result, [{"message": "No data found for My Signal (CA)."}])
+
 
 class PreviewNwssDataTests(TestCase):
     @patch("indicatorsets.utils.requests.get")
@@ -715,6 +829,28 @@ class PreviewNwssDataTests(TestCase):
         )
         self.assertEqual(result, [{"value": 3}])
 
+    @patch("indicatorsets.utils.requests.get")
+    def test_no_data_message_names_indicator_and_source(self, mock_get):
+        mock_response = MagicMock()
+        mock_response.status_code = 200
+        mock_response.raise_for_status = MagicMock()
+        mock_response.json.return_value = []
+        mock_get.return_value = mock_response
+
+        result = preview_nwss_data(
+            [{"_endpoint": "nwss", "indicator": "sig", "display_name": "My Signal"}],
+            "2020-01-01",
+            "2020-01-20",
+            ["sewershed_1"],
+            [{"id": "CDC_Biobot"}],
+            "source",
+            None,
+            "json",
+        )
+        self.assertEqual(
+            result, [{"message": "No data found for My Signal (source: CDC_Biobot)."}]
+        )
+
 
 class PreviewDataViewTests(TestCase):
     def setUp(self):
@@ -747,3 +883,298 @@ class PreviewDataViewTests(TestCase):
         self.assertEqual(
             data, [[["release_date", "region", "value"], ["2020-01-01", "nat", "1.5"]]]
         )
+
+    @patch("indicatorsets.utils.requests.get")
+    def test_csv_format_returns_no_data_message_when_no_rows(self, mock_get):
+        mock_response = MagicMock()
+        mock_response.status_code = 200
+        mock_response.raise_for_status = MagicMock()
+        mock_response.text = "release_date,region,value"
+        mock_get.return_value = mock_response
+
+        payload = {
+            "start_date": "2020-01-01",
+            "end_date": "2020-01-20",
+            "indicators": [],
+            "covidCastGeographicValues": {},
+            "fluviewLocations": [{"id": "nat", "text": "U.S. National"}],
+            "dataFormat": "csv",
+        }
+        response = self.client.post(
+            reverse("preview_data"),
+            data=json.dumps(payload),
+            content_type="application/json",
+        )
+        self.assertEqual(response.status_code, 200)
+        data = response.json()
+        self.assertEqual(data, [{"message": NO_DATA_MESSAGE}])
+
+    def test_no_sources_selected_returns_no_data_message(self):
+        payload = {
+            "start_date": "2020-01-01",
+            "end_date": "2020-01-20",
+            "indicators": [],
+            "covidCastGeographicValues": {},
+            "dataFormat": "json",
+        }
+        response = self.client.post(
+            reverse("preview_data"),
+            data=json.dumps(payload),
+            content_type="application/json",
+        )
+        self.assertEqual(response.status_code, 200)
+        data = response.json()
+        self.assertEqual(data, [{"message": NO_DATA_MESSAGE}])
+
+
+class GenerateCovidcastIndicatorsExportUrlTests(TestCase):
+    @patch("indicatorsets.utils.requests.get")
+    def test_skips_indicator_with_no_data(self, mock_get):
+        mock_response = MagicMock()
+        mock_response.status_code = 200
+        mock_response.raise_for_status = MagicMock()
+        mock_response.json.return_value = {"epidata": [], "result": -2, "message": "no results"}
+        mock_get.return_value = mock_response
+
+        result = generate_covidcast_indicators_export_url(
+            [
+                {
+                    "_endpoint": "covidcast",
+                    "data_source": "src",
+                    "indicator": "sig",
+                    "time_type": "day",
+                    "display_name": "My Signal",
+                }
+            ],
+            "2020-01-01",
+            "2020-01-20",
+            {"state": [{"id": "state:pa", "geoType": "state"}]},
+            None,
+            "csv",
+        )
+        self.assertEqual(len(result), 1)
+        self.assertIn("No data found for My Signal (state)", result[0])
+        self.assertNotIn("wget", result[0])
+
+    @patch("indicatorsets.utils.requests.get")
+    def test_includes_export_command_when_data_exists(self, mock_get):
+        mock_response = MagicMock()
+        mock_response.status_code = 200
+        mock_response.raise_for_status = MagicMock()
+        mock_response.json.return_value = {
+            "epidata": [{"value": 1}],
+            "result": 1,
+            "message": "success",
+        }
+        mock_get.return_value = mock_response
+
+        result = generate_covidcast_indicators_export_url(
+            [
+                {
+                    "_endpoint": "covidcast",
+                    "data_source": "src",
+                    "indicator": "sig",
+                    "time_type": "day",
+                    "display_name": "My Signal",
+                }
+            ],
+            "2020-01-01",
+            "2020-01-20",
+            {"state": [{"id": "state:pa", "geoType": "state"}]},
+            None,
+            "csv",
+        )
+        self.assertEqual(len(result), 1)
+        self.assertIn("wget", result[0])
+        self.assertIn("covidcast/csv", result[0])
+
+    @patch("indicatorsets.utils.requests.get")
+    def test_mixed_indicators_only_skips_the_one_without_data(self, mock_get):
+        def fake_get(url, params=None, timeout=None):
+            response = MagicMock()
+            response.status_code = 200
+            response.raise_for_status = MagicMock()
+            if params["signal"] == "has_data":
+                response.json.return_value = {
+                    "epidata": [{"value": 1}],
+                    "result": 1,
+                    "message": "success",
+                }
+            else:
+                response.json.return_value = {"epidata": [], "result": -2, "message": "no results"}
+            return response
+
+        mock_get.side_effect = fake_get
+
+        indicators = [
+            {
+                "_endpoint": "covidcast",
+                "data_source": "src",
+                "indicator": "has_data",
+                "time_type": "day",
+                "display_name": "Has Data",
+            },
+            {
+                "_endpoint": "covidcast",
+                "data_source": "src",
+                "indicator": "no_data",
+                "time_type": "day",
+                "display_name": "No Data",
+            },
+        ]
+        result = generate_covidcast_indicators_export_url(
+            indicators,
+            "2020-01-01",
+            "2020-01-20",
+            {"state": [{"id": "state:pa", "geoType": "state"}]},
+            None,
+            "csv",
+        )
+        self.assertEqual(len(result), 2)
+        self.assertTrue(any("wget" in r and "has_data" in r for r in result))
+        self.assertTrue(any("No data found for No Data" in r for r in result))
+
+
+class GeneratePophiveExportUrlTests(TestCase):
+    @patch("indicatorsets.utils.requests.get")
+    def test_skips_indicator_with_no_data(self, mock_get):
+        mock_response = MagicMock()
+        mock_response.status_code = 200
+        mock_response.raise_for_status = MagicMock()
+        mock_response.json.return_value = []
+        mock_get.return_value = mock_response
+
+        result = generate_pophive_export_url(
+            [
+                {
+                    "_endpoint": "pophive",
+                    "indicator": "sig",
+                    "display_name": "My Signal",
+                }
+            ],
+            "2020-01-01",
+            "2020-01-20",
+            [{"id": "ca", "geo_type": "state", "text": "CA"}],
+            [{"id": "all"}],
+            None,
+            "csv",
+        )
+        self.assertEqual(len(result), 1)
+        self.assertIn("No data found for My Signal (CA)", result[0])
+        self.assertNotIn("curl", result[0])
+
+    @patch("indicatorsets.utils.requests.get")
+    def test_includes_export_command_when_data_exists(self, mock_get):
+        mock_response = MagicMock()
+        mock_response.status_code = 200
+        mock_response.raise_for_status = MagicMock()
+        mock_response.json.return_value = [{"value": 5}]
+        mock_get.return_value = mock_response
+
+        result = generate_pophive_export_url(
+            [
+                {
+                    "_endpoint": "pophive",
+                    "indicator": "sig",
+                    "display_name": "My Signal",
+                }
+            ],
+            "2020-01-01",
+            "2020-01-20",
+            [{"id": "ca", "geo_type": "state", "text": "CA"}],
+            [{"id": "all"}],
+            None,
+            "csv",
+        )
+        self.assertEqual(len(result), 1)
+        self.assertIn("curl", result[0])
+
+
+class GenerateNwssExportUrlTests(TestCase):
+    @patch("indicatorsets.utils.requests.get")
+    def test_skips_indicator_with_no_data(self, mock_get):
+        mock_response = MagicMock()
+        mock_response.status_code = 200
+        mock_response.raise_for_status = MagicMock()
+        mock_response.json.return_value = []
+        mock_get.return_value = mock_response
+
+        result = generate_nwss_export_url(
+            [
+                {
+                    "_endpoint": "nwss",
+                    "indicator": "sig",
+                    "display_name": "My Signal",
+                }
+            ],
+            "2020-01-01",
+            "2020-01-20",
+            ["sewershed_1"],
+            [{"id": "CDC_Biobot"}],
+            "source",
+            None,
+            "csv",
+        )
+        self.assertEqual(len(result), 1)
+        self.assertIn("No data found for My Signal (source: CDC_Biobot)", result[0])
+        self.assertNotIn("curl", result[0])
+
+    @patch("indicatorsets.utils.requests.get")
+    def test_includes_export_command_when_data_exists(self, mock_get):
+        mock_response = MagicMock()
+        mock_response.status_code = 200
+        mock_response.raise_for_status = MagicMock()
+        mock_response.json.return_value = [{"value": 3}]
+        mock_get.return_value = mock_response
+
+        result = generate_nwss_export_url(
+            [
+                {
+                    "_endpoint": "nwss",
+                    "indicator": "sig",
+                    "display_name": "My Signal",
+                }
+            ],
+            "2020-01-01",
+            "2020-01-20",
+            ["sewershed_1"],
+            [{"id": "CDC_Biobot"}],
+            "source",
+            None,
+            "csv",
+        )
+        self.assertEqual(len(result), 1)
+        self.assertIn("curl", result[0])
+
+
+class ExportDataViewTests(TestCase):
+    def setUp(self):
+        self.client = Client()
+
+    @patch("indicatorsets.utils.requests.get")
+    def test_returns_401_for_invalid_api_key(self, mock_get):
+        mock_response = MagicMock()
+        mock_response.status_code = 401
+        mock_get.return_value = mock_response
+
+        payload = {
+            "start_date": "2020-01-01",
+            "end_date": "2020-01-20",
+            "indicators": [
+                {
+                    "_endpoint": "covidcast",
+                    "data_source": "src",
+                    "indicator": "sig",
+                    "time_type": "day",
+                    "display_name": "My Signal",
+                }
+            ],
+            "covidCastGeographicValues": {"state": [{"id": "state:pa", "geoType": "state"}]},
+            "dataFormat": "csv",
+        }
+        response = self.client.post(
+            reverse("export"),
+            data=json.dumps(payload),
+            content_type="application/json",
+        )
+        self.assertEqual(response.status_code, 401)

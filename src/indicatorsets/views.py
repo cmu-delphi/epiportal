@@ -1,3 +1,4 @@
+from delphi_utils.logger import LoggerThread
 import base64
 import json
 import sys
@@ -21,6 +22,7 @@ from indicatorsets.forms import IndicatorSetFilterForm
 from indicatorsets.models import ColumnDescription, FilterDescription, IndicatorSet
 from indicatorsets.utils import (
     InvalidApiKeyError,
+    NO_DATA_MESSAGE,
     generate_covidcast_dataset_epivis,
     generate_covidcast_indicators_export_url,
     generate_flusurv_dataset_epivis,
@@ -477,59 +479,66 @@ def generate_export_data_url(request):
 
         log_form_stats(request, data, "export")
         log_form_data(request, data, "export")
-        data_export_commands.extend(
-            generate_covidcast_indicators_export_url(
-                indicators, start_date, end_date, covidcast_geos, api_key, data_format
-            )
-        )
-        if fluview_geos:
+        try:
             data_export_commands.extend(
-                generate_fluview_indicators_export_url(
-                    fluview_geos, start_date, end_date, api_key, data_format
+                generate_covidcast_indicators_export_url(
+                    indicators, start_date, end_date, covidcast_geos, api_key, data_format
                 )
             )
-        if nidss_flu_locations:
-            data_export_commands.extend(
-                generate_nidss_flu_export_url(
-                    nidss_flu_locations, start_date, end_date, api_key, data_format
+            if fluview_geos:
+                data_export_commands.extend(
+                    generate_fluview_indicators_export_url(
+                        fluview_geos, start_date, end_date, api_key, data_format
+                    )
                 )
-            )
-        if nidss_dengue_locations:
-            data_export_commands.extend(
-                generate_nidss_dengue_export_url(
-                    nidss_dengue_locations, start_date, end_date, api_key, data_format
+            if nidss_flu_locations:
+                data_export_commands.extend(
+                    generate_nidss_flu_export_url(
+                        nidss_flu_locations, start_date, end_date, api_key, data_format
+                    )
                 )
-            )
-        if flusurv_locations:
-            data_export_commands.extend(
-                generate_flusurv_export_url(
-                    flusurv_locations, start_date, end_date, api_key, data_format
+            if nidss_dengue_locations:
+                data_export_commands.extend(
+                    generate_nidss_dengue_export_url(
+                        nidss_dengue_locations, start_date, end_date, api_key, data_format
+                    )
                 )
-            )
-        if pophive_geos:
-            data_export_commands.extend(
-                generate_pophive_export_url(
-                    indicators,
-                    start_date,
-                    end_date,
-                    pophive_geos,
-                    pophive_age_group,
-                    api_key,
-                    data_format
+            if flusurv_locations:
+                data_export_commands.extend(
+                    generate_flusurv_export_url(
+                        flusurv_locations, start_date, end_date, api_key, data_format
+                    )
                 )
-            )
-        if nwss_geographic_value:
-            data_export_commands.extend(
-                generate_nwss_export_url(
-                    indicators,
-                    start_date,
-                    end_date,
-                    nwss_geographic_value,
-                    nwss_source,
-                    nwss_fill_method,
-                    api_key,
-                    data_format
+            if pophive_geos:
+                data_export_commands.extend(
+                    generate_pophive_export_url(
+                        indicators,
+                        start_date,
+                        end_date,
+                        pophive_geos,
+                        pophive_age_group,
+                        api_key,
+                        data_format
+                    )
                 )
+            if nwss_geographic_value:
+                data_export_commands.extend(
+                    generate_nwss_export_url(
+                        indicators,
+                        start_date,
+                        end_date,
+                        nwss_geographic_value,
+                        nwss_source,
+                        nwss_fill_method,
+                        api_key,
+                        data_format
+                    )
+                )
+        except InvalidApiKeyError as e:
+            return JsonResponse(
+                {"epidata": [], "result": -2, "message": str(e)},
+                safe=False,
+                status=401,
             )
         data_export_block = data_export_block.format("<br>".join(data_export_commands))
         response = {
@@ -620,6 +629,8 @@ def preview_data(request):
                 safe=False,
                 status=401,
             )
+        if not preview_data:
+            preview_data = [{"message": NO_DATA_MESSAGE}]
         return JsonResponse(preview_data, safe=False)
 
 
@@ -964,6 +975,7 @@ def get_nwss_county_mapping(request):
                 )
                 nwss_county_mapping = sorted(nwss_county_mapping, key=lambda x: x["text"])
             cache.set("nwss_county_mapping", nwss_county_mapping, 60 * 60 * 24)
+            logger.info(f"Fetched: {len(nwss_county_mapping)} locations.")
         except requests.RequestException:
             logger.exception("Error getting nwss county mapping")
     return JsonResponse({"nwss_county_mapping": nwss_county_mapping})
