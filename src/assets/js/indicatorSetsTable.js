@@ -59,7 +59,7 @@ var table = new DataTable("#indicatorSetsTable", {
         { data: "reporting_cadence" },  // Reporting Cadence
         { data: "reporting_lag" },  // Reporting Lag
         { data: "revision_cadence" }, // Revision Cadence
-        { data: "demographic_scope" }, // Population
+        // { data: "demographic_scope" }, // Population
         { data: "demographic_granularity" }, // Population Stratifiers
         {
             data: "severity_pyramid_rungs",
@@ -72,22 +72,22 @@ var table = new DataTable("#indicatorSetsTable", {
             }
         }, // Surveillance Categories
         { data: "original_data_provider" }, // Original Data Provider
-        { data: "preprocessing_description" }, // Pre-processing
-        { data: "censoring" }, // Censoring
-        { data: "missingness" }, // Missingness
+        // { data: "preprocessing_description" }, // Pre-processing
+        // { data: "censoring" }, // Censoring
+        // { data: "missingness" }, // Missingness
         { data: "delphi_hosted" }, // Hosted by Delphi?
-        { data: "dua_required" }, // DUA required?
-        { data: "license" }, // Data Use Terms
-        {
-            data: "documentation_link",
-            render: function (data, type, row) {
-                if (data) {
-                    return `<a href="${data}" target="_blank">${data}</a>`;
-                } else {
-                    return '';
-                }
-            }
-        }, // Documentation
+        // { data: "dua_required" }, // DUA required?
+        // { data: "license" }, // Data Use Terms
+        // {
+        //     data: "documentation_link",
+        //     render: function (data, type, row) {
+        //         if (data) {
+        //             return `<a href="${data}" target="_blank">${data}</a>`;
+        //         } else {
+        //             return '';
+        //         }
+        //     }
+        // }, // Documentation
     ],
     fixedHeader: true,
     paging: false,
