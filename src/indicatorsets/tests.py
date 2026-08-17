@@ -18,7 +18,6 @@ from indicatorsets.models import (
 )
 from indicatorsets.utils import (
     NO_DATA_MESSAGE,
-    dict_to_geo_string,
     generate_covidcast_indicators_export_url,
     generate_epivis_custom_title,
     generate_nwss_export_url,
@@ -26,6 +25,8 @@ from indicatorsets.utils import (
     generate_random_color,
     get_epiweek,
     get_grouped_original_data_provider_choices,
+    get_indicators_based_on_geo_epidata,
+    get_indicators_based_on_geo_epidata_v5,
     get_list_of_indicators_filtered_by_geo,
     get_preview_data,
     group_by_property,
@@ -55,10 +56,6 @@ class IndicatorsetsUtilsTests(TestCase):
         result = list_to_dict(["state:pa", "state:ny", "county:42003"])
         self.assertEqual(result["state"], ["pa", "ny"])
         self.assertEqual(result["county"], ["42003"])
-
-    def test_dict_to_geo_string(self):
-        geo_dict = {"state": ["pa", "ny"], "county": ["42003"]}
-        self.assertEqual(dict_to_geo_string(geo_dict), "state:pa,ny;county:42003")
 
     def test_group_by_property(self):
         items = [
@@ -478,22 +475,76 @@ class OriginalDataProviderUtilsTests(TestCase):
 
 class GeoCoverageUtilsTests(TestCase):
     @patch("indicatorsets.utils.requests.get")
-    def test_get_list_of_indicators_filtered_by_geo_returns_epidata(self, mock_get):
+    def test_get_indicators_based_on_geo_epidata_returns_epidata_items(
+        self, mock_get
+    ):
         mock_response = MagicMock()
         mock_response.raise_for_status = MagicMock()
         mock_response.json.return_value = {
-            "epidata": [{"source": "src", "signal": "sig"}],
-            "result": 1,
+            "epidata": [{"source": "src", "signal": "sig"}]
         }
         mock_get.return_value = mock_response
 
+        result = get_indicators_based_on_geo_epidata({"state": ["pa"]})
+        self.assertEqual(result, [{"source": "src", "signal": "sig"}])
+
+    @patch("indicatorsets.utils.requests.get", side_effect=requests.RequestException)
+    def test_get_indicators_based_on_geo_epidata_handles_errors(self, _mock_get):
+        result = get_indicators_based_on_geo_epidata({"state": ["pa"]})
+        self.assertEqual(result, [])
+
+    @patch("indicatorsets.utils.requests.get")
+    def test_get_indicators_based_on_geo_epidata_v5_returns_values_items(
+        self, mock_get
+    ):
+        mock_response = MagicMock()
+        mock_response.raise_for_status = MagicMock()
+        mock_response.json.return_value = {
+            "values": [{"source": "src", "signal": "sig"}]
+        }
+        mock_get.return_value = mock_response
+
+        result = get_indicators_based_on_geo_epidata_v5({"state": ["PA"]})
+        self.assertEqual(result, [{"source": "src", "signal": "sig"}])
+        self.assertEqual(mock_get.call_args.kwargs["params"]["geo_value"], "pa")
+
+    @patch("indicatorsets.utils.requests.get", side_effect=requests.RequestException)
+    def test_get_indicators_based_on_geo_epidata_v5_handles_errors(self, _mock_get):
+        result = get_indicators_based_on_geo_epidata_v5({"state": ["pa"]})
+        self.assertEqual(result, [])
+
+    @patch("indicatorsets.utils.requests.get")
+    def test_get_list_of_indicators_filtered_by_geo_combines_both_sources(
+        self, mock_get
+    ):
+        def fake_get(url, **kwargs):
+            response = MagicMock()
+            response.raise_for_status = MagicMock()
+            if "geo_coverage" in url:
+                response.json.return_value = {
+                    "epidata": [{"source": "epidata_src", "signal": "epidata_sig"}]
+                }
+            else:
+                response.json.return_value = {
+                    "values": [{"source": "v5_src", "signal": "v5_sig"}]
+                }
+            return response
+
+        mock_get.side_effect = fake_get
+
         result = get_list_of_indicators_filtered_by_geo("['state:pa']")
-        self.assertEqual(result["epidata"][0]["signal"], "sig")
+        self.assertEqual(
+            result,
+            [
+                {"source": "epidata_src", "signal": "epidata_sig"},
+                {"source": "v5_src", "signal": "v5_sig"},
+            ],
+        )
 
     @patch("indicatorsets.utils.requests.get", side_effect=requests.RequestException)
     def test_get_list_of_indicators_filtered_by_geo_handles_errors(self, _mock_get):
         result = get_list_of_indicators_filtered_by_geo("['state:pa']")
-        self.assertEqual(result, {"epidata": [], "result": -1})
+        self.assertEqual(result, [])
 
 
 class GetPreviewDataTests(TestCase):

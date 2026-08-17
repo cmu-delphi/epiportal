@@ -222,11 +222,11 @@ class IndicatorSetListView(ListView):
 
     def get_grouped_geographic_granularities(self):
         geo_units = GeographyUnit.objects.prefetch_related("geo_level").values(
-            "geo_level__name", "id", "display_name", "geo_level__display_name"
+            "geo_level__name", "id", "display_name", "geo_level__display_name", "geo_id"
         )
         geographic_granularities = [
             {
-                "id": f"{geo_unit['geo_level__name']}:{geo_unit['id']}",
+                "id": f"{geo_unit['geo_level__name']}:{geo_unit['geo_id']}",
                 "geoType": geo_unit["geo_level__name"],
                 "text": geo_unit["display_name"],
                 "geoTypeDisplayName": geo_unit["geo_level__display_name"],
