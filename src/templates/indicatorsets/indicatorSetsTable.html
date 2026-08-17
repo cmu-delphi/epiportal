@@ -171,22 +171,6 @@
                     </a>
                 </th>
                 <th class="text-center">
-                    Population
-                    <a
-                        tabindex="0"
-                        type="button"
-                        class="info-button filter-description-popover"
-                        data-mdb-container="body"
-                        data-mdb-ripple-init
-                        data-mdb-popover-init
-                        data-mdb-trigger="hover"
-                        data-mdb-placement="right"
-                        data-mdb-content="{{ columns_descriptions|dict_get:'population' }}"
-                    >
-                        <i class="far fa-circle-question"></i>
-                    </a>
-                </th>
-                <th class="text-center">
                     Population Stratifiers
                     <a
                         tabindex="0"
@@ -234,88 +218,7 @@
                         <i class="far fa-circle-question"></i>
                     </a>
                 </th>
-                <th class="min-w-300 text-center">
-                    Pre-processing
-                    <a
-                        tabindex="0"
-                        type="button"
-                        class="info-button filter-description-popover"
-                        data-mdb-container="body"
-                        data-mdb-ripple-init
-                        data-mdb-popover-init
-                        data-mdb-trigger="hover"
-                        data-mdb-placement="right"
-                        data-mdb-content="{{ columns_descriptions|dict_get:'pre_processing' }}"
-                    >
-                        <i class="far fa-circle-question"></i>
-                    </a>
-                </th>
-                <th class="min-w-300 text-center">
-                    Censoring
-                    <a
-                        tabindex="0"
-                        type="button"
-                        class="info-button filter-description-popover"
-                        data-mdb-container="body"
-                        data-mdb-ripple-init
-                        data-mdb-popover-init
-                        data-mdb-trigger="hover"
-                        data-mdb-placement="right"
-                        data-mdb-content="{{ columns_descriptions|dict_get:'censoring' }}"
-                    >
-                        <i class="far fa-circle-question"></i>
-                    </a>
-                </th>
-                <th class="min-w-300 text-center">
-                    Missingness
-                    <a
-                        tabindex="0"
-                        type="button"
-                        class="info-button filter-description-popover"
-                        data-mdb-container="body"
-                        data-mdb-ripple-init
-                        data-mdb-popover-init
-                        data-mdb-trigger="hover"
-                        data-mdb-placement="right"
-                        data-mdb-content="{{ columns_descriptions|dict_get:'missingness' }}"
-                    >
-                        <i class="far fa-circle-question"></i>
-                    </a>
-                </th>
                 <th class="text-center">Hosted by Delphi?</th>
-                <th class="text-center">DUA required?</th>
-                <th class="text-center min-w-300">
-                    Data Use Terms
-                    <a
-                        tabindex="0"
-                        type="button"
-                        class="info-button filter-description-popover"
-                        data-mdb-container="body"
-                        data-mdb-ripple-init
-                        data-mdb-popover-init
-                        data-mdb-trigger="hover"
-                        data-mdb-placement="right"
-                        data-mdb-content="{{ columns_descriptions|dict_get:'data_use_terms' }}"
-                    >
-                        <i class="far fa-circle-question"></i>
-                    </a>
-                </th>
-                <th class="text-center">
-                    Documentation
-                    <a
-                        tabindex="0"
-                        type="button"
-                        class="info-button filter-description-popover"
-                        data-mdb-container="body"
-                        data-mdb-ripple-init
-                        data-mdb-popover-init
-                        data-mdb-trigger="hover"
-                        data-mdb-placement="right"
-                        data-mdb-content="{{ columns_descriptions|dict_get:'documentation' }}"
-                    >
-                        <i class="far fa-circle-question"></i>
-                    </a>
-                </th>
             </tr>
         </thead>
         <tbody>
@@ -374,9 +277,8 @@
             // Open this row
             row.child(
                 format(
-                    tr.data("id"),
+                    row.data(),
                     relatedIndicators,
-                    tr.data("description"),
                 ),
             ).show();
             initIndicatorPopovers(row.child());
@@ -394,12 +296,10 @@
                 if (typeof table !== "undefined") {
                     table.rows().every(function () {
                         if (this.child.isShown()) {
-                            var tr = $(this.node());
                             this.child(
                                 format(
-                                    tr.data("id"),
+                                    this.data(),
                                     relatedIndicators,
-                                    tr.data("description"),
                                 ),
                             ).show();
                             initIndicatorPopovers(this.child());

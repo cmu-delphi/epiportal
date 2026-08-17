@@ -59,7 +59,6 @@ var table = new DataTable("#indicatorSetsTable", {
         { data: "reporting_cadence" },  // Reporting Cadence
         { data: "reporting_lag" },  // Reporting Lag
         { data: "revision_cadence" }, // Revision Cadence
-        { data: "demographic_scope" }, // Population
         { data: "demographic_granularity" }, // Population Stratifiers
         {
             data: "severity_pyramid_rungs",
@@ -72,22 +71,7 @@ var table = new DataTable("#indicatorSetsTable", {
             }
         }, // Surveillance Categories
         { data: "original_data_provider" }, // Original Data Provider
-        { data: "preprocessing_description" }, // Pre-processing
-        { data: "censoring" }, // Censoring
-        { data: "missingness" }, // Missingness
         { data: "delphi_hosted" }, // Hosted by Delphi?
-        { data: "dua_required" }, // DUA required?
-        { data: "license" }, // Data Use Terms
-        {
-            data: "documentation_link",
-            render: function (data, type, row) {
-                if (data) {
-                    return `<a href="${data}" target="_blank">${data}</a>`;
-                } else {
-                    return '';
-                }
-            }
-        }, // Documentation
     ],
     fixedHeader: true,
     paging: false,
@@ -169,11 +153,39 @@ function initIndicatorPopovers(childContainer) {
     });
 }
 
-function format(indicatorSetId, relatedIndicators, indicatorSetDescription) {
+function buildIndicatorSetMetadata(rowData) {
+    var fields = [
+        { label: "Population", value: rowData.demographic_scope },
+        { label: "Pre-processing", value: rowData.preprocessing_description },
+        { label: "Censoring", value: rowData.censoring },
+        { label: "Missingness", value: rowData.missingness },
+        { label: "DUA required?", value: rowData.dua_required },
+        { label: "Data Use Terms", value: rowData.license },
+        {
+            label: "Documentation",
+            value: rowData.documentation_link
+                ? `<a href="${rowData.documentation_link}" target="_blank">View documentation</a>`
+                : "",
+        },
+    ].filter((field) => field.value);
+
+    if (fields.length === 0) {
+        return "";
+    }
+
+    var rows = fields
+        .map((field) => `<div style="font-weight:600;">${field.label}</div><div>${field.value}</div>`)
+        .join("");
+
+    return `<div style="display:grid;grid-template-columns:120px 1fr;gap:4px 12px;margin-bottom:12px;">${rows}</div>`;
+}
+
+function format(rowData, relatedIndicators) {
     if (!relatedIndicators) {
         return '<div class="d-flex justify-content-start my-3" style="padding-left: 20px;"><div class="spinner-border text-primary" role="status"><span class="visually-hidden">Loading...</span></div></div>';
     }
 
+    var indicatorSetId = rowData.DT_RowId;
     var indicators;
     if (Array.isArray(relatedIndicators)) {
         indicators = relatedIndicators.filter(
@@ -185,7 +197,7 @@ function format(indicatorSetId, relatedIndicators, indicatorSetDescription) {
     var disabled, restricted, sourceType;
 
     if (indicators.length > 0) {
-        var data = `<p style="width: 40%;">${indicatorSetDescription}</p>`;
+        var data = `<p style="width: 40%;">${rowData.description}</p>` + buildIndicatorSetMetadata(rowData);
         var tableMarkup =
             '<table class="table" cellpadding="5" cellspacing="0" border="0" style="padding-left:50px;">' +
             "<thead>" +
@@ -250,7 +262,7 @@ function format(indicatorSetId, relatedIndicators, indicatorSetDescription) {
 
         data += tableMarkup;
     } else {
-        data = "<p>No available indicators yet.</p>";
+        data = buildIndicatorSetMetadata(rowData) + "<p>No available indicators yet.</p>";
     }
     return data;
 }
