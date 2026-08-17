@@ -277,9 +277,8 @@
             // Open this row
             row.child(
                 format(
-                    tr.data("id"),
+                    row.data(),
                     relatedIndicators,
-                    tr.data("description"),
                 ),
             ).show();
             initIndicatorPopovers(row.child());
@@ -297,12 +296,10 @@
                 if (typeof table !== "undefined") {
                     table.rows().every(function () {
                         if (this.child.isShown()) {
-                            var tr = $(this.node());
                             this.child(
                                 format(
-                                    tr.data("id"),
+                                    this.data(),
                                     relatedIndicators,
-                                    tr.data("description"),
                                 ),
                             ).show();
                             initIndicatorPopovers(this.child());
