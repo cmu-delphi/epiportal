@@ -22,7 +22,16 @@ var table = new DataTable("#indicatorSetsTable", {
             data: null,
             defaultContent: ''
         },  // dt-control column
-        { data: "name" },  // Name
+        { 
+            data: null,
+            render: function (data, type, row) {
+                if (row.geographic_scope != 'United States' && !row.name.includes(row.geographic_scope)) {
+                    return `${row.name} ${row.geographic_scope}`
+                } else {
+                    return row.name
+                }
+            } 
+        },  // Name
         {
             data: "pathogens",
             render: function (data, type, row) {
@@ -33,7 +42,6 @@ var table = new DataTable("#indicatorSetsTable", {
                 }
             }
         }, // Pathogens
-        { data: "geographic_scope" },  // Geographic Coverage
         {
             data: "geographic_levels",
             render: function (data, type, row) {
