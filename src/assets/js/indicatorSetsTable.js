@@ -17,6 +17,22 @@ var table = new DataTable("#indicatorSetsTable", {
     },
     columns: [
         {
+            className: 'dt-select text-center',
+            orderable: false,
+            data: null,
+            render: function (data, type, row) {
+                var indicatorSetId = row.DT_RowId;
+                // Without indicatorSetsSelection.js a checkbox would be inert, so render
+                // nothing rather than taking the whole table down with a ReferenceError.
+                if (indicatorSetId === undefined || indicatorSetId === null ||
+                    typeof isIndicatorSetSelected !== 'function') {
+                    return '';
+                }
+                var checked = isIndicatorSetSelected(indicatorSetId) ? ' checked' : '';
+                return `<input type="checkbox" class="form-check-input indicator-set-select" data-indicator-set-id="${indicatorSetId}" aria-label="Select this indicator set"${checked}>`;
+            }
+        },  // Select column
+        {
             className: 'dt-control',
             orderable: false,
             data: null,
@@ -87,15 +103,19 @@ var table = new DataTable("#indicatorSetsTable", {
     scrollX: true,
     scrollY: calculate_table_height() + 75,
     fixedColumns: {
-        left: 2,
+        left: 3,
     },
     ordering: false,
     mark: true,
     language: {
         emptyTable: "No indicators match your specified filters.  Try relaxing some filters, or clear all filters and try again.",
+        // The selected-only view is the only client-side filter on this table, so this is
+        // shown exactly when none of the selected sets survived the server-side filters.
+        zeroRecords: "None of your selected indicator sets match your specified filters.  Try relaxing some filters, or turn off \"Show only selected\".",
     },
     layout: {
         topStart: function () {
+            let topStartContainer = document.createElement('div');
             let indicatorSetsInfo = document.createElement('span');
             indicatorSetsInfo.className = 'table-stats-info';
             indicatorSetsInfo.id = 'indicatorSetsInfo';
@@ -112,7 +132,11 @@ var table = new DataTable("#indicatorSetsTable", {
                     }
                 }
             });
-            return indicatorSetsInfo;
+            topStartContainer.appendChild(indicatorSetsInfo);
+            if (typeof buildSelectionToolbar === 'function') {
+                topStartContainer.appendChild(buildSelectionToolbar());
+            }
+            return topStartContainer;
         },
         topEnd: null,
         bottomStart: null,
