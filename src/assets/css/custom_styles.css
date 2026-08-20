@@ -302,3 +302,45 @@ tr:not(.odd-row) > .dtfc-fixed-end {
 #location_search {
     height: 38px !important;
 }
+
+/* Indicator set row selection */
+th.dt-select,
+td.dt-select {
+    width: 60px;
+    min-width: 60px;
+}
+
+td.dt-select .indicator-set-select {
+    cursor: pointer;
+}
+
+.selection-stats-note {
+    font-size: 16px;
+    font-style: italic;
+}
+
+.selection-toolbar {
+    display: flex;
+    align-items: center;
+    flex-wrap: wrap;
+    column-gap: 1rem;
+    margin: 0.25rem 0 0.5rem;
+}
+
+.selection-toolbar > * {
+    flex: 0 0 auto;
+    width: auto;
+}
+
+.selection-toolbar .form-check-label {
+    cursor: pointer;
+}
+
+.selection-toolbar .form-check-input:disabled + .form-check-label {
+    cursor: default;
+    opacity: 0.6;
+}
+
+.selection-toolbar-action {
+    padding: 0;
+}
