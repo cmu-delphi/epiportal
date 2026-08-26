@@ -11,7 +11,10 @@ from alternative_interface.utils.epidata import (
     get_fluview_data,
 )
 from alternative_interface.utils.geos import get_available_geos
-from alternative_interface.utils.normalization import normalize_dataset
+from alternative_interface.utils.normalization import (
+    group_maximum,
+    normalize_dataset,
+)
 from alternative_interface.utils.series import prepare_chart_series_multi
 from alternative_interface.utils.timeline import (
     _day_key,
@@ -33,6 +36,7 @@ __all__ = [
     "get_chart_data",
     "get_covidcast_data",
     "get_fluview_data",
+    "group_maximum",
     "normalize_dataset",
     "prepare_chart_series_multi",
 ]
