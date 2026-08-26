@@ -1,3 +1,4 @@
+import base64
 import json
 from unittest.mock import MagicMock, patch
 
@@ -18,8 +19,12 @@ from indicatorsets.models import (
 )
 from indicatorsets.utils import (
     NO_DATA_MESSAGE,
+    InvalidApiKeyError,
     generate_covidcast_indicators_export_url,
     generate_epivis_custom_title,
+    generate_epiweek_dataset_epivis,
+    generate_epiweek_export_url,
+    generate_query_code_epiweek,
     generate_nwss_export_url,
     generate_pophive_export_url,
     generate_random_color,
@@ -33,13 +38,11 @@ from indicatorsets.utils import (
     list_to_dict,
     parse_original_data_provider_ids,
     preview_covidcast_data,
-    preview_flusurv_data,
-    preview_fluview_data,
-    preview_nidss_dengue_data,
-    preview_nidss_flu_data,
+    preview_epiweek_data,
     preview_nwss_data,
     preview_pophive_data,
 )
+from indicatorsets.utils.sources import EPIWEEK_SOURCES
 from indicatorsets.views import age_group_sort_key, get_related_indicators
 from indicatorsets.filters import IndicatorSetFilter
 from indicatorsets.resources import (
@@ -474,7 +477,7 @@ class OriginalDataProviderUtilsTests(TestCase):
 
 
 class GeoCoverageUtilsTests(TestCase):
-    @patch("indicatorsets.utils.requests.get")
+    @patch("indicatorsets.utils.geos.requests.get")
     def test_get_indicators_based_on_geo_epidata_returns_epidata_items(
         self, mock_get
     ):
@@ -488,12 +491,12 @@ class GeoCoverageUtilsTests(TestCase):
         result = get_indicators_based_on_geo_epidata({"state": ["pa"]})
         self.assertEqual(result, [{"source": "src", "signal": "sig"}])
 
-    @patch("indicatorsets.utils.requests.get", side_effect=requests.RequestException)
+    @patch("indicatorsets.utils.geos.requests.get", side_effect=requests.RequestException)
     def test_get_indicators_based_on_geo_epidata_handles_errors(self, _mock_get):
         result = get_indicators_based_on_geo_epidata({"state": ["pa"]})
         self.assertEqual(result, [])
 
-    @patch("indicatorsets.utils.requests.get")
+    @patch("indicatorsets.utils.geos.requests.get")
     def test_get_indicators_based_on_geo_epidata_v5_returns_values_items(
         self, mock_get
     ):
@@ -508,12 +511,12 @@ class GeoCoverageUtilsTests(TestCase):
         self.assertEqual(result, [{"source": "src", "signal": "sig"}])
         self.assertEqual(mock_get.call_args.kwargs["params"]["geo_value"], "pa")
 
-    @patch("indicatorsets.utils.requests.get", side_effect=requests.RequestException)
+    @patch("indicatorsets.utils.geos.requests.get", side_effect=requests.RequestException)
     def test_get_indicators_based_on_geo_epidata_v5_handles_errors(self, _mock_get):
         result = get_indicators_based_on_geo_epidata_v5({"state": ["pa"]})
         self.assertEqual(result, [])
 
-    @patch("indicatorsets.utils.requests.get")
+    @patch("indicatorsets.utils.geos.requests.get")
     def test_get_list_of_indicators_filtered_by_geo_combines_both_sources(
         self, mock_get
     ):
@@ -541,7 +544,7 @@ class GeoCoverageUtilsTests(TestCase):
             ],
         )
 
-    @patch("indicatorsets.utils.requests.get", side_effect=requests.RequestException)
+    @patch("indicatorsets.utils.geos.requests.get", side_effect=requests.RequestException)
     def test_get_list_of_indicators_filtered_by_geo_handles_errors(self, _mock_get):
         result = get_list_of_indicators_filtered_by_geo("['state:pa']")
         self.assertEqual(result, [])
@@ -608,7 +611,7 @@ class GetPreviewDataTests(TestCase):
 
 
 class PreviewCovidcastDataTests(TestCase):
-    @patch("indicatorsets.utils.requests.get")
+    @patch("indicatorsets.utils.previews.requests.get")
     def test_no_data_message_names_indicator_and_geo_type(self, mock_get):
         mock_response = MagicMock()
         mock_response.status_code = 200
@@ -634,7 +637,7 @@ class PreviewCovidcastDataTests(TestCase):
         )
         self.assertEqual(result, [{"message": "No data found for My Signal (state)."}])
 
-    @patch("indicatorsets.utils.requests.get")
+    @patch("indicatorsets.utils.previews.requests.get")
     def test_shows_data_for_available_geo_and_message_for_unavailable_geo(self, mock_get):
         def fake_get(url, params=None, timeout=None):
             response = MagicMock()
@@ -676,7 +679,7 @@ class PreviewCovidcastDataTests(TestCase):
 
 
 class PreviewFluviewDataTests(TestCase):
-    @patch("indicatorsets.utils.requests.get")
+    @patch("indicatorsets.utils.previews.requests.get")
     def test_csv_format_returns_parsed_rows(self, mock_get):
         mock_response = MagicMock()
         mock_response.status_code = 200
@@ -684,7 +687,8 @@ class PreviewFluviewDataTests(TestCase):
         mock_response.text = "release_date,region,value\n2020-01-01,nat,1.5\n"
         mock_get.return_value = mock_response
 
-        result = preview_fluview_data(
+        result = preview_epiweek_data(
+            EPIWEEK_SOURCES["fluview"],
             [{"id": "nat", "text": "U.S. National"}],
             "2020-01-01",
             "2020-01-20",
@@ -695,7 +699,7 @@ class PreviewFluviewDataTests(TestCase):
             result, [[["release_date", "region", "value"], ["2020-01-01", "nat", "1.5"]]]
         )
 
-    @patch("indicatorsets.utils.requests.get")
+    @patch("indicatorsets.utils.previews.requests.get")
     def test_json_format_returns_first_epidata_row(self, mock_get):
         mock_response = MagicMock()
         mock_response.status_code = 200
@@ -707,7 +711,8 @@ class PreviewFluviewDataTests(TestCase):
         }
         mock_get.return_value = mock_response
 
-        result = preview_fluview_data(
+        result = preview_epiweek_data(
+            EPIWEEK_SOURCES["fluview"],
             [{"id": "nat", "text": "U.S. National"}],
             "2020-01-01",
             "2020-01-20",
@@ -718,7 +723,7 @@ class PreviewFluviewDataTests(TestCase):
 
 
 class PreviewNIDSSFluDataTests(TestCase):
-    @patch("indicatorsets.utils.requests.get")
+    @patch("indicatorsets.utils.previews.requests.get")
     def test_csv_format_returns_parsed_rows(self, mock_get):
         mock_response = MagicMock()
         mock_response.status_code = 200
@@ -726,7 +731,8 @@ class PreviewNIDSSFluDataTests(TestCase):
         mock_response.text = "epiweek,region,ili\n202001,taipei,2\n"
         mock_get.return_value = mock_response
 
-        result = preview_nidss_flu_data(
+        result = preview_epiweek_data(
+            EPIWEEK_SOURCES["nidss_flu"],
             [{"id": "taipei", "text": "Taipei"}],
             "2020-01-01",
             "2020-01-20",
@@ -739,7 +745,7 @@ class PreviewNIDSSFluDataTests(TestCase):
 
 
 class PreviewNIDSSDengueDataTests(TestCase):
-    @patch("indicatorsets.utils.requests.get")
+    @patch("indicatorsets.utils.previews.requests.get")
     def test_csv_format_returns_parsed_rows(self, mock_get):
         mock_response = MagicMock()
         mock_response.status_code = 200
@@ -747,7 +753,8 @@ class PreviewNIDSSDengueDataTests(TestCase):
         mock_response.text = "epiweek,location,count\n202001,taipei,3\n"
         mock_get.return_value = mock_response
 
-        result = preview_nidss_dengue_data(
+        result = preview_epiweek_data(
+            EPIWEEK_SOURCES["nidss_dengue"],
             [{"id": "taipei", "text": "Taipei"}],
             "2020-01-01",
             "2020-01-20",
@@ -760,7 +767,7 @@ class PreviewNIDSSDengueDataTests(TestCase):
 
 
 class PreviewFlusurvDataTests(TestCase):
-    @patch("indicatorsets.utils.requests.get")
+    @patch("indicatorsets.utils.previews.requests.get")
     def test_csv_format_returns_parsed_rows(self, mock_get):
         mock_response = MagicMock()
         mock_response.status_code = 200
@@ -768,7 +775,8 @@ class PreviewFlusurvDataTests(TestCase):
         mock_response.text = "epiweek,location,rate\n202001,CA,1.1\n"
         mock_get.return_value = mock_response
 
-        result = preview_flusurv_data(
+        result = preview_epiweek_data(
+            EPIWEEK_SOURCES["flusurv"],
             [{"id": "CA", "text": "CA"}],
             "2020-01-01",
             "2020-01-20",
@@ -781,7 +789,7 @@ class PreviewFlusurvDataTests(TestCase):
 
 
 class PreviewPophiveDataTests(TestCase):
-    @patch("indicatorsets.utils.requests.get")
+    @patch("indicatorsets.utils.previews.requests.get")
     def test_csv_format_returns_parsed_rows(self, mock_get):
         mock_response = MagicMock()
         mock_response.status_code = 200
@@ -800,7 +808,7 @@ class PreviewPophiveDataTests(TestCase):
         )
         self.assertEqual(result, [[["geo_value", "value"], ["ca", "5"]]])
 
-    @patch("indicatorsets.utils.requests.get")
+    @patch("indicatorsets.utils.previews.requests.get")
     def test_json_format_returns_first_item(self, mock_get):
         mock_response = MagicMock()
         mock_response.status_code = 200
@@ -819,7 +827,7 @@ class PreviewPophiveDataTests(TestCase):
         )
         self.assertEqual(result, [{"value": 5}])
 
-    @patch("indicatorsets.utils.requests.get")
+    @patch("indicatorsets.utils.previews.requests.get")
     def test_no_data_message_names_indicator_and_geo(self, mock_get):
         mock_response = MagicMock()
         mock_response.status_code = 200
@@ -840,7 +848,7 @@ class PreviewPophiveDataTests(TestCase):
 
 
 class PreviewNwssDataTests(TestCase):
-    @patch("indicatorsets.utils.requests.get")
+    @patch("indicatorsets.utils.previews.requests.get")
     def test_csv_format_appends_parsed_rows(self, mock_get):
         mock_response = MagicMock()
         mock_response.status_code = 200
@@ -860,7 +868,7 @@ class PreviewNwssDataTests(TestCase):
         )
         self.assertEqual(result, [[["geo_value", "value"], ["sewershed_1", "3"]]])
 
-    @patch("indicatorsets.utils.requests.get")
+    @patch("indicatorsets.utils.previews.requests.get")
     def test_json_format_returns_first_item(self, mock_get):
         mock_response = MagicMock()
         mock_response.status_code = 200
@@ -880,7 +888,7 @@ class PreviewNwssDataTests(TestCase):
         )
         self.assertEqual(result, [{"value": 3}])
 
-    @patch("indicatorsets.utils.requests.get")
+    @patch("indicatorsets.utils.previews.requests.get")
     def test_no_data_message_names_indicator_and_source(self, mock_get):
         mock_response = MagicMock()
         mock_response.status_code = 200
@@ -907,7 +915,7 @@ class PreviewDataViewTests(TestCase):
     def setUp(self):
         self.client = Client()
 
-    @patch("indicatorsets.utils.requests.get")
+    @patch("indicatorsets.utils.previews.requests.get")
     def test_csv_format_returns_json_response_with_parsed_rows(self, mock_get):
         mock_response = MagicMock()
         mock_response.status_code = 200
@@ -935,7 +943,7 @@ class PreviewDataViewTests(TestCase):
             data, [[["release_date", "region", "value"], ["2020-01-01", "nat", "1.5"]]]
         )
 
-    @patch("indicatorsets.utils.requests.get")
+    @patch("indicatorsets.utils.previews.requests.get")
     def test_csv_format_returns_no_data_message_when_no_rows(self, mock_get):
         mock_response = MagicMock()
         mock_response.status_code = 200
@@ -979,7 +987,7 @@ class PreviewDataViewTests(TestCase):
 
 
 class GenerateCovidcastIndicatorsExportUrlTests(TestCase):
-    @patch("indicatorsets.utils.requests.get")
+    @patch("indicatorsets.utils.epidata.requests.get")
     def test_skips_indicator_with_no_data(self, mock_get):
         mock_response = MagicMock()
         mock_response.status_code = 200
@@ -1007,7 +1015,7 @@ class GenerateCovidcastIndicatorsExportUrlTests(TestCase):
         self.assertIn("No data found for My Signal (state)", result[0])
         self.assertNotIn("wget", result[0])
 
-    @patch("indicatorsets.utils.requests.get")
+    @patch("indicatorsets.utils.epidata.requests.get")
     def test_includes_export_command_when_data_exists(self, mock_get):
         mock_response = MagicMock()
         mock_response.status_code = 200
@@ -1039,7 +1047,7 @@ class GenerateCovidcastIndicatorsExportUrlTests(TestCase):
         self.assertIn("wget", result[0])
         self.assertIn("covidcast/csv", result[0])
 
-    @patch("indicatorsets.utils.requests.get")
+    @patch("indicatorsets.utils.epidata.requests.get")
     def test_mixed_indicators_only_skips_the_one_without_data(self, mock_get):
         def fake_get(url, params=None, timeout=None):
             response = MagicMock()
@@ -1087,7 +1095,7 @@ class GenerateCovidcastIndicatorsExportUrlTests(TestCase):
 
 
 class GeneratePophiveExportUrlTests(TestCase):
-    @patch("indicatorsets.utils.requests.get")
+    @patch("indicatorsets.utils.epidata.requests.get")
     def test_skips_indicator_with_no_data(self, mock_get):
         mock_response = MagicMock()
         mock_response.status_code = 200
@@ -1114,7 +1122,7 @@ class GeneratePophiveExportUrlTests(TestCase):
         self.assertIn("No data found for My Signal (CA)", result[0])
         self.assertNotIn("curl", result[0])
 
-    @patch("indicatorsets.utils.requests.get")
+    @patch("indicatorsets.utils.epidata.requests.get")
     def test_includes_export_command_when_data_exists(self, mock_get):
         mock_response = MagicMock()
         mock_response.status_code = 200
@@ -1142,7 +1150,7 @@ class GeneratePophiveExportUrlTests(TestCase):
 
 
 class GenerateNwssExportUrlTests(TestCase):
-    @patch("indicatorsets.utils.requests.get")
+    @patch("indicatorsets.utils.epidata.requests.get")
     def test_skips_indicator_with_no_data(self, mock_get):
         mock_response = MagicMock()
         mock_response.status_code = 200
@@ -1170,7 +1178,7 @@ class GenerateNwssExportUrlTests(TestCase):
         self.assertIn("No data found for My Signal (source: CDC_Biobot)", result[0])
         self.assertNotIn("curl", result[0])
 
-    @patch("indicatorsets.utils.requests.get")
+    @patch("indicatorsets.utils.epidata.requests.get")
     def test_includes_export_command_when_data_exists(self, mock_get):
         mock_response = MagicMock()
         mock_response.status_code = 200
@@ -1198,11 +1206,549 @@ class GenerateNwssExportUrlTests(TestCase):
         self.assertIn("curl", result[0])
 
 
+@override_settings(EPIVIS_URL="https://epivis.example.com/")
+class EpivisViewEndpointRoutingTests(TestCase):
+    """End-to-end check that the epivis view routes each endpoint to the right
+    builder: fluview to its dedicated one, the other epiweek sources to the
+    generic one.
+
+    Registry-free and network-free so it runs identically before and after the
+    generic builders were collapsed into one.
+    """
+
+    def _datasets(self, payload):
+        response = self.client.post(
+            reverse("epivis"),
+            data=json.dumps(payload),
+            content_type="application/json",
+        )
+        self.assertEqual(response.status_code, 200)
+        encoded = response.json()["epivis_url"].split("#", 1)[1]
+        return json.loads(base64.b64decode(encoded).decode("ascii"))["datasets"]
+
+    def test_fluview_keeps_its_dedicated_payload(self):
+        datasets = self._datasets(
+            {
+                "indicators": [
+                    {
+                        "_endpoint": "fluview",
+                        "data_source": "fluview",
+                        "indicator": "wili",
+                        "indicator_set_short_name": "FluView",
+                    }
+                ],
+                "covidCastGeographicValues": {},
+                "fluviewLocations": [{"id": "nat", "text": "U.S. National"}],
+            }
+        )
+        self.assertEqual(len(datasets), 1)
+        # the mapped display title is fluview-specific behaviour
+        self.assertEqual(datasets[0]["title"], "%wILI")
+        self.assertEqual(datasets[0]["params"]["regions"], "nat")
+
+    def test_other_epiweek_sources_use_the_generic_payload(self):
+        for endpoint, form_key, geo_param in (
+            ("nidss_flu", "nidssFluLocations", "regions"),
+            ("nidss_dengue", "nidssDengueLocations", "locations"),
+            ("flusurv", "flusurvLocations", "locations"),
+        ):
+            with self.subTest(endpoint=endpoint):
+                datasets = self._datasets(
+                    {
+                        "indicators": [
+                            {
+                                "_endpoint": endpoint,
+                                "data_source": endpoint,
+                                "indicator": "ili",
+                                "indicator_set_short_name": "SRC",
+                            }
+                        ],
+                        "covidCastGeographicValues": {},
+                        form_key: [{"id": "taipei", "text": "Taipei"}],
+                    }
+                )
+                self.assertEqual(len(datasets), 1)
+                self.assertEqual(datasets[0]["title"], "ili")
+                self.assertEqual(datasets[0]["params"][geo_param], "taipei")
+                self.assertEqual(datasets[0]["params"]["_endpoint"], endpoint)
+                self.assertEqual(
+                    datasets[0]["params"]["custom_title"], "SRC:ili : Taipei"
+                )
+
+    def test_no_geos_selected_yields_bare_epivis_url(self):
+        response = self.client.post(
+            reverse("epivis"),
+            data=json.dumps(
+                {
+                    "indicators": [
+                        {
+                            "_endpoint": "flusurv",
+                            "data_source": "flusurv",
+                            "indicator": "ili",
+                            "indicator_set_short_name": "SRC",
+                        }
+                    ],
+                    "covidCastGeographicValues": {},
+                    "flusurvLocations": [],
+                }
+            ),
+            content_type="application/json",
+        )
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.json()["epivis_url"], "https://epivis.example.com/")
+
+
+class EpiweekEpivisDatasetTests(TestCase):
+    """Characterization tests for the generic epiweek EpiVis dataset payload.
+
+    fluview is deliberately excluded: it has its own title mapping, a
+    notCoveredGeos filter and a fluview_clinical endpoint fallback, so it keeps
+    a dedicated builder.
+    """
+
+    INDICATOR = {
+        "_endpoint": "nidss_flu",
+        "indicator": "ili",
+        "indicator_set_short_name": "NIDSS",
+    }
+    GEOS = [{"id": "taipei", "text": "Taipei"}, {"id": "nat", "text": "Nationwide"}]
+
+    def _expected(self, geo_param):
+        return [
+            {
+                "color": "#abcdef",
+                "title": "ili",
+                "params": {
+                    "_endpoint": "nidss_flu",
+                    geo_param: geo_id,
+                    "custom_title": f"NIDSS:ili : {geo_text}",
+                },
+            }
+            for geo_id, geo_text in (("taipei", "Taipei"), ("nat", "Nationwide"))
+        ]
+
+    def test_generic_epiweek_sources_share_one_payload_shape(self):
+        for endpoint, geo_param in (
+            ("nidss_flu", "regions"),
+            ("nidss_dengue", "locations"),
+            ("flusurv", "locations"),
+        ):
+            with self.subTest(endpoint=endpoint):
+                with patch(
+                    "indicatorsets.utils.epivis.generate_random_color",
+                    return_value="#abcdef",
+                ):
+                    datasets = generate_epiweek_dataset_epivis(
+                        EPIWEEK_SOURCES[endpoint], self.INDICATOR, self.GEOS
+                    )
+                self.assertEqual(datasets, self._expected(geo_param))
+
+    def test_endpoint_comes_from_the_indicator_not_the_source(self):
+        """The payload's _endpoint is read off the indicator record, so a
+        nidss_flu indicator keeps that endpoint even when built via another
+        source's geo parameter."""
+        with patch(
+            "indicatorsets.utils.epivis.generate_random_color", return_value="#abcdef"
+        ):
+            datasets = generate_epiweek_dataset_epivis(
+                EPIWEEK_SOURCES["flusurv"], self.INDICATOR, self.GEOS
+            )
+        self.assertEqual(
+            [d["params"]["_endpoint"] for d in datasets], ["nidss_flu", "nidss_flu"]
+        )
+
+    def test_empty_geos_yields_no_datasets(self):
+        self.assertEqual(
+            generate_epiweek_dataset_epivis(
+                EPIWEEK_SOURCES["flusurv"], self.INDICATOR, []
+            ),
+            [],
+        )
+
+
+@override_settings(
+    EPIDATA_URL="https://api.example.com/epidata/", EPIDATA_API_KEY="default-key"
+)
+class EpiweekPreviewRequestTests(TestCase):
+    """Characterization tests for the outgoing request each epiweek preview makes.
+
+    The existing Preview*DataTests cover response parsing; these pin the request
+    itself -- endpoint path (no trailing slash), geo parameter name, and the
+    401/network error paths.
+    """
+
+    GEOS = [{"id": "nat", "text": "U.S. National"}]
+    CASES = [
+        ("fluview", "regions"),
+        ("nidss_flu", "regions"),
+        ("nidss_dengue", "locations"),
+        ("flusurv", "locations"),
+    ]
+
+    @staticmethod
+    def _preview(endpoint, *args):
+        return preview_epiweek_data(EPIWEEK_SOURCES[endpoint], *args)
+
+    def test_request_url_and_params(self):
+        for endpoint, geo_param in self.CASES:
+            with self.subTest(endpoint=endpoint):
+                with patch("indicatorsets.utils.previews.requests.get") as mock_get:
+                    mock_response = MagicMock()
+                    mock_response.status_code = 200
+                    mock_response.text = "a,b\n1,2\n"
+                    mock_get.return_value = mock_response
+                    self._preview(
+                        endpoint, self.GEOS, "2020-01-01", "2020-01-20", None, "csv"
+                    )
+                self.assertEqual(
+                    mock_get.call_args.args[0],
+                    f"https://api.example.com/epidata/{endpoint}",
+                )
+                self.assertEqual(
+                    mock_get.call_args.kwargs["params"],
+                    {
+                        geo_param: "nat",
+                        "epiweeks": "202001-202004",
+                        "api_key": "default-key",
+                        "format": "csv",
+                        "header": "true",
+                    },
+                )
+                self.assertEqual(mock_get.call_args.kwargs["timeout"], (5, 30))
+
+    def test_explicit_api_key_overrides_default_and_json_drops_header(self):
+        for endpoint, geo_param in self.CASES:
+            with self.subTest(endpoint=endpoint):
+                with patch("indicatorsets.utils.previews.requests.get") as mock_get:
+                    mock_response = MagicMock()
+                    mock_response.status_code = 200
+                    mock_response.json.return_value = {"epidata": [], "result": 1}
+                    mock_get.return_value = mock_response
+                    self._preview(
+                        endpoint, self.GEOS, "2020-01-01", "2020-01-20", "mine", "json"
+                    )
+                params = mock_get.call_args.kwargs["params"]
+                self.assertEqual(params["api_key"], "mine")
+                self.assertEqual(params["format"], "json")
+                self.assertEqual(params["header"], "false")
+
+    def test_401_raises_invalid_api_key_error(self):
+        for endpoint, _geo_param in self.CASES:
+            with self.subTest(endpoint=endpoint):
+                with patch("indicatorsets.utils.previews.requests.get") as mock_get:
+                    mock_response = MagicMock()
+                    mock_response.status_code = 401
+                    mock_get.return_value = mock_response
+                    with self.assertRaises(InvalidApiKeyError):
+                        self._preview(
+                            endpoint,
+                            self.GEOS,
+                            "2020-01-01",
+                            "2020-01-20",
+                            "bad",
+                            "csv",
+                        )
+
+    def test_network_error_returns_empty_list(self):
+        for endpoint, _geo_param in self.CASES:
+            with self.subTest(endpoint=endpoint):
+                with patch(
+                    "indicatorsets.utils.previews.requests.get",
+                    side_effect=requests.RequestException,
+                ):
+                    self.assertEqual(
+                        self._preview(
+                            endpoint, self.GEOS, "2020-01-01", "2020-01-20", None, "csv"
+                        ),
+                        [],
+                    )
+
+
+class QueryCodeViewEpiweekOrderingTests(TestCase):
+    """End-to-end check that create_query_code emits one snippet pair per
+    selected epiweek source, in registry order, skipping unselected ones.
+
+    Registry-free and network-free so it runs identically before and after the
+    per-source generators were collapsed into one.
+    """
+
+    def _post(self, payload):
+        return self.client.post(
+            reverse("create_query_code"),
+            data=json.dumps(payload),
+            content_type="application/json",
+        )
+
+    def test_snippets_appear_in_source_order(self):
+        response = self._post(
+            {
+                "start_date": "2024-01-01",
+                "end_date": "2024-02-01",
+                "indicators": [],
+                "covidCastGeographicValues": {},
+                "fluviewLocations": [{"id": "nat"}],
+                "nidssFluLocations": [{"id": "taipei"}],
+                "nidssDengueLocations": [{"id": "taipei"}],
+                "flusurvLocations": [{"id": "network_all"}],
+            }
+        )
+        self.assertEqual(response.status_code, 200)
+        body = response.json()
+        self.assertEqual(
+            [line for line in body["python_code_blocks"] if "epidata.pub_" in line],
+            [
+                'fluview_df = epidata.pub_fluview(\n    regions="nat",\n'
+                '    epiweeks="202401-202405",\n).df()\n',
+                'nidss_flu_df = epidata.pub_nidss_flu(\n    regions="taipei",\n'
+                '    epiweeks="202401-202405",\n).df()\n',
+                'nidss_dengue_df = epidata.pub_nidss_dengue(\n    locations="taipei",\n'
+                '    epiweeks="202401-202405",\n).df()\n',
+                'flusurv_df = epidata.pub_flusurv(\n    locations="network_all",\n'
+                '    epiweeks="202401-202405",\n).df()\n',
+            ],
+        )
+        self.assertEqual(
+            [line for line in body["r_code_blocks"] if "<- pub_" in line],
+            [
+                'epidata_fluview <- pub_fluview(\n    regions = "nat",\n'
+                "    epiweeks = epirange(202401, 202405)\n)\n",
+                'epidata_nidss_flu <- pub_nidss_flu(\n    regions = "taipei",\n'
+                "    epiweeks = epirange(202401, 202405)\n)\n",
+                'epidata_nidss_dengue <- pub_nidss_dengue(\n    locations = "taipei",\n'
+                "    epiweeks = epirange(202401, 202405)\n)\n",
+                'epidata_flusurv <- pub_flusurv(\n    locations = "network_all",\n'
+                "    epiweeks = epirange(202401, 202405)\n)\n",
+            ],
+        )
+
+    def test_unselected_sources_are_skipped(self):
+        response = self._post(
+            {
+                "start_date": "2024-01-01",
+                "end_date": "2024-02-01",
+                "indicators": [],
+                "covidCastGeographicValues": {},
+                "fluviewLocations": [],
+                "flusurvLocations": [{"id": "network_all"}],
+            }
+        )
+        self.assertEqual(response.status_code, 200)
+        body = response.json()
+        self.assertEqual(
+            [line for line in body["python_code_blocks"] if "epidata.pub_" in line],
+            [
+                'flusurv_df = epidata.pub_flusurv(\n    locations="network_all",\n'
+                '    epiweeks="202401-202405",\n).df()\n'
+            ],
+        )
+
+
+class EpiweekQueryCodeTests(TestCase):
+    """Characterization tests for the epiweek query-code generators.
+
+    Each of these endpoints emits one epidatpy snippet and one epidatr snippet,
+    differing only in the client function name and the geo argument name.
+    """
+
+    GEOS = [{"id": "nat"}, {"id": "hhs1"}]
+    START = "2024-01-01"
+    END = "2024-02-01"
+
+    def _expected(self, endpoint, geo_param):
+        python_block = (
+            f"{endpoint}_df = epidata.pub_{endpoint}(\n"
+            f'    {geo_param}="nat,hhs1",\n'
+            f'    epiweeks="202401-202405",\n'
+            ").df()\n"
+        )
+        r_block = (
+            f"epidata_{endpoint} <- pub_{endpoint}(\n"
+            f'    {geo_param} = "nat,hhs1",\n'
+            "    epiweeks = epirange(202401, 202405)\n"
+            ")\n"
+        )
+        return [python_block], [r_block]
+
+    def test_fluview_query_code_exact_strings(self):
+        """One fully literal anchor, independent of the template helper above."""
+        python_blocks, r_blocks = generate_query_code_epiweek(
+            EPIWEEK_SOURCES["fluview"], self.GEOS, self.START, self.END
+        )
+        self.assertEqual(
+            python_blocks,
+            [
+                'fluview_df = epidata.pub_fluview(\n    regions="nat,hhs1",\n'
+                '    epiweeks="202401-202405",\n).df()\n'
+            ],
+        )
+        self.assertEqual(
+            r_blocks,
+            [
+                'epidata_fluview <- pub_fluview(\n    regions = "nat,hhs1",\n'
+                "    epiweeks = epirange(202401, 202405)\n)\n"
+            ],
+        )
+
+    def test_query_code_for_all_epiweek_sources(self):
+        for endpoint, source in EPIWEEK_SOURCES.items():
+            with self.subTest(endpoint=endpoint):
+                self.assertEqual(
+                    generate_query_code_epiweek(
+                        source, self.GEOS, self.START, self.END
+                    ),
+                    self._expected(endpoint, source.geo_param),
+                )
+
+
+@override_settings(EPIDATA_URL="https://api.example.com/epidata/")
+class EpiweekExportUrlTests(TestCase):
+    """Characterization tests for the epiweek-based export URL builders.
+
+    These endpoints (fluview, nidss_flu, nidss_dengue, flusurv) share one query
+    shape and differ only in path segment and geo parameter name.
+    """
+
+    GEOS = [{"id": "nat"}, {"id": "hhs1"}]
+    START = "2024-01-01"
+    END = "2024-02-01"
+
+    def _expected(self, endpoint, geo_param, data_format, api_key):
+        url = (
+            f"https://api.example.com/epidata/{endpoint}/"
+            f"?{geo_param}=nat,hhs1&epiweeks=202401-202405&format={data_format}"
+        )
+        if data_format == "csv":
+            url += "&header=true"
+        if api_key:
+            url += f"&api_key={api_key}"
+        return [f'wget --content-disposition <a href="{url}">{url}</a>']
+
+    def test_fluview_export_url_exact_string(self):
+        """One fully literal anchor, independent of the template helper above."""
+        expected = (
+            "wget --content-disposition "
+            '<a href="https://api.example.com/epidata/fluview/?regions=nat,hhs1'
+            '&epiweeks=202401-202405&format=csv&header=true&api_key=secret-key">'
+            "https://api.example.com/epidata/fluview/?regions=nat,hhs1"
+            "&epiweeks=202401-202405&format=csv&header=true&api_key=secret-key</a>"
+        )
+        self.assertEqual(
+            generate_epiweek_export_url(
+                EPIWEEK_SOURCES["fluview"],
+                self.GEOS,
+                self.START,
+                self.END,
+                "secret-key",
+                "csv",
+            ),
+            [expected],
+        )
+
+    def test_export_urls_for_all_epiweek_sources(self):
+        expected_geo_params = {
+            "fluview": "regions",
+            "nidss_flu": "regions",
+            "nidss_dengue": "locations",
+            "flusurv": "locations",
+        }
+        self.assertEqual(set(EPIWEEK_SOURCES), set(expected_geo_params))
+        for endpoint, geo_param in expected_geo_params.items():
+            source = EPIWEEK_SOURCES[endpoint]
+            self.assertEqual(source.geo_param, geo_param)
+            for data_format in ("csv", "json"):
+                for api_key in ("secret-key", None):
+                    with self.subTest(
+                        endpoint=endpoint,
+                        data_format=data_format,
+                        with_api_key=bool(api_key),
+                    ):
+                        self.assertEqual(
+                            generate_epiweek_export_url(
+                                source,
+                                self.GEOS,
+                                self.START,
+                                self.END,
+                                api_key,
+                                data_format,
+                            ),
+                            self._expected(endpoint, geo_param, data_format, api_key),
+                        )
+
+
+@override_settings(EPIDATA_URL="https://api.example.com/epidata/")
+class ExportViewEpiweekOrderingTests(TestCase):
+    """End-to-end check that the export view emits one command per selected
+    epiweek source, in registry order, and skips sources with no geos.
+
+    Deliberately registry-free and network-free: no covidcast indicators means
+    no availability probes, so this runs identically before and after the
+    per-source builders were collapsed into one.
+    """
+
+    def _post(self, payload):
+        return self.client.post(
+            reverse("export"),
+            data=json.dumps(payload),
+            content_type="application/json",
+        )
+
+    @staticmethod
+    def _command(endpoint, geo_param, geo_ids):
+        url = (
+            f"https://api.example.com/epidata/{endpoint}/"
+            f"?{geo_param}={geo_ids}&epiweeks=202401-202405&format=csv&header=true"
+        )
+        return f'wget --content-disposition <a href="{url}">{url}</a>'
+
+    def test_all_four_sources_emit_commands_in_order(self):
+        response = self._post(
+            {
+                "start_date": "2024-01-01",
+                "end_date": "2024-02-01",
+                "indicators": [],
+                "covidCastGeographicValues": {},
+                "fluviewLocations": [{"id": "nat"}],
+                "nidssFluLocations": [{"id": "taipei"}],
+                "nidssDengueLocations": [{"id": "taipei"}],
+                "flusurvLocations": [{"id": "network_all"}],
+                "dataFormat": "csv",
+            }
+        )
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(
+            response.json()["data_export_commands"],
+            [
+                self._command("fluview", "regions", "nat"),
+                self._command("nidss_flu", "regions", "taipei"),
+                self._command("nidss_dengue", "locations", "taipei"),
+                self._command("flusurv", "locations", "network_all"),
+            ],
+        )
+
+    def test_unselected_sources_are_skipped(self):
+        response = self._post(
+            {
+                "start_date": "2024-01-01",
+                "end_date": "2024-02-01",
+                "indicators": [],
+                "covidCastGeographicValues": {},
+                "fluviewLocations": [],
+                "nidssDengueLocations": [{"id": "taipei"}],
+                "dataFormat": "csv",
+            }
+        )
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(
+            response.json()["data_export_commands"],
+            [self._command("nidss_dengue", "locations", "taipei")],
+        )
+
+
 class ExportDataViewTests(TestCase):
     def setUp(self):
         self.client = Client()
 
-    @patch("indicatorsets.utils.requests.get")
+    @patch("indicatorsets.utils.epidata.requests.get")
     def test_returns_401_for_invalid_api_key(self, mock_get):
         mock_response = MagicMock()
         mock_response.status_code = 401

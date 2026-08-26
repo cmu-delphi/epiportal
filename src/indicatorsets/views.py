@@ -20,34 +20,24 @@ from base.models import GeographyUnit
 from indicatorsets.filters import IndicatorSetFilter
 from indicatorsets.forms import IndicatorSetFilterForm
 from indicatorsets.models import ColumnDescription, FilterDescription, IndicatorSet
+from indicatorsets.utils.sources import EPIWEEK_SOURCES
 from indicatorsets.utils import (
     InvalidApiKeyError,
     NO_DATA_MESSAGE,
     generate_covidcast_dataset_epivis,
     generate_covidcast_indicators_export_url,
-    generate_flusurv_dataset_epivis,
-    generate_flusurv_export_url,
+    generate_epiweek_dataset_epivis,
+    generate_epiweek_export_url,
     generate_fluview_dataset_epivis,
-    generate_fluview_indicators_export_url,
-    generate_nidss_dengue_dataset_epivis,
-    generate_nidss_dengue_export_url,
-    generate_nidss_flu_dataset_epivis,
-    generate_nidss_flu_export_url,
     generate_query_code_covidcast,
-    generate_query_code_flusurv,
-    generate_query_code_fluview,
-    generate_query_code_nidss_dengue,
-    generate_query_code_nidss_flu,
+    generate_query_code_epiweek,
     get_grouped_original_data_provider_choices,
     group_by_property,
     parse_original_data_provider_ids,
     log_form_data,
     log_form_stats,
     preview_covidcast_data,
-    preview_flusurv_data,
-    preview_fluview_data,
-    preview_nidss_dengue_data,
-    preview_nidss_flu_data,
+    preview_epiweek_data,
     get_num_locations_from_meta,
     generate_pophive_dataset_epivis,
     generate_nwss_dataset_epivis,
@@ -396,9 +386,6 @@ def epivis(request):
         indicators = data.get("indicators", [])
         covidcast_geos = data.get("covidCastGeographicValues", [])
         fluview_geos = data.get("fluviewLocations", [])
-        nidss_flu_locations = data.get("nidssFluLocations", [])
-        nidss_dengue_locations = data.get("nidssDengueLocations", [])
-        flusurv_locations = data.get("flusurvLocations", [])
         pophive_geos = data.get("pophiveLocations", [])
         pophive_age_group = data.get("pophiveAgeGroup", [])
         nwss_source = data.get("nwssSource", [])
@@ -415,19 +402,14 @@ def epivis(request):
                 datasets.extend(
                     generate_fluview_dataset_epivis(indicator, fluview_geos)
                 )
-            elif indicator["_endpoint"] == "nidss_flu":
+            elif indicator["_endpoint"] in EPIWEEK_SOURCES:
+                # fluview is matched by its own branch above; anything left in
+                # the registry uses the generic epiweek payload.
+                source = EPIWEEK_SOURCES[indicator["_endpoint"]]
                 datasets.extend(
-                    generate_nidss_flu_dataset_epivis(indicator, nidss_flu_locations)
-                )
-            elif indicator["_endpoint"] == "nidss_dengue":
-                datasets.extend(
-                    generate_nidss_dengue_dataset_epivis(
-                        indicator, nidss_dengue_locations
+                    generate_epiweek_dataset_epivis(
+                        source, indicator, data.get(source.form_key, [])
                     )
-                )
-            elif indicator["_endpoint"] == "flusurv":
-                datasets.extend(
-                    generate_flusurv_dataset_epivis(indicator, flusurv_locations)
                 )
             elif indicator["_endpoint"] == "pophive":
                 datasets.extend(
@@ -464,10 +446,6 @@ def generate_export_data_url(request):
         end_date = data.get("end_date", "")
         indicators = data.get("indicators", [])
         covidcast_geos = data.get("covidCastGeographicValues", [])
-        fluview_geos = data.get("fluviewLocations", [])
-        nidss_flu_locations = data.get("nidssFluLocations", [])
-        nidss_dengue_locations = data.get("nidssDengueLocations", [])
-        flusurv_locations = data.get("flusurvLocations", [])
         api_key = data.get("apiKey", None)
 
         pophive_geos = data.get("pophiveLocations", [])
@@ -485,30 +463,14 @@ def generate_export_data_url(request):
                     indicators, start_date, end_date, covidcast_geos, api_key, data_format
                 )
             )
-            if fluview_geos:
-                data_export_commands.extend(
-                    generate_fluview_indicators_export_url(
-                        fluview_geos, start_date, end_date, api_key, data_format
+            for source in EPIWEEK_SOURCES.values():
+                geos = data.get(source.form_key, [])
+                if geos:
+                    data_export_commands.extend(
+                        generate_epiweek_export_url(
+                            source, geos, start_date, end_date, api_key, data_format
+                        )
                     )
-                )
-            if nidss_flu_locations:
-                data_export_commands.extend(
-                    generate_nidss_flu_export_url(
-                        nidss_flu_locations, start_date, end_date, api_key, data_format
-                    )
-                )
-            if nidss_dengue_locations:
-                data_export_commands.extend(
-                    generate_nidss_dengue_export_url(
-                        nidss_dengue_locations, start_date, end_date, api_key, data_format
-                    )
-                )
-            if flusurv_locations:
-                data_export_commands.extend(
-                    generate_flusurv_export_url(
-                        flusurv_locations, start_date, end_date, api_key, data_format
-                    )
-                )
             if pophive_geos:
                 data_export_commands.extend(
                     generate_pophive_export_url(
@@ -557,10 +519,6 @@ def preview_data(request):
         end_date = data.get("end_date", "")
         indicators = data.get("indicators", [])
         covidcast_geos = data.get("covidCastGeographicValues", {})
-        fluview_geos = data.get("fluviewLocations", [])
-        nidss_flu_locations = data.get("nidssFluLocations", [])
-        nidss_dengue_locations = data.get("nidssDengueLocations", [])
-        flusurv_locations = data.get("flusurvLocations", [])
         pophive_geos = data.get("pophiveLocations", [])
         pophive_age_group = data.get("pophiveAgeGroup", [])
         nwss_source = data.get("nwssSource", [])
@@ -576,28 +534,14 @@ def preview_data(request):
                     indicators, start_date, end_date, covidcast_geos, api_key, data_format
                 )
             )
-            if fluview_geos:
-                preview_data.extend(
-                    preview_fluview_data(fluview_geos, start_date, end_date, api_key, data_format)
-                )
-            if nidss_flu_locations:
-                preview_data.extend(
-                    preview_nidss_flu_data(
-                        nidss_flu_locations, start_date, end_date, api_key, data_format
+            for source in EPIWEEK_SOURCES.values():
+                geos = data.get(source.form_key, [])
+                if geos:
+                    preview_data.extend(
+                        preview_epiweek_data(
+                            source, geos, start_date, end_date, api_key, data_format
+                        )
                     )
-                )
-            if nidss_dengue_locations:
-                preview_data.extend(
-                    preview_nidss_dengue_data(
-                        nidss_dengue_locations, start_date, end_date, api_key, data_format
-                    )
-                )
-            if flusurv_locations:
-                preview_data.extend(
-                    preview_flusurv_data(
-                        flusurv_locations, start_date, end_date, api_key, data_format
-                    )
-                )
             if pophive_geos and pophive_age_group:
                 preview_data.extend(
                     preview_pophive_data(
@@ -643,10 +587,6 @@ def create_query_code(request):
         end_date = data.get("end_date", "")
         indicators = data.get("indicators", [])
         covidcast_geos = data.get("covidCastGeographicValues", {})
-        fluview_geos = data.get("fluviewLocations", [])
-        nidss_flu_locations = data.get("nidssFluLocations", [])
-        nidss_dengue_locations = data.get("nidssDengueLocations", [])
-        flusurv_locations = data.get("flusurvLocations", [])
         pophive_geos = data.get("pophiveLocations", [])
         pophive_age_group = data.get("pophiveAgeGroup", [])
         nwss_source = data.get("nwssSource", [])
@@ -688,30 +628,14 @@ def create_query_code(request):
                 )
                 python_code_blocks.extend(python_code_block)
                 r_code_blocks.extend(r_code_block)
-        if fluview_geos:
-            python_code_block, r_code_block = generate_query_code_fluview(
-                fluview_geos, start_date, end_date
-            )
-            python_code_blocks.extend(python_code_block)
-            r_code_blocks.extend(r_code_block)
-        if nidss_flu_locations:
-            python_code_block, r_code_block = generate_query_code_nidss_flu(
-                nidss_flu_locations, start_date, end_date
-            )
-            python_code_blocks.extend(python_code_block)
-            r_code_blocks.extend(r_code_block)
-        if nidss_dengue_locations:
-            python_code_block, r_code_block = generate_query_code_nidss_dengue(
-                nidss_dengue_locations, start_date, end_date
-            )
-            python_code_blocks.extend(python_code_block)
-            r_code_blocks.extend(r_code_block)
-        if flusurv_locations:
-            python_code_block, r_code_block = generate_query_code_flusurv(
-                flusurv_locations, start_date, end_date
-            )
-            python_code_blocks.extend(python_code_block)
-            r_code_blocks.extend(r_code_block)
+        for source in EPIWEEK_SOURCES.values():
+            geos = data.get(source.form_key, [])
+            if geos:
+                python_code_block, r_code_block = generate_query_code_epiweek(
+                    source, geos, start_date, end_date
+                )
+                python_code_blocks.extend(python_code_block)
+                r_code_blocks.extend(r_code_block)
         if pophive_geos and pophive_age_group:
             python_code_block, r_code_block = generate_query_code_pophive(
                 all_indicators, start_date, end_date, pophive_geos, pophive_age_group
