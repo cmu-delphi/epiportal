@@ -13,7 +13,7 @@ def log_form_stats(request, data, form_mode):
     log_data = {
         "form_mode": form_mode,
         "num_of_indicators": len(data.get("indicators", [])),
-        "num_of_covidcast_geos": len(data.get("covidCastGeographicValues", [])),
+        "num_of_covidcast_geos": len(data.get("covidCastGeographicValues") or {}),
         "num_of_fluview_geos": len(data.get("fluviewLocations", [])),
         "num_of_nidss_flu_geos": len(data.get("nidssFluLocations", [])),
         "num_of_nidss_dengue_geos": len(data.get("nidssDengueLocations", [])),
@@ -49,7 +49,9 @@ def log_form_data(request, data, form_mode):
         } for ind in indicators
     ]  # fmt: skip
     indicators = group_by_property(indicators, "endpoint")
-    covidcast_geographic_values = data.get("covidCastGeographicValues", [])
+    # Mapping of geo_type -> selected geos. Falls back to an empty mapping when
+    # the key is absent or null, which callers that select no covidcast geos do.
+    covidcast_geographic_values = data.get("covidCastGeographicValues") or {}
 
     covidcast_geos = []
     for geo_type in covidcast_geographic_values.keys():

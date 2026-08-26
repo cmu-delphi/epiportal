@@ -4,7 +4,7 @@ from unittest.mock import MagicMock, patch
 
 import requests
 from django.core.cache import cache
-from django.test import Client, TestCase, override_settings
+from django.test import Client, RequestFactory, TestCase, override_settings
 from django.urls import reverse
 
 from django.http import QueryDict
@@ -36,6 +36,8 @@ from indicatorsets.utils import (
     get_preview_data,
     group_by_property,
     list_to_dict,
+    log_form_data,
+    log_form_stats,
     parse_original_data_provider_ids,
     preview_covidcast_data,
     preview_epiweek_data,
@@ -1204,6 +1206,73 @@ class GenerateNwssExportUrlTests(TestCase):
         )
         self.assertEqual(len(result), 1)
         self.assertIn("curl", result[0])
+
+
+class LogFormDataTests(TestCase):
+    """log_form_data must tolerate a payload with no covidcast geos.
+
+    Its default for covidCastGeographicValues was [], but the value is used as
+    a dict, so any request omitting the key raised AttributeError and the view
+    returned a 500.
+    """
+
+    def test_missing_covidcast_geos_does_not_raise(self):
+        request = RequestFactory().post("/")
+        log_form_data(request, {"indicators": []}, "export")
+
+    def test_null_covidcast_geos_does_not_raise(self):
+        request = RequestFactory().post("/")
+        log_form_data(
+            request, {"indicators": [], "covidCastGeographicValues": None}, "export"
+        )
+
+    def test_log_form_stats_tolerates_missing_and_null_covidcast_geos(self):
+        """log_form_stats runs before log_form_data in every view, so it needs
+        the same tolerance or the null case still 500s."""
+        request = RequestFactory().post("/")
+        log_form_stats(request, {"indicators": []}, "export")
+        log_form_stats(
+            request, {"indicators": [], "covidCastGeographicValues": None}, "export"
+        )
+
+    def test_covidcast_geos_are_still_flattened_when_present(self):
+        request = RequestFactory().post("/")
+        with patch("indicatorsets.utils.form_logging.form_data_logger") as mock_logger:
+            log_form_data(
+                request,
+                {
+                    "indicators": [],
+                    "covidCastGeographicValues": {
+                        "state": [{"id": "state:pa", "text": "Pennsylvania"}]
+                    },
+                },
+                "export",
+            )
+        self.assertEqual(
+            mock_logger.info.call_args.kwargs["covidcast_geos"],
+            [{"geo_type": "state", "geo_value": "pa", "geo_text": "Pennsylvania"}],
+        )
+
+
+class ExportViewWithoutCovidcastGeosTests(TestCase):
+    """Regression test: the export endpoint must not 500 when the payload omits
+    covidCastGeographicValues."""
+
+    def test_export_succeeds_without_covidcast_geos_key(self):
+        response = self.client.post(
+            reverse("export"),
+            data=json.dumps(
+                {
+                    "start_date": "2024-01-01",
+                    "end_date": "2024-02-01",
+                    "indicators": [],
+                    "flusurvLocations": [{"id": "network_all"}],
+                    "dataFormat": "csv",
+                }
+            ),
+            content_type="application/json",
+        )
+        self.assertEqual(response.status_code, 200)
 
 
 @override_settings(EPIVIS_URL="https://epivis.example.com/")
