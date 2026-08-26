@@ -28,7 +28,7 @@ class AvailableIndicatorsViewTests(TestCase):
         mock_get.return_value = mock_response
         response = self.client.get(
             reverse("available-indicators"),
-            {"geo_type": "state", "geo_value": "pa", "pathogen": self.pathogen.id},
+            {"geo_type": "state", "geo_value": "pa", "pathogen": self.pathogen.name},
         )
         self.assertEqual(response.status_code, 200)
         names = [i["name"] for i in response.json()["indicators"]]
@@ -41,7 +41,7 @@ class AvailableIndicatorsViewTests(TestCase):
         mock_get.side_effect = requests.RequestException
         response = self.client.get(
             reverse("available-indicators"),
-            {"geo_type": "state", "geo_value": "pa", "pathogen": self.pathogen.id},
+            {"geo_type": "state", "geo_value": "pa", "pathogen": self.pathogen.name},
         )
         self.assertEqual(response.status_code, 200)
         self.assertEqual(response.json(), {"indicators": []})
@@ -49,6 +49,6 @@ class AvailableIndicatorsViewTests(TestCase):
     def test_invalid_pathogen_returns_400(self):
         response = self.client.get(
             reverse("available-indicators"),
-            {"geo_type": "state", "geo_value": "pa", "pathogen": 99999},
+            {"geo_type": "state", "geo_value": "pa", "pathogen": "no-such-pathogen"},
         )
         self.assertEqual(response.status_code, 400)
