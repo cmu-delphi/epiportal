@@ -4,9 +4,9 @@ import ast
 
 import requests
 from django.conf import settings
-from django.core.cache import cache
 from delphi_utils import get_structured_logger
 
+from indicatorsets.utils.caching import safe_cache_get, safe_cache_set
 from indicatorsets.utils.helpers import list_to_dict
 
 logger = get_structured_logger("indicatorsets.utils")
@@ -61,7 +61,7 @@ def get_num_locations_from_meta(indicators):
         (indicator["source__name"], indicator["name"]) for indicator in indicators
     )
 
-    metadata = cache.get("covidcast_meta")
+    metadata = safe_cache_get("covidcast_meta")
     if not metadata:
         try:
             response = requests.get(
@@ -70,7 +70,7 @@ def get_num_locations_from_meta(indicators):
             response.raise_for_status()
             data = response.json()
             metadata = data["epidata"]
-            cache.set("covidcast_meta", metadata, 60 * 60 * 24)
+            safe_cache_set("covidcast_meta", metadata, 60 * 60 * 24)
         except requests.RequestException:
             logger.error("Error fetching covidcast metadata")
             return 0

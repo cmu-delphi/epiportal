@@ -44,6 +44,7 @@ from indicatorsets.utils import (
     preview_nwss_data,
     preview_pophive_data,
 )
+from indicatorsets.utils.caching import safe_cache_get, safe_cache_set
 from indicatorsets.utils.sources import EPIWEEK_SOURCES
 from indicatorsets.views import age_group_sort_key, get_related_indicators
 from indicatorsets.filters import IndicatorSetFilter
@@ -1094,6 +1095,32 @@ class GenerateCovidcastIndicatorsExportUrlTests(TestCase):
         self.assertEqual(len(result), 2)
         self.assertTrue(any("wget" in r and "has_data" in r for r in result))
         self.assertTrue(any("No data found for No Data" in r for r in result))
+
+
+class SafeCacheTests(TestCase):
+    """A cache failure must be indistinguishable from a cache miss."""
+
+    @patch("indicatorsets.utils.caching.cache")
+    def test_get_returns_default_when_the_backend_raises(self, mock_cache):
+        mock_cache.get.side_effect = ConnectionError("Connection refused")
+        self.assertIsNone(safe_cache_get("some_key"))
+        self.assertEqual(safe_cache_get("some_key", []), [])
+
+    @patch("indicatorsets.utils.caching.cache")
+    def test_get_returns_default_on_a_miss(self, mock_cache):
+        mock_cache.get.return_value = None
+        self.assertEqual(safe_cache_get("some_key", []), [])
+
+    @patch("indicatorsets.utils.caching.cache")
+    def test_get_returns_the_cached_value(self, mock_cache):
+        mock_cache.get.return_value = {"nhsn": {}}
+        self.assertEqual(safe_cache_get("some_key"), {"nhsn": {}})
+
+    @patch("indicatorsets.utils.caching.cache")
+    def test_set_swallows_backend_failures(self, mock_cache):
+        mock_cache.set.side_effect = ConnectionError("Connection refused")
+        safe_cache_set("some_key", "value", 60)  # must not raise
+        mock_cache.set.assert_called_once_with("some_key", "value", 60)
 
 
 class GeneratePophiveExportUrlTests(TestCase):
