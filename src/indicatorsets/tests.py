@@ -1,8 +1,12 @@
 import base64
 import json
+import re
 from unittest.mock import MagicMock, patch
+from urllib.parse import parse_qs, urlparse
 
+import redis
 import requests
+from django.conf import settings
 from django.core.cache import cache
 from django.test import Client, RequestFactory, TestCase, override_settings
 from django.urls import reverse
@@ -44,7 +48,11 @@ from indicatorsets.utils import (
     preview_nwss_data,
     preview_pophive_data,
 )
+from indicatorsets.proxy_views import VIZ_SOURCES
+from indicatorsets.utils.constants import MIGRATED_DATASOURCES
 from indicatorsets.utils.caching import safe_cache_get, safe_cache_set
+from indicatorsets.utils.epidata import get_v5_metadata, get_v5_source
+from indicatorsets.utils.query_code import generate_query_code_covidcast
 from indicatorsets.utils.sources import EPIWEEK_SOURCES
 from indicatorsets.views import age_group_sort_key, get_related_indicators
 from indicatorsets.filters import IndicatorSetFilter
@@ -1097,6 +1105,55 @@ class GenerateCovidcastIndicatorsExportUrlTests(TestCase):
         self.assertTrue(any("No data found for No Data" in r for r in result))
 
 
+class V5RoutingTestMixin:
+    """Helpers for tests that exercise the v4/v5 routing in the covidcast export.
+
+    Every module imports ``requests`` as a module, so patching
+    ``<module>.requests.get`` patches the one shared ``requests.get``. A single
+    patch therefore has to serve both the v5 metadata call and the availability
+    probe; these helpers dispatch on the requested URL.
+    """
+
+    def setUp(self):
+        cache.clear()
+
+    def tearDown(self):
+        cache.clear()
+
+    @staticmethod
+    def _fake_get(
+        metadata_signals=None,
+        metadata_error=None,
+        has_data=True,
+        metadata_source="nhsn",
+    ):
+        def fake_get(url, params=None, timeout=None):
+            response = MagicMock()
+            response.status_code = 200
+            response.raise_for_status = MagicMock()
+            if "metadata/" in url:
+                if metadata_error is not None:
+                    raise metadata_error
+                response.json.return_value = {
+                    metadata_source: {"signals": list(metadata_signals or [])}
+                }
+                return response
+            response.json.return_value = (
+                {"epidata": [{"value": 1}], "result": 1, "message": "success"}
+                if has_data
+                else {"epidata": [], "result": -2, "message": "no results"}
+            )
+            return response
+
+        return fake_get
+
+    @staticmethod
+    def _probe_calls(mock_get):
+        return [
+            call for call in mock_get.call_args_list if "metadata/" not in call.args[0]
+        ]
+
+
 class SafeCacheTests(TestCase):
     """A cache failure must be indistinguishable from a cache miss."""
 
@@ -1121,6 +1178,676 @@ class SafeCacheTests(TestCase):
         mock_cache.set.side_effect = ConnectionError("Connection refused")
         safe_cache_set("some_key", "value", 60)  # must not raise
         mock_cache.set.assert_called_once_with("some_key", "value", 60)
+
+
+class V5MetadataWithoutCacheTests(V5RoutingTestMixin, TestCase):
+    """Exports must keep working when Redis is unreachable."""
+
+    INDICATOR = {
+        "_endpoint": "covidcast",
+        "data_source": "nhsn",
+        "indicator": "confirmed_admissions_covid_ew",
+        "time_type": "week",
+        "display_name": "COVID Admissions",
+    }
+
+    @patch("indicatorsets.utils.caching.cache")
+    @patch("indicatorsets.utils.epidata.requests.get")
+    def test_metadata_is_fetched_when_the_cache_is_down(self, mock_get, mock_cache):
+        mock_cache.get.side_effect = redis.exceptions.ConnectionError("refused")
+        mock_cache.set.side_effect = redis.exceptions.ConnectionError("refused")
+        mock_get.side_effect = self._fake_get(metadata_signals=["sig"])
+
+        self.assertEqual(get_v5_metadata(), {"nhsn": {"signals": ["sig"]}})
+
+    @patch("indicatorsets.utils.caching.cache")
+    @patch("indicatorsets.utils.epidata.requests.get")
+    def test_export_still_routes_to_v5_when_the_cache_is_down(
+        self, mock_get, mock_cache
+    ):
+        mock_cache.get.side_effect = redis.exceptions.ConnectionError("refused")
+        mock_cache.set.side_effect = redis.exceptions.ConnectionError("refused")
+        mock_get.side_effect = self._fake_get(
+            metadata_signals=["confirmed_admissions_covid_ew"]
+        )
+
+        result = generate_covidcast_indicators_export_url(
+            [self.INDICATOR],
+            "2020-01-01",
+            "2020-01-20",
+            {"state": [{"id": "state:pa", "geoType": "state"}]},
+            None,
+            "csv",
+        )
+        self.assertEqual(len(result), 1)
+        self.assertIn("curl -o", result[0])
+        self.assertIn("/v5/", result[0])
+        # no caching means the metadata is re-fetched per indicator
+        self.assertTrue(
+            any("metadata/" in call.args[0] for call in mock_get.call_args_list)
+        )
+
+
+class GetV5SourceTests(V5RoutingTestMixin, TestCase):
+    @patch("indicatorsets.utils.epidata.requests.get")
+    def test_skips_metadata_lookup_for_non_migrated_source(self, mock_get):
+        self.assertIsNone(get_v5_source({"data_source": "src", "indicator": "sig"}))
+        mock_get.assert_not_called()
+
+    @patch("indicatorsets.utils.epidata.requests.get")
+    def test_true_when_signal_present_in_v5(self, mock_get):
+        mock_get.side_effect = self._fake_get(
+            metadata_signals=["confirmed_admissions_covid_ew"]
+        )
+        self.assertEqual(
+            get_v5_source(
+                {"data_source": "nhsn", "indicator": "confirmed_admissions_covid_ew"}
+            ),
+            "nhsn",
+        )
+
+    @patch("indicatorsets.utils.epidata.requests.get")
+    def test_false_when_migrated_source_lacks_the_signal(self, mock_get):
+        mock_get.side_effect = self._fake_get(
+            metadata_signals=["confirmed_admissions_covid_ew"]
+        )
+        self.assertIsNone(
+            get_v5_source({"data_source": "nhsn", "indicator": "not_in_v5"})
+        )
+
+    @patch("indicatorsets.utils.epidata.requests.get")
+    def test_false_when_metadata_request_fails(self, mock_get):
+        mock_get.side_effect = requests.RequestException("unavailable")
+        self.assertIsNone(
+            get_v5_source(
+                {"data_source": "nhsn", "indicator": "confirmed_admissions_covid_ew"}
+            )
+        )
+        self.assertIsNone(cache.get("epidata_v5_metadata"))
+
+    @patch("indicatorsets.utils.epidata.requests.get")
+    def test_false_when_metadata_payload_is_not_a_mapping(self, mock_get):
+        response = MagicMock()
+        response.raise_for_status = MagicMock()
+        response.json.return_value = ["unexpected"]
+        mock_get.return_value = response
+        self.assertIsNone(
+            get_v5_source(
+                {"data_source": "nhsn", "indicator": "confirmed_admissions_covid_ew"}
+            )
+        )
+
+    @patch("indicatorsets.utils.epidata.requests.get")
+    def test_metadata_is_fetched_once_and_cached(self, mock_get):
+        mock_get.side_effect = self._fake_get(metadata_signals=["inpatient_beds_ew"])
+        get_v5_metadata()
+        get_v5_source({"data_source": "nhsn", "indicator": "inpatient_beds_ew"})
+        get_v5_source({"data_source": "nssp", "indicator": "pct_ed_visits_ari"})
+        self.assertEqual(mock_get.call_count, 1)
+        self.assertIn("nhsn", cache.get("epidata_v5_metadata"))
+
+
+class CovidcastExportAuthParamTests(V5RoutingTestMixin, TestCase):
+    """Availability probes and export URLs must carry the right key, the right way."""
+
+    V5_INDICATOR = {
+        "_endpoint": "covidcast",
+        "data_source": "nhsn",
+        "indicator": "confirmed_admissions_covid_ew",
+        "time_type": "week",
+        "display_name": "COVID Admissions",
+    }
+    V4_INDICATOR = {
+        "_endpoint": "covidcast",
+        "data_source": "src",
+        "indicator": "sig",
+        "time_type": "day",
+        "display_name": "My Signal",
+    }
+
+    def _export(self, indicator, api_key):
+        return generate_covidcast_indicators_export_url(
+            [indicator],
+            "2020-01-01",
+            "2020-01-20",
+            {"state": [{"id": "state:pa", "geoType": "state"}]},
+            api_key,
+            "csv",
+        )
+
+    @override_settings(EPIDATA_API_KEY="server-key")
+    @patch("indicatorsets.utils.epidata.requests.get")
+    def test_v4_probe_falls_back_to_server_api_key(self, mock_get):
+        mock_get.side_effect = self._fake_get()
+
+        result = self._export(self.V4_INDICATOR, None)
+        probe_calls = self._probe_calls(mock_get)
+        self.assertEqual(len(probe_calls), 1)
+        self.assertIn("covidcast", probe_calls[0].args[0])
+        self.assertEqual(probe_calls[0].kwargs["params"]["api_key"], "server-key")
+        self.assertIn("wget", result[0])
+
+    @override_settings(EPIDATA_API_KEY="server-key")
+    @patch("indicatorsets.utils.epidata.requests.get")
+    def test_v5_probe_falls_back_to_server_api_key(self, mock_get):
+        mock_get.side_effect = self._fake_get(
+            metadata_signals=["confirmed_admissions_covid_ew"]
+        )
+
+        self._export(self.V5_INDICATOR, None)
+        probe_calls = self._probe_calls(mock_get)
+        self.assertEqual(len(probe_calls), 1)
+        params = probe_calls[0].kwargs["params"]
+        self.assertIn("/v5/", probe_calls[0].args[0])
+        self.assertEqual(params["api_key"], "server-key")
+        self.assertNotIn("token", params)
+
+    @patch("indicatorsets.utils.epidata.requests.get")
+    def test_v5_uses_api_key_not_token_for_user_supplied_key(self, mock_get):
+        mock_get.side_effect = self._fake_get(
+            metadata_signals=["confirmed_admissions_covid_ew"]
+        )
+
+        result = self._export(self.V5_INDICATOR, "user-key")
+        params = self._probe_calls(mock_get)[0].kwargs["params"]
+        self.assertEqual(params["api_key"], "user-key")
+        self.assertNotIn("token", params)
+        self.assertEqual(len(result), 1)
+        self.assertIn("/v5/", result[0])
+        self.assertIn("api_key=user-key", result[0])
+        self.assertNotIn("token=", result[0])
+
+    @override_settings(EPIDATA_API_KEY="server-key")
+    @patch("indicatorsets.utils.epidata.requests.get")
+    def test_export_url_never_leaks_the_server_api_key(self, mock_get):
+        mock_get.side_effect = self._fake_get(
+            metadata_signals=["confirmed_admissions_covid_ew"]
+        )
+
+        result = self._export(self.V5_INDICATOR, None)
+        self.assertEqual(len(result), 1)
+        self.assertIn("curl -o", result[0])
+        self.assertNotIn("server-key", result[0])
+        self.assertNotIn("api_key", result[0])
+
+    @patch("indicatorsets.utils.epidata.requests.get")
+    def test_v4_probe_params_are_scalars(self, mock_get):
+        mock_get.side_effect = self._fake_get()
+
+        self._export(self.V4_INDICATOR, "user-key")
+        params = self._probe_calls(mock_get)[0].kwargs["params"]
+        self.assertEqual(params["data_source"], "src")
+        self.assertEqual(params["geo_values"], "pa")
+        for key, value in params.items():
+            self.assertIsInstance(value, str, msg=f"{key} should be a plain string")
+
+    @patch("indicatorsets.utils.epidata.requests.get")
+    def test_v5_probe_params_are_scalars(self, mock_get):
+        mock_get.side_effect = self._fake_get(
+            metadata_signals=["confirmed_admissions_covid_ew"]
+        )
+
+        self._export(self.V5_INDICATOR, "user-key")
+        params = self._probe_calls(mock_get)[0].kwargs["params"]
+        self.assertEqual(params["source"], "nhsn")
+        self.assertEqual(params["geo_value"], "pa")
+        for key, value in params.items():
+            self.assertIsInstance(value, str, msg=f"{key} should be a plain string")
+
+    @patch("indicatorsets.utils.epidata.requests.get")
+    def test_v5_export_routes_through_the_download_proxy(self, mock_get):
+        mock_get.side_effect = self._fake_get(
+            metadata_signals=["confirmed_admissions_covid_ew"]
+        )
+
+        result = self._export(self.V5_INDICATOR, "user-key")
+        self.assertEqual(len(result), 1)
+        command = result[0]
+        filename = "nhsn_confirmed_admissions_covid_ew_state.csv"
+        self.assertIn(f"curl -o {filename}", command)
+        self.assertIn(f'download="{filename}"', command)
+        self.assertNotIn("wget", command)
+
+        href = re.search(r'href="([^"]+)"', command).group(1)
+        self.assertTrue(href.startswith(reverse("download_export")))
+        params = parse_qs(urlparse(href).query)
+        self.assertEqual(params["source"], ["nhsn"])
+        self.assertEqual(params["signal"], ["confirmed_admissions_covid_ew"])
+        self.assertEqual(params["geo_type"], ["state"])
+        self.assertEqual(params["geo_value"], ["pa"])
+        self.assertEqual(params["time_values"], ["2020-01-01:2020-01-20"])
+        self.assertEqual(params["format"], ["csv"])
+        self.assertEqual(params["header"], ["true"])
+        self.assertEqual(params["filename"], [filename])
+        self.assertEqual(params["api_key"], ["user-key"])
+        # the raw API URL stays visible as the link text
+        self.assertIn(f"{settings.EPIDATA_V5_URL}viz/?source=nhsn", command)
+
+    @patch("indicatorsets.utils.epidata.requests.get")
+    def test_v4_export_still_uses_wget_against_the_api(self, mock_get):
+        mock_get.side_effect = self._fake_get()
+
+        result = self._export(self.V4_INDICATOR, "user-key")
+        self.assertEqual(len(result), 1)
+        self.assertIn("wget --content-disposition", result[0])
+        self.assertIn("covidcast/csv", result[0])
+        self.assertNotIn("curl -o", result[0])
+        self.assertNotIn(reverse("download_export"), result[0])
+
+    @patch("indicatorsets.utils.epidata.requests.get")
+    def test_v5_probe_omits_time_type(self, mock_get):
+        mock_get.side_effect = self._fake_get(
+            metadata_signals=["confirmed_admissions_covid_ew"]
+        )
+
+        self._export(self.V5_INDICATOR, None)
+        params = self._probe_calls(mock_get)[0].kwargs["params"]
+        self.assertNotIn("time_type", params)
+
+    @patch("indicatorsets.utils.epidata.requests.get")
+    def test_v4_probe_still_sends_time_type(self, mock_get):
+        mock_get.side_effect = self._fake_get()
+
+        self._export(self.V4_INDICATOR, None)
+        params = self._probe_calls(mock_get)[0].kwargs["params"]
+        self.assertEqual(params["time_type"], "day")
+
+    @override_settings(EPIDATA_API_KEY="server-key")
+    @patch("indicatorsets.utils.epidata.requests.get")
+    def test_export_falls_back_to_v4_when_metadata_unavailable(self, mock_get):
+        mock_get.side_effect = self._fake_get(
+            metadata_error=requests.RequestException("unavailable")
+        )
+
+        result = self._export(self.V5_INDICATOR, None)
+        probe_calls = self._probe_calls(mock_get)
+        self.assertEqual(len(probe_calls), 1)
+        self.assertIn("covidcast", probe_calls[0].args[0])
+        self.assertNotIn("/v5/", probe_calls[0].args[0])
+        self.assertEqual(len(result), 1)
+        self.assertIn("covidcast/csv", result[0])
+        self.assertNotIn("/v5/", result[0])
+
+
+class GenerateQueryCodeCovidcastTests(V5RoutingTestMixin, TestCase):
+    GEOS = {
+        "state": [
+            {"id": "state:PA", "geoType": "state"},
+            {"id": "state:NY", "geoType": "state"},
+        ]
+    }
+
+    def _indicators(
+        self, time_type="week", data_source="my-src", signals=("sig_a", "sig_b")
+    ):
+        return [
+            {
+                "_endpoint": "covidcast",
+                "data_source": data_source,
+                "indicator": signal,
+                "time_type": time_type,
+            }
+            for signal in signals
+        ]
+
+    def _generate(self, indicators, data_source="my-src"):
+        return generate_query_code_covidcast(
+            indicators,
+            self.GEOS,
+            "2024-01-01",
+            "2024-03-01",
+            data_source,
+            ",".join(i["indicator"] for i in indicators),
+        )
+
+    @patch("indicatorsets.utils.epidata.requests.get")
+    def test_weekly_v4_snippets_are_unchanged(self, mock_get):
+        mock_get.side_effect = self._fake_get()
+        python_blocks, r_blocks = self._generate(self._indicators("week"))
+        self.assertEqual(
+            "".join(python_blocks),
+            "my_src_state_df = epidata.pub_covidcast(\n"
+            '    data_source="my-src",\n'
+            '    signals="sig_a,sig_b",\n'
+            '    geo_type="state",\n'
+            '    time_type="week",\n'
+            '    geo_values="pa,ny",\n'
+            "    time_values=EpiRange(202401, 202409),\n"
+            ").df()\n",
+        )
+        self.assertEqual(
+            "".join(r_blocks),
+            "epidata_my_src_state <- pub_covidcast(\n"
+            '    source = "my-src",\n'
+            '    signals = "sig_a,sig_b",\n'
+            '    geo_type = "state",\n'
+            '    time_type = "week",\n'
+            '    geo_values = "pa,ny",\n'
+            "    time_values = epirange(202401, 202409)\n"
+            ")\n",
+        )
+
+    @patch("indicatorsets.utils.epidata.requests.get")
+    def test_migrated_signals_get_v5_request_snippets(self, mock_get):
+        mock_get.side_effect = self._fake_get(metadata_signals=["sig_a", "sig_b"])
+
+        python_blocks, r_blocks = self._generate(
+            self._indicators("week", data_source="nhsn"), data_source="nhsn"
+        )
+        python_code = "".join(python_blocks)
+        r_code = "".join(r_blocks)
+
+        self.assertNotIn("pub_covidcast", python_code)
+        self.assertNotIn("pub_covidcast", r_code)
+        self.assertIn("import requests", python_blocks)
+        self.assertIn("library(httr)", r_blocks)
+        for signal in ("sig_a", "sig_b"):
+            self.assertIn(f"nhsn_{signal}_state_response = requests.get(", python_code)
+            self.assertIn(f"nhsn_{signal}_state_response <- GET(", r_code)
+            self.assertIn(
+                f"{settings.EPIDATA_V5_URL}viz/?source=nhsn&signal={signal}"
+                "&geo_type=state&geo_value=pa,ny"
+                "&time_values=2024-01-01:2024-03-01&format=json&header=false",
+                python_code,
+            )
+
+    @patch("indicatorsets.utils.epidata.requests.get")
+    def test_mixed_group_splits_between_v5_and_v4(self, mock_get):
+        mock_get.side_effect = self._fake_get(metadata_signals=["sig_a"])
+
+        python_blocks, _ = self._generate(
+            self._indicators("week", data_source="nhsn"), data_source="nhsn"
+        )
+        python_code = "".join(python_blocks)
+
+        # sig_a is on v5, sig_b is not
+        self.assertIn("nhsn_sig_a_state_response = requests.get(", python_code)
+        self.assertNotIn("nhsn_sig_b_state_response", python_code)
+        self.assertIn("epidata.pub_covidcast(", python_code)
+        self.assertIn('signals="sig_b",', python_code)
+        self.assertNotIn("sig_a,sig_b", python_code)
+
+    @patch("indicatorsets.utils.epidata.requests.get")
+    def test_falls_back_to_v4_snippets_when_metadata_unavailable(self, mock_get):
+        mock_get.side_effect = self._fake_get(
+            metadata_error=requests.RequestException("unavailable")
+        )
+
+        python_blocks, _ = self._generate(
+            self._indicators("week", data_source="nhsn"), data_source="nhsn"
+        )
+        python_code = "".join(python_blocks)
+        self.assertIn("epidata.pub_covidcast(", python_code)
+        self.assertIn('signals="sig_a,sig_b",', python_code)
+        self.assertNotIn("requests.get(", python_code)
+
+    @patch("indicatorsets.utils.epidata.requests.get")
+    def test_daily_v4_snippets_are_unchanged(self, mock_get):
+        mock_get.side_effect = self._fake_get()
+        python_blocks, r_blocks = self._generate(self._indicators("day"))
+        self.assertEqual(
+            "".join(python_blocks),
+            "my_src_state_df = epidata.pub_covidcast(\n"
+            '    data_source="my-src",\n'
+            '    signals="sig_a,sig_b",\n'
+            '    geo_type="state",\n'
+            '    time_type="day",\n'
+            '    geo_values="pa,ny",\n'
+            "    time_values=EpiRange(20240101, 20240301),\n"
+            ").df()\n",
+        )
+        self.assertEqual(
+            "".join(r_blocks),
+            "epidata_my_src_state <- pub_covidcast(\n"
+            '    source = "my-src",\n'
+            '    signals = "sig_a,sig_b",\n'
+            '    geo_type = "state",\n'
+            '    time_type = "day",\n'
+            '    geo_values = "pa,ny",\n'
+            "    time_values = epirange(20240101, 20240301)\n"
+            ")\n",
+        )
+
+
+class PreviewCovidcastRoutingTests(V5RoutingTestMixin, TestCase):
+    V5_INDICATOR = {
+        "_endpoint": "covidcast",
+        "data_source": "nhsn",
+        "indicator": "confirmed_admissions_covid_ew",
+        "time_type": "week",
+        "display_name": "COVID Admissions",
+    }
+    V4_INDICATOR = {
+        "_endpoint": "covidcast",
+        "data_source": "src",
+        "indicator": "sig",
+        "time_type": "week",
+        "display_name": "My Signal",
+    }
+
+    def _preview(self, indicator, api_key=None):
+        return preview_covidcast_data(
+            [indicator],
+            "2020-01-01",
+            "2020-01-20",
+            {"state": [{"id": "state:pa", "geoType": "state"}]},
+            api_key,
+            "json",
+        )
+
+    @patch("indicatorsets.utils.epidata.requests.get")
+    def test_v4_indicator_is_previewed_from_v4(self, mock_get):
+        mock_get.side_effect = self._fake_get()
+
+        self._preview(self.V4_INDICATOR)
+        calls = self._probe_calls(mock_get)
+        self.assertEqual(len(calls), 1)
+        params = calls[0].kwargs["params"]
+        self.assertNotIn("/v5/", calls[0].args[0])
+        self.assertEqual(params["data_source"], "src")
+        self.assertEqual(params["geo_values"], "pa")
+        # weekly v4 previews keep epiweek time values
+        self.assertEqual(params["time_values"], "202001-202004")
+
+    @patch("indicatorsets.utils.epidata.requests.get")
+    def test_migrated_indicator_is_previewed_from_v5(self, mock_get):
+        mock_get.side_effect = self._fake_get(
+            metadata_signals=["confirmed_admissions_covid_ew"]
+        )
+
+        self._preview(self.V5_INDICATOR, api_key="user-key")
+        calls = self._probe_calls(mock_get)
+        self.assertEqual(len(calls), 1)
+        params = calls[0].kwargs["params"]
+        self.assertIn("/v5/viz/", calls[0].args[0])
+        self.assertEqual(params["source"], "nhsn")
+        self.assertEqual(params["geo_value"], "pa")
+        self.assertEqual(params["time_values"], "2020-01-01:2020-01-20")
+        self.assertEqual(params["api_key"], "user-key")
+        self.assertNotIn("data_source", params)
+        self.assertNotIn("geo_values", params)
+
+    @patch("indicatorsets.utils.epidata.requests.get")
+    def test_v5_preview_omits_time_type(self, mock_get):
+        mock_get.side_effect = self._fake_get(
+            metadata_signals=["confirmed_admissions_covid_ew"]
+        )
+
+        self._preview(self.V5_INDICATOR)
+        params = self._probe_calls(mock_get)[0].kwargs["params"]
+        self.assertNotIn("time_type", params)
+
+    @patch("indicatorsets.utils.epidata.requests.get")
+    def test_v4_preview_still_sends_time_type(self, mock_get):
+        mock_get.side_effect = self._fake_get()
+
+        self._preview(self.V4_INDICATOR)
+        params = self._probe_calls(mock_get)[0].kwargs["params"]
+        self.assertEqual(params["time_type"], "week")
+
+    @patch("indicatorsets.utils.epidata.requests.get")
+    def test_preview_falls_back_to_v4_when_metadata_unavailable(self, mock_get):
+        mock_get.side_effect = self._fake_get(
+            metadata_error=requests.RequestException("unavailable")
+        )
+
+        self._preview(self.V5_INDICATOR)
+        calls = self._probe_calls(mock_get)
+        self.assertEqual(len(calls), 1)
+        self.assertNotIn("/v5/", calls[0].args[0])
+        self.assertEqual(calls[0].kwargs["params"]["data_source"], "nhsn")
+
+    @patch("indicatorsets.utils.epidata.requests.get")
+    def test_preview_and_export_agree_on_the_endpoint(self, mock_get):
+        """The point of the fix: one selection must not straddle two APIs."""
+        mock_get.side_effect = self._fake_get(
+            metadata_signals=["confirmed_admissions_covid_ew"]
+        )
+
+        self._preview(self.V5_INDICATOR)
+        preview_url = self._probe_calls(mock_get)[0].args[0]
+
+        mock_get.reset_mock()
+        cache.clear()
+        mock_get.side_effect = self._fake_get(
+            metadata_signals=["confirmed_admissions_covid_ew"]
+        )
+        generate_covidcast_indicators_export_url(
+            [self.V5_INDICATOR],
+            "2020-01-01",
+            "2020-01-20",
+            {"state": [{"id": "state:pa", "geoType": "state"}]},
+            None,
+            "csv",
+        )
+        export_probe_url = self._probe_calls(mock_get)[0].args[0]
+
+        self.assertIn("/v5/", preview_url)
+        self.assertEqual(preview_url, export_probe_url)
+
+
+@patch.dict(
+    "indicatorsets.utils.constants.MIGRATED_DATASOURCES",
+    {"nhsn": "nhsn_renamed_in_v5"},
+    clear=True,
+)
+class RenamedV5SourceTests(V5RoutingTestMixin, TestCase):
+    """A source whose v5 name differs from its v4 name must query the v5 name.
+
+    Every real MIGRATED_DATASOURCES entry maps a name to itself, so only a
+    non-identity mapping can catch a call site that reuses the v4 name.
+    """
+
+    INDICATOR = {
+        "_endpoint": "covidcast",
+        "data_source": "nhsn",
+        "indicator": "confirmed_admissions_covid_ew",
+        "time_type": "week",
+        "display_name": "COVID Admissions",
+    }
+    GEOS = {"state": [{"id": "state:pa", "geoType": "state"}]}
+
+    def _renamed_fake_get(self):
+        return self._fake_get(
+            metadata_signals=["confirmed_admissions_covid_ew"],
+            metadata_source="nhsn_renamed_in_v5",
+        )
+
+    @patch("indicatorsets.utils.epidata.requests.get")
+    def test_resolver_returns_the_v5_name(self, mock_get):
+        mock_get.side_effect = self._renamed_fake_get()
+        self.assertEqual(get_v5_source(self.INDICATOR), "nhsn_renamed_in_v5")
+
+    @patch("indicatorsets.utils.epidata.requests.get")
+    def test_export_uses_the_v5_name_everywhere(self, mock_get):
+        mock_get.side_effect = self._renamed_fake_get()
+
+        result = generate_covidcast_indicators_export_url(
+            [self.INDICATOR], "2020-01-01", "2020-01-20", self.GEOS, None, "csv"
+        )
+        probe_params = self._probe_calls(mock_get)[0].kwargs["params"]
+        self.assertEqual(probe_params["source"], "nhsn_renamed_in_v5")
+
+        href = re.search(r'href="([^"]+)"', result[0]).group(1)
+        self.assertEqual(
+            parse_qs(urlparse(href).query)["source"], ["nhsn_renamed_in_v5"]
+        )
+        # the visible link text is a real v5 URL, so it carries the v5 name too
+        self.assertIn("viz/?source=nhsn_renamed_in_v5", result[0])
+
+    @patch("indicatorsets.utils.epidata.requests.get")
+    def test_preview_uses_the_v5_name(self, mock_get):
+        mock_get.side_effect = self._renamed_fake_get()
+
+        preview_covidcast_data(
+            [self.INDICATOR], "2020-01-01", "2020-01-20", self.GEOS, None, "json"
+        )
+        params = self._probe_calls(mock_get)[0].kwargs["params"]
+        self.assertEqual(params["source"], "nhsn_renamed_in_v5")
+
+    @patch("indicatorsets.utils.epidata.requests.get")
+    def test_query_code_uses_the_v5_name(self, mock_get):
+        mock_get.side_effect = self._renamed_fake_get()
+
+        python_blocks, r_blocks = generate_query_code_covidcast(
+            [self.INDICATOR],
+            self.GEOS,
+            "2020-01-01",
+            "2020-01-20",
+            "nhsn",
+            "confirmed_admissions_covid_ew",
+        )
+        python_code = "".join(python_blocks)
+        self.assertIn("viz/?source=nhsn_renamed_in_v5", python_code)
+        self.assertIn("viz/?source=nhsn_renamed_in_v5", "".join(r_blocks))
+        self.assertNotIn("source=nhsn&", python_code)
+
+
+class DownloadVizExportTests(TestCase):
+    UPSTREAM_CSV = b"signal,value\nconfirmed_admissions_covid_ew,1\n"
+
+    def test_rejects_source_outside_the_allowlist(self):
+        response = self.client.get(
+            reverse("download_export"), {"source": "not_a_source"}
+        )
+        self.assertEqual(response.status_code, 400)
+
+    def test_migrated_covidcast_sources_are_allowed(self):
+        for source in MIGRATED_DATASOURCES.values():
+            self.assertIn(source, VIZ_SOURCES)
+
+    @patch("indicatorsets.proxy_views.requests.get")
+    def test_serves_migrated_covidcast_source_with_content_disposition(self, mock_get):
+        upstream = MagicMock()
+        upstream.status_code = 200
+        upstream.raise_for_status = MagicMock()
+        upstream.content = self.UPSTREAM_CSV
+        upstream.headers = {"Content-Type": "text/csv; charset=utf-8"}
+        mock_get.return_value = upstream
+
+        filename = "nhsn_confirmed_admissions_covid_ew_state.csv"
+        response = self.client.get(
+            reverse("download_export"),
+            {
+                "source": "nhsn",
+                "signal": "confirmed_admissions_covid_ew",
+                "geo_type": "state",
+                "geo_value": "pa",
+                "time_values": "2020-01-01:2020-01-20",
+                "format": "csv",
+                "header": "true",
+                "filename": filename,
+            },
+        )
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.content, self.UPSTREAM_CSV)
+        self.assertEqual(
+            response["Content-Disposition"], f'attachment; filename="{filename}"'
+        )
+        forwarded = mock_get.call_args.kwargs["params"]
+        self.assertEqual(forwarded["source"], "nhsn")
+        self.assertEqual(forwarded["signal"], "confirmed_admissions_covid_ew")
+        self.assertEqual(forwarded["geo_value"], "pa")
 
 
 class GeneratePophiveExportUrlTests(TestCase):
