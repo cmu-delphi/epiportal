@@ -8,6 +8,106 @@ from indicatorsets.utils.epidata import get_v5_source
 from indicatorsets.utils.helpers import get_epiweek
 
 
+def split_v4_v5_covidcast_indicators(indicators):
+    """Partition ``indicators`` by whether their source has migrated to v5.
+
+    Returns ``(v5_indicators, v4_indicators, v5_source)``, where ``v5_source``
+    is the v5 name shared by every v5 indicator (all indicators in a group
+    share one data source), or ``None`` if nothing has migrated.
+    """
+    v5_indicators = [indicator for indicator in indicators if get_v5_source(indicator)]
+    v4_indicators = [
+        indicator for indicator in indicators if indicator not in v5_indicators
+    ]
+    v5_source = get_v5_source(v5_indicators[0]) if v5_indicators else None
+    return v5_indicators, v4_indicators, v5_source
+
+
+def generate_v5_covidcast_snippets(
+    v5_indicators, v5_source, data_source, geo_type, geo_values, start_date, end_date
+):
+    """Build one plain requests/httr snippet per v5-migrated indicator.
+
+    epidatpy/epidatr have no v5 equivalent of ``pub_covidcast``, so these query
+    the v5 endpoint directly, the way the pophive and nwss builders do.
+    """
+    python_code_blocks = []
+    r_code_blocks = []
+    for indicator in v5_indicators:
+        url = (
+            f"{settings.EPIDATA_V5_URL}viz/?source={v5_source}"
+            f"&signal={indicator['indicator']}&geo_type={geo_type}"
+            f"&geo_value={','.join(geo_values)}"
+            f"&time_values={start_date}:{end_date}&format=json&header=false"
+        )
+        name = f"{data_source.replace('-', '_')}_{indicator['indicator']}_{geo_type}"
+        python_code_blocks.append(
+            dedent(
+                f"""\
+                {name}_response = requests.get(
+                    "{url}"
+                )
+                {name}_data = {name}_response.json()
+            """
+            )
+        )
+        r_code_blocks.append(
+            dedent(
+                f"""\
+                {name}_response <- GET(
+                    "{url}"
+                )
+                {name}_data <- fromJSON(content({name}_response, "text"))
+            """
+            )
+        )
+    return python_code_blocks, r_code_blocks
+
+
+def generate_v4_covidcast_snippet(
+    data_source, indicators_str, time_type, geo_type, geo_values, start_date, end_date
+):
+    """Build the single ``pub_covidcast`` snippet covering every v4 indicator.
+
+    ``pub_covidcast`` takes a comma-joined ``signals`` string, so all v4
+    indicators for this geo_type are fetched in one call.
+    """
+    if time_type == "week":
+        start_week, end_week = get_epiweek(start_date, end_date)
+        python_time_values = f"EpiRange({start_week}, {end_week})"
+        r_time_values = f"epirange({start_week}, {end_week})"
+    else:
+        start_day = start_date.replace("-", "")
+        end_day = end_date.replace("-", "")
+        python_time_values = f"EpiRange({start_day}, {end_day})"
+        r_time_values = f"epirange({start_day}, {end_day})"
+    python_code_block = dedent(
+        f"""\
+        {data_source.replace('-', '_')}_{geo_type}_df = epidata.pub_covidcast(
+            data_source="{data_source}",
+            signals="{indicators_str}",
+            geo_type="{geo_type}",
+            time_type="{time_type}",
+            geo_values="{','.join(geo_values)}",
+            time_values={python_time_values},
+        ).df()
+    """
+    )
+    r_code_block = dedent(
+        f"""\
+        epidata_{data_source.replace("-", "_")}_{geo_type} <- pub_covidcast(
+            source = "{data_source}",
+            signals = "{indicators_str}",
+            geo_type = "{geo_type}",
+            time_type = "{time_type}",
+            geo_values = "{','.join(geo_values)}",
+            time_values = {r_time_values}
+        )
+    """
+    )
+    return python_code_block, r_code_block
+
+
 def generate_query_code_covidcast(
     indicators,
     covidcast_geos,
@@ -19,20 +119,16 @@ def generate_query_code_covidcast(
     """Generate snippets for a covidcast data source, routing per indicator.
 
     Signals this source has migrated to Epidata v5 get plain ``requests``/``httr``
-    snippets against the v5 endpoint, the way the pophive and nwss builders do,
-    because epidatpy/epidatr have no v5 equivalent of ``pub_covidcast``. Anything
-    still on v4 keeps its ``pub_covidcast`` call. ``indicators_str`` is only used
-    when nothing has migrated; otherwise the v4 signal list is recomputed from
-    the indicators that are actually still on v4.
+    snippets against the v5 endpoint; anything still on v4 keeps its
+    ``pub_covidcast`` call. ``indicators_str`` is only used when nothing has
+    migrated; otherwise the v4 signal list is recomputed from the indicators
+    that are actually still on v4.
     """
     python_code_blocks = []
     r_code_blocks = []
-    v5_indicators = [indicator for indicator in indicators if get_v5_source(indicator)]
-    v4_indicators = [
-        indicator for indicator in indicators if indicator not in v5_indicators
-    ]
-    # every indicator in this group shares one data source, so one v5 name
-    v5_source = get_v5_source(v5_indicators[0]) if v5_indicators else None
+    v5_indicators, v4_indicators, v5_source = split_v4_v5_covidcast_indicators(
+        indicators
+    )
     if v5_indicators:
         python_code_blocks.append("import requests")
         r_code_blocks.extend(["library(httr)", "library(jsonlite)"])
@@ -49,75 +145,30 @@ def generate_query_code_covidcast(
             )
             for value in values
         ]
-        for indicator in v5_indicators:
-            url = (
-                f"{settings.EPIDATA_V5_URL}viz/?source={v5_source}"
-                f"&signal={indicator['indicator']}&geo_type={geo_type}"
-                f"&geo_value={','.join(geo_values)}"
-                f"&time_values={start_date}:{end_date}&format=json&header=false"
-            )
-            name = (
-                f"{data_source.replace('-', '_')}_{indicator['indicator']}_{geo_type}"
-            )
-            python_code_blocks.append(
-                dedent(
-                    f"""\
-                    {name}_response = requests.get(
-                        "{url}"
-                    )
-                    {name}_data = {name}_response.json()
-                """
-                )
-            )
-            r_code_blocks.append(
-                dedent(
-                    f"""\
-                    {name}_response <- GET(
-                        "{url}"
-                    )
-                    {name}_data <- fromJSON(content({name}_response, "text"))
-                """
-                )
-            )
+        v5_python_blocks, v5_r_blocks = generate_v5_covidcast_snippets(
+            v5_indicators,
+            v5_source,
+            data_source,
+            geo_type,
+            geo_values,
+            start_date,
+            end_date,
+        )
+        python_code_blocks.extend(v5_python_blocks)
+        r_code_blocks.extend(v5_r_blocks)
         if not v4_indicators:
             continue
-        if time_type == "week":
-            start_week, end_week = get_epiweek(start_date, end_date)
-            python_time_values = f"EpiRange({start_week}, {end_week})"
-            r_time_values = f"epirange({start_week}, {end_week})"
-        else:
-            start_day = start_date.replace("-", "")
-            end_day = end_date.replace("-", "")
-            python_time_values = f"EpiRange({start_day}, {end_day})"
-            r_time_values = f"epirange({start_day}, {end_day})"
-        python_code_blocks.append(
-            dedent(
-                f"""\
-                {data_source.replace('-', '_')}_{geo_type}_df = epidata.pub_covidcast(
-                    data_source="{data_source}",
-                    signals="{indicators_str}",
-                    geo_type="{geo_type}",
-                    time_type="{time_type}",
-                    geo_values="{','.join(geo_values)}",
-                    time_values={python_time_values},
-                ).df()
-            """
-            )
+        v4_python_block, v4_r_block = generate_v4_covidcast_snippet(
+            data_source,
+            indicators_str,
+            time_type,
+            geo_type,
+            geo_values,
+            start_date,
+            end_date,
         )
-        r_code_blocks.append(
-            dedent(
-                f"""\
-                epidata_{data_source.replace("-", "_")}_{geo_type} <- pub_covidcast(
-                    source = "{data_source}",
-                    signals = "{indicators_str}",
-                    geo_type = "{geo_type}",
-                    time_type = "{time_type}",
-                    geo_values = "{','.join(geo_values)}",
-                    time_values = {r_time_values}
-                )
-            """
-            )
-        )
+        python_code_blocks.append(v4_python_block)
+        r_code_blocks.append(v4_r_block)
     return python_code_blocks, r_code_blocks
 
 
