@@ -11,3 +11,11 @@ NO_DATA_MESSAGE = (
     "No data found for the selected parameters. Try adjusting the date range, "
     "indicators, or locations."
 )
+
+# Key, value pairs {"v4 name": "v5 name"}
+MIGRATED_DATASOURCES = {
+    "nhsn": "nhsn",
+    "nssp": "nssp",
+    "beta_nssp": "nssp",
+    "beta_nssp_github": "nssp",
+}

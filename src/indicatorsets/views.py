@@ -14,12 +14,12 @@ from django.db.models import Case, IntegerField, Value, When
 from django.http import JsonResponse
 from django.views.generic import ListView
 from epiweeks import Week
-from django.core.cache import cache
 
 from base.models import GeographyUnit
 from indicatorsets.filters import IndicatorSetFilter
 from indicatorsets.forms import IndicatorSetFilterForm
 from indicatorsets.models import ColumnDescription, FilterDescription, IndicatorSet
+from indicatorsets.utils.caching import safe_cache_get, safe_cache_set
 from indicatorsets.utils.sources import EPIWEEK_SOURCES
 from indicatorsets.utils import (
     InvalidApiKeyError,
@@ -368,10 +368,10 @@ class IndicatorSetListView(ListView):
             ColumnDescription.get_all_descriptions_as_dict()
         )
         context["header_description"] = HEADER_DESCRIPTION
-        geographic_granularities = cache.get("geographic_granularities")
+        geographic_granularities = safe_cache_get("geographic_granularities")
         if not geographic_granularities:
             geographic_granularities = self.get_grouped_geographic_granularities()
-            cache.set(
+            safe_cache_set(
                 "geographic_granularities", geographic_granularities, 60 * 60 * 24
             )
         context["geographic_granularities"] = geographic_granularities
@@ -849,7 +849,7 @@ def age_group_sort_key(value):
 
 
 def get_pophive_age_groups(request):
-    pophive_age_groups = cache.get("pophive_age_groups") or []
+    pophive_age_groups = safe_cache_get("pophive_age_groups", []) or []
     if not pophive_age_groups:
         try:
             response = requests.get(
@@ -861,14 +861,14 @@ def get_pophive_age_groups(request):
                 "age_group", []
             )
             pophive_age_groups.sort(key=age_group_sort_key)
-            cache.set("pophive_age_groups", pophive_age_groups, 60 * 60 * 24)
+            safe_cache_set("pophive_age_groups", pophive_age_groups, 60 * 60 * 24)
         except requests.RequestException:
             logger.exception("Error getting pophive age groups")
     return JsonResponse({"age_groups": pophive_age_groups})
 
 
 def get_nwss_county_mapping(request):
-    nwss_county_mapping = cache.get("nwss_county_mapping") or []
+    nwss_county_mapping = safe_cache_get("nwss_county_mapping", []) or []
     nwss_county_mapping = []
     url = settings.EPIDATA_V5_URL + "geomap/nwss_sewershed_crosswalk?other_geo_type=county"
     if not nwss_county_mapping:
@@ -898,7 +898,7 @@ def get_nwss_county_mapping(request):
                     }
                 )
                 nwss_county_mapping = sorted(nwss_county_mapping, key=lambda x: x["text"])
-            cache.set("nwss_county_mapping", nwss_county_mapping, 60 * 60 * 24)
+            safe_cache_set("nwss_county_mapping", nwss_county_mapping, 60 * 60 * 24)
             logger.info(f"Fetched: {len(nwss_county_mapping)} locations.")
         except requests.RequestException:
             logger.exception("Error getting nwss county mapping")

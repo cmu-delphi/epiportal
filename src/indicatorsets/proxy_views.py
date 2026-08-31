@@ -5,11 +5,15 @@ from delphi_utils import get_structured_logger
 from django.conf import settings
 from django.http import HttpResponse, HttpResponseBadRequest, HttpResponseForbidden
 
+from indicatorsets.utils.constants import MIGRATED_DATASOURCES
+
 logger = get_structured_logger("indicatorsets.proxy_views")
 
 FILENAME_SANITIZE_RE = re.compile(r"[^A-Za-z0-9_.-]")
 
-VIZ_SOURCES = ("nwss", "pophive")
+# The v5-native endpoints, plus any covidcast source whose exports now route to
+# v5 -- derived so migrating a source does not silently 400 its downloads.
+VIZ_SOURCES = ("nwss", "pophive") + tuple(sorted(set(MIGRATED_DATASOURCES.values())))
 
 
 def download_viz_export(request):

@@ -9,6 +9,7 @@ from django.conf import settings
 from delphi_utils import get_structured_logger
 
 from indicatorsets.utils.constants import INVALID_API_KEY_MESSAGE, NO_DATA_MESSAGE
+from indicatorsets.utils.epidata import get_time_values, get_v5_source
 from indicatorsets.utils.exceptions import InvalidApiKeyError
 from indicatorsets.utils.helpers import get_epiweek
 
@@ -44,10 +45,11 @@ def preview_covidcast_data(
     preview_data = []
     for indicator in indicators:
         if indicator["_endpoint"] == "covidcast":
-            time_values = f"{start_date}--{end_date}"
-            if indicator["time_type"] == "week":
-                start_day, end_day = get_epiweek(start_date, end_date)
-                time_values = f"{start_day}-{end_day}"
+            v5_source = get_v5_source(indicator)
+            get_from_v5 = v5_source is not None
+            time_values, _ = get_time_values(
+                indicator, start_date, end_date, get_from_v5
+            )
             for geo_type, values in covidcast_geos.items():
                 geo_values = ",".join(
                     [
@@ -60,19 +62,26 @@ def preview_covidcast_data(
                     ]
                 )
                 params = {
-                    "time_type": indicator["time_type"],
                     "time_values": time_values,
-                    "data_source": indicator["data_source"],
                     "signal": indicator["indicator"],
                     "geo_type": geo_type,
-                    "geo_values": geo_values,
                     "api_key": api_key if api_key else settings.EPIDATA_API_KEY,
                     "format": data_format,
                     "header": "true" if data_format == "csv" else "false",
                 }
+                if get_from_v5:
+                    params["source"] = v5_source
+                    params["geo_value"] = geo_values
+                    epidata_url = f"{settings.EPIDATA_V5_URL}viz/"
+                else:
+                    # v5 keys signals by source and has no time_type dimension
+                    params["time_type"] = indicator["time_type"]
+                    params["data_source"] = indicator["data_source"]
+                    params["geo_values"] = geo_values
+                    epidata_url = f"{settings.EPIDATA_URL}covidcast"
                 try:
                     response = requests.get(
-                        f"{settings.EPIDATA_URL}covidcast",
+                        epidata_url,
                         params=params,
                         timeout=(5, 30),
                     )
