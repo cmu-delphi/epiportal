@@ -52,7 +52,11 @@ from indicatorsets.proxy_views import VIZ_SOURCES
 from indicatorsets.utils.constants import MIGRATED_DATASOURCES
 from indicatorsets.utils.caching import safe_cache_get, safe_cache_set
 from indicatorsets.utils.epidata import get_v5_metadata, get_v5_source
-from indicatorsets.utils.query_code import generate_query_code_covidcast
+from indicatorsets.utils.query_code import (
+    generate_query_code_covidcast,
+    generate_query_code_nwss,
+    generate_query_code_pophive,
+)
 from indicatorsets.utils.sources import EPIWEEK_SOURCES
 from indicatorsets.views import age_group_sort_key, get_related_indicators
 from indicatorsets.filters import IndicatorSetFilter
@@ -216,10 +220,10 @@ class PophiveAgeGroupsViewTests(TestCase):
         )
 
     def test_age_group_sort_key(self):
-        age_groups = ["5-18", "0-1", "18-50", "65+", "all", "1-5", "50-65"]
+        age_groups = ["5-18", "<1", "18-50", "65+", "all", "1-5", "50-65"]
         self.assertEqual(
             sorted(age_groups, key=age_group_sort_key),
-            ["0-1", "1-5", "5-18", "18-50", "50-65", "65+", "all"],
+            ["<1", "1-5", "5-18", "18-50", "50-65", "65+", "all"],
         )
 
 
@@ -1528,7 +1532,7 @@ class GenerateQueryCodeCovidcastTests(V5RoutingTestMixin, TestCase):
         )
 
     @patch("indicatorsets.utils.epidata.requests.get")
-    def test_migrated_signals_get_v5_request_snippets(self, mock_get):
+    def test_migrated_signals_get_v5_client_snippets(self, mock_get):
         mock_get.side_effect = self._fake_get(metadata_signals=["sig_a", "sig_b"])
 
         python_blocks, r_blocks = self._generate(
@@ -1539,17 +1543,30 @@ class GenerateQueryCodeCovidcastTests(V5RoutingTestMixin, TestCase):
 
         self.assertNotIn("pub_covidcast", python_code)
         self.assertNotIn("pub_covidcast", r_code)
-        self.assertIn("import requests", python_blocks)
-        self.assertIn("library(httr)", r_blocks)
-        for signal in ("sig_a", "sig_b"):
-            self.assertIn(f"nhsn_{signal}_state_response = requests.get(", python_code)
-            self.assertIn(f"nhsn_{signal}_state_response <- GET(", r_code)
-            self.assertIn(
-                f"{settings.EPIDATA_V5_URL}viz/?source=nhsn&signal={signal}"
-                "&geo_type=state&geo_value=pa,ny"
-                "&time_values=2024-01-01:2024-03-01&format=json&header=false",
-                python_code,
-            )
+        self.assertNotIn("requests.get(", python_code)
+        self.assertNotIn("library(httr)", r_blocks)
+        self.assertNotIn("library(jsonlite)", r_blocks)
+        # both clients have a v5 client and batch every migrated signal into one call
+        self.assertIn(
+            "nhsn_state_v5_df = epidata.epidata_snapshot(\n"
+            '    source="nhsn",\n'
+            '    signals=["sig_a", "sig_b"],\n'
+            '    geo_type="state",\n'
+            '    geo_values=["pa", "ny"],\n'
+            '    reference_time=EpiRange("2024-01-01", "2024-03-01"),\n'
+            ").df()\n",
+            python_code,
+        )
+        self.assertIn(
+            "epidata_nhsn_state_v5 <- epidata_snapshot(\n"
+            '    source = "nhsn",\n'
+            '    signals = c("sig_a", "sig_b"),\n'
+            '    geo_type = "state",\n'
+            '    geo_values = c("pa", "ny"),\n'
+            '    reference_time = epirange("2024-01-01", "2024-03-01")\n'
+            ")\n",
+            r_code,
+        )
 
     @patch("indicatorsets.utils.epidata.requests.get")
     def test_mixed_group_splits_between_v5_and_v4(self, mock_get):
@@ -1561,8 +1578,8 @@ class GenerateQueryCodeCovidcastTests(V5RoutingTestMixin, TestCase):
         python_code = "".join(python_blocks)
 
         # sig_a is on v5, sig_b is not
-        self.assertIn("nhsn_sig_a_state_response = requests.get(", python_code)
-        self.assertNotIn("nhsn_sig_b_state_response", python_code)
+        self.assertIn("epidata.epidata_snapshot(", python_code)
+        self.assertIn('signals=["sig_a"],', python_code)
         self.assertIn("epidata.pub_covidcast(", python_code)
         self.assertIn('signals="sig_b",', python_code)
         self.assertNotIn("sig_a,sig_b", python_code)
@@ -1607,6 +1624,168 @@ class GenerateQueryCodeCovidcastTests(V5RoutingTestMixin, TestCase):
             "    time_values = epirange(20240101, 20240301)\n"
             ")\n",
         )
+
+
+class GenerateQueryCodePophiveTests(TestCase):
+    GEOS = [
+        {"id": "ca", "geo_type": "state", "text": "CA"},
+        {"id": "06001", "geo_type": "county", "text": "Alameda"},
+    ]
+    AGE_GROUP = [{"id": "0-17"}]
+
+    def _indicators(self, endpoint="pophive", signals=("sig_a", "sig_b")):
+        return [{"_endpoint": endpoint, "indicator": signal} for signal in signals]
+
+    def test_batches_every_signal_into_one_call_per_geo(self):
+        python_blocks, r_blocks = generate_query_code_pophive(
+            self._indicators(), "2024-01-01", "2024-03-01", self.GEOS, self.AGE_GROUP
+        )
+        self.assertEqual(
+            "".join(python_blocks),
+            "pophive_state_ca_df = epidata.epidata_snapshot(\n"
+            '    source="pophive",\n'
+            '    signals=["sig_a", "sig_b"],\n'
+            '    geo_type="state",\n'
+            '    geo_values="ca",\n'
+            '    reference_time=EpiRange("2024-01-01", "2024-03-01"),\n'
+            ").df()\n"
+            'pophive_state_ca_df = pophive_state_ca_df[pophive_state_ca_df["age_group"] == "0-17"]\n'
+            "pophive_county_06001_df = epidata.epidata_snapshot(\n"
+            '    source="pophive",\n'
+            '    signals=["sig_a", "sig_b"],\n'
+            '    geo_type="county",\n'
+            '    geo_values="06001",\n'
+            '    reference_time=EpiRange("2024-01-01", "2024-03-01"),\n'
+            ").df()\n"
+            'pophive_county_06001_df = pophive_county_06001_df[pophive_county_06001_df["age_group"] == "0-17"]\n',
+        )
+        self.assertEqual(
+            "".join(r_blocks),
+            "epidata_pophive_state_ca <- epidata_snapshot(\n"
+            '    source = "pophive",\n'
+            '    signals = c("sig_a", "sig_b"),\n'
+            '    geo_type = "state",\n'
+            '    geo_values = "ca",\n'
+            '    reference_time = epirange("2024-01-01", "2024-03-01"),\n'
+            '    age_group = "0-17"\n'
+            ")\n"
+            "epidata_pophive_county_06001 <- epidata_snapshot(\n"
+            '    source = "pophive",\n'
+            '    signals = c("sig_a", "sig_b"),\n'
+            '    geo_type = "county",\n'
+            '    geo_values = "06001",\n'
+            '    reference_time = epirange("2024-01-01", "2024-03-01"),\n'
+            '    age_group = "0-17"\n'
+            ")\n",
+        )
+
+    def test_ignores_non_pophive_indicators(self):
+        indicators = self._indicators() + self._indicators(
+            endpoint="covidcast", signals=("other",)
+        )
+        python_blocks, _ = generate_query_code_pophive(
+            indicators, "2024-01-01", "2024-03-01", self.GEOS[:1], self.AGE_GROUP
+        )
+        python_code = "".join(python_blocks)
+        self.assertNotIn("other", python_code)
+        self.assertIn('signals=["sig_a", "sig_b"]', python_code)
+
+    def test_returns_nothing_when_no_pophive_indicators(self):
+        python_blocks, r_blocks = generate_query_code_pophive(
+            self._indicators(endpoint="covidcast"),
+            "2024-01-01",
+            "2024-03-01",
+            self.GEOS,
+            self.AGE_GROUP,
+        )
+        self.assertEqual(python_blocks, [])
+        self.assertEqual(r_blocks, [])
+
+
+class GenerateQueryCodeNwssTests(TestCase):
+    SOURCES = [{"id": "CDC_Biobot"}, {"id": "CDC_Verily"}]
+
+    def _indicators(self, endpoint="nwss", signals=("sig_a", "sig_b")):
+        return [{"_endpoint": endpoint, "indicator": signal} for signal in signals]
+
+    def test_batches_every_signal_into_one_call_per_source(self):
+        python_blocks, r_blocks = generate_query_code_nwss(
+            self._indicators(),
+            "2024-01-01",
+            "2024-03-01",
+            ["sewershed_1", "sewershed_2"],
+            self.SOURCES,
+            "fill_ave",
+        )
+        self.assertEqual(
+            "".join(python_blocks),
+            "nwss_source_CDC_Biobot_df = epidata.epidata_snapshot(\n"
+            '    source="nwss",\n'
+            '    signals=["sig_a", "sig_b"],\n'
+            '    geo_type="sewershed",\n'
+            '    geo_values=["sewershed_1", "sewershed_2"],\n'
+            '    reference_time=EpiRange("2024-01-01", "2024-03-01"),\n'
+            '    fill_method="fill_ave",\n'
+            ").df()\n"
+            'nwss_source_CDC_Biobot_df = nwss_source_CDC_Biobot_df[nwss_source_CDC_Biobot_df["nwss_source"] == "CDC_Biobot"]\n'
+            "nwss_source_CDC_Verily_df = epidata.epidata_snapshot(\n"
+            '    source="nwss",\n'
+            '    signals=["sig_a", "sig_b"],\n'
+            '    geo_type="sewershed",\n'
+            '    geo_values=["sewershed_1", "sewershed_2"],\n'
+            '    reference_time=EpiRange("2024-01-01", "2024-03-01"),\n'
+            '    fill_method="fill_ave",\n'
+            ").df()\n"
+            'nwss_source_CDC_Verily_df = nwss_source_CDC_Verily_df[nwss_source_CDC_Verily_df["nwss_source"] == "CDC_Verily"]\n',
+        )
+        self.assertEqual(
+            "".join(r_blocks),
+            "epidata_nwss_source_CDC_Biobot <- epidata_snapshot(\n"
+            '    source = "nwss",\n'
+            '    signals = c("sig_a", "sig_b"),\n'
+            '    geo_type = "sewershed",\n'
+            '    geo_values = c("sewershed_1", "sewershed_2"),\n'
+            '    reference_time = epirange("2024-01-01", "2024-03-01"),\n'
+            '    fill_method = "fill_ave",\n'
+            '    nwss_source = "CDC_Biobot"\n'
+            ")\n"
+            "epidata_nwss_source_CDC_Verily <- epidata_snapshot(\n"
+            '    source = "nwss",\n'
+            '    signals = c("sig_a", "sig_b"),\n'
+            '    geo_type = "sewershed",\n'
+            '    geo_values = c("sewershed_1", "sewershed_2"),\n'
+            '    reference_time = epirange("2024-01-01", "2024-03-01"),\n'
+            '    fill_method = "fill_ave",\n'
+            '    nwss_source = "CDC_Verily"\n'
+            ")\n",
+        )
+
+    def test_ignores_non_nwss_indicators(self):
+        indicators = self._indicators() + self._indicators(
+            endpoint="pophive", signals=("other",)
+        )
+        python_blocks, _ = generate_query_code_nwss(
+            indicators,
+            "2024-01-01",
+            "2024-03-01",
+            ["sewershed_1"],
+            self.SOURCES[:1],
+            "source",
+        )
+        python_code = "".join(python_blocks)
+        self.assertNotIn("other", python_code)
+
+    def test_returns_nothing_when_no_nwss_indicators(self):
+        python_blocks, r_blocks = generate_query_code_nwss(
+            self._indicators(endpoint="pophive"),
+            "2024-01-01",
+            "2024-03-01",
+            ["sewershed_1"],
+            self.SOURCES,
+            "source",
+        )
+        self.assertEqual(python_blocks, [])
+        self.assertEqual(r_blocks, [])
 
 
 class PreviewCovidcastRoutingTests(V5RoutingTestMixin, TestCase):
@@ -1798,9 +1977,11 @@ class RenamedV5SourceTests(V5RoutingTestMixin, TestCase):
             "confirmed_admissions_covid_ew",
         )
         python_code = "".join(python_blocks)
-        self.assertIn("viz/?source=nhsn_renamed_in_v5", python_code)
-        self.assertIn("viz/?source=nhsn_renamed_in_v5", "".join(r_blocks))
-        self.assertNotIn("source=nhsn&", python_code)
+        r_code = "".join(r_blocks)
+        self.assertIn('source="nhsn_renamed_in_v5"', python_code)
+        self.assertIn('source = "nhsn_renamed_in_v5"', r_code)
+        self.assertNotIn('source="nhsn"', python_code)
+        self.assertNotIn('source = "nhsn"', r_code)
 
 
 class DownloadVizExportTests(TestCase):

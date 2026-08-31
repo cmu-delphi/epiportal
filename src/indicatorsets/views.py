@@ -843,6 +843,8 @@ def check_fluview_geo_coverage(request):
 def age_group_sort_key(value):
     if value == "all":
         return float("inf")
+    if value.startswith("<"):
+        return int(value[-1]) - 0.5
     if value.endswith("+"):
         return int(value[:-1]) + 0.5
     return int(value.split("-", 1)[0])
