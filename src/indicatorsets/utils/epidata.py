@@ -78,6 +78,22 @@ def get_v5_source(indicator):
     return v5_source if indicator["indicator"] in signals else None
 
 
+def split_v4_v5_indicators(indicators):
+    """Partition ``indicators`` by whether their source has migrated to v5.
+
+    Returns ``(v5_indicators, v4_indicators, v5_source)``, where ``v5_source``
+    is the v5 name shared by every v5 indicator (all indicators in a group
+    share one data source), or ``None`` if nothing has migrated. Shared by the
+    covidcast and epiweek query-code generators.
+    """
+    v5_indicators = [indicator for indicator in indicators if get_v5_source(indicator)]
+    v4_indicators = [
+        indicator for indicator in indicators if indicator not in v5_indicators
+    ]
+    v5_source = get_v5_source(v5_indicators[0]) if v5_indicators else None
+    return v5_indicators, v4_indicators, v5_source
+
+
 def get_time_values(indicator, start_date, end_date, get_from_v5):
     if get_from_v5:
         dates = None
@@ -90,3 +106,29 @@ def get_time_values(indicator, start_date, end_date, get_from_v5):
             dates = [start_date, end_date]
             time_values = f"{start_date}--{end_date}"
     return time_values, dates
+
+
+def map_fluview_geo_to_v5(geo_id):
+    """Map one of fluview's ``regions`` ids to a v5 ``(geo_type, geo_value)`` pair.
+
+    fluview's geo ids bake the geo type into the id itself ("nat" for the
+    nation, "hhsN"/"cenN" for HHS regions and census divisions, bare two-letter
+    codes for states) instead of carrying it alongside, the way covidcast_geos
+    does.
+    """
+    if geo_id == "nat":
+        return "nation", "us"
+    if geo_id.startswith("hhs"):
+        return "hhs", geo_id[len("hhs") :]
+    if geo_id.startswith("cen"):
+        return "census_division", geo_id[len("cen") :]
+    return "state", geo_id.lower()
+
+
+def group_fluview_geos_by_v5_type(geos):
+    """Bucket fluview's flat geo id list into ``{v5 geo_type: [v5 geo_values]}``."""
+    grouped = {}
+    for geo in geos:
+        geo_type, geo_value = map_fluview_geo_to_v5(geo["id"])
+        grouped.setdefault(geo_type, []).append(geo_value)
+    return grouped

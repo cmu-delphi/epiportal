@@ -15,7 +15,7 @@ from indicatorsets.utils.data_providers import (
     parse_original_data_provider_ids,
     sort_data_providers,
 )
-from indicatorsets.utils.epidata import has_epidata_results
+from indicatorsets.utils.epidata import has_epidata_results, split_v4_v5_indicators
 from indicatorsets.utils.epivis import (
     generate_covidcast_dataset_epivis,
     generate_epivis_custom_title,
@@ -99,4 +99,5 @@ __all__ = [
     "preview_nwss_data",
     "preview_pophive_data",
     "sort_data_providers",
+    "split_v4_v5_indicators",
 ]

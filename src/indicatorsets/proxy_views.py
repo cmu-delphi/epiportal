@@ -33,7 +33,7 @@ def download_viz_export(request):
         "signal": request.GET.get("signal", ""),
         "geo_type": request.GET.get("geo_type", ""),
         "geo_value": request.GET.get("geo_value", ""),
-        "time_values": request.GET.get("time_values", ""),
+        "reference_times": request.GET.get("reference_times", ""),
         "format": request.GET.get("format", "json"),
         "header": request.GET.get("header", "false"),
     }
@@ -43,9 +43,9 @@ def download_viz_export(request):
     fill_method = request.GET.get("fill_method")
     if fill_method:
         params["fill_method"] = fill_method
-    api_key = request.GET.get("api_key") or settings.EPIDATA_API_KEY
+    api_key = request.GET.get("token") or settings.EPIDATA_API_KEY
     if api_key:
-        params["api_key"] = api_key
+        params["token"] = api_key
 
     filename = FILENAME_SANITIZE_RE.sub(
         "_", request.GET.get("filename", f"{source}_export.json")
