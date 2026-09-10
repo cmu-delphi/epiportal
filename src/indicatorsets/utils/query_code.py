@@ -2,23 +2,12 @@
 
 from textwrap import dedent
 
-from indicatorsets.utils.epidata import get_v5_source
+from indicatorsets.utils.epidata import (
+    group_fluview_geos_by_v5_type,
+    group_v5_indicators_by_source,
+    split_v4_v5_indicators,
+)
 from indicatorsets.utils.helpers import get_epiweek
-
-
-def split_v4_v5_covidcast_indicators(indicators):
-    """Partition ``indicators`` by whether their source has migrated to v5.
-
-    Returns ``(v5_indicators, v4_indicators, v5_source)``, where ``v5_source``
-    is the v5 name shared by every v5 indicator (all indicators in a group
-    share one data source), or ``None`` if nothing has migrated.
-    """
-    v5_indicators = [indicator for indicator in indicators if get_v5_source(indicator)]
-    v4_indicators = [
-        indicator for indicator in indicators if indicator not in v5_indicators
-    ]
-    v5_source = get_v5_source(v5_indicators[0]) if v5_indicators else None
-    return v5_indicators, v4_indicators, v5_source
 
 
 def generate_v5_covidcast_snippets(
@@ -130,9 +119,7 @@ def generate_query_code_covidcast(
     """
     python_code_blocks = []
     r_code_blocks = []
-    v5_indicators, v4_indicators, v5_source = split_v4_v5_covidcast_indicators(
-        indicators
-    )
+    v5_indicators, v4_indicators, v5_source = split_v4_v5_indicators(indicators)
     if v5_indicators:
         indicators_str = ",".join(
             [indicator["indicator"] for indicator in v4_indicators]
@@ -174,21 +161,85 @@ def generate_query_code_covidcast(
     return python_code_blocks, r_code_blocks
 
 
-def generate_query_code_epiweek(source, geos, start_date, end_date):
-    """Generate epidatpy/epidatr snippets for an epiweek-based endpoint.
 
-    Args:
-        source: The :class:`EpiweekSource` describing the endpoint.
-        geos: Selected geos, each a dict with an ``id`` key.
 
-    Returns:
-        A ``(python_code_blocks, r_code_blocks)`` pair, one block each.
+
+def generate_v5_fluview_snippets(v5_indicators, geos, start_date, end_date):
+    """Build the v5 snippets for epiweek indicators whose source has migrated.
+
+    Mirrors ``generate_v5_covidcast_snippets``: migrated signals are batched
+    into one ``epidata_snapshot()`` call per v5 geo_type. Epiweek geo ids do
+    not carry an explicit geo_type the way covidcast_geos does, so they are
+    bucketed into v5 geo_type/geo_value pairs first.
+
+    Note the bucketing still goes through ``group_fluview_geos_by_v5_type``,
+    which only understands fluview's geo id format. Other epiweek endpoints
+    use different conventions, so each will need its own mapper before it can
+    be migrated -- see ``map_fluview_geo_to_v5``.
+
+    Batching is also per v5 source, not per endpoint: one endpoint can serve
+    several data sources mapping to different v5 sources, and asking one
+    source for another's signals returns the wrong data rather than an error.
+    The v5 source name goes into the variable name for the same reason --
+    several sources in one request would otherwise generate identically-named
+    dataframes, each clobbering the last.
+    """
+    python_code_blocks = []
+    r_code_blocks = []
+    grouped_geos = group_fluview_geos_by_v5_type(geos)
+    for v5_source, indicators in group_v5_indicators_by_source(v5_indicators).items():
+        signals_list = ", ".join(
+            f'"{indicator["indicator"]}"' for indicator in indicators
+        )
+        for geo_type, geo_values in grouped_geos.items():
+            geo_values_str = ", ".join(f'"{geo_value}"' for geo_value in geo_values)
+            python_code_blocks.append(
+                dedent(
+                    f"""\
+                    {v5_source}_{geo_type}_v5_df = epidata.epidata_snapshot(
+                        source="{v5_source}",
+                        signals=[{signals_list}],
+                        geo_type="{geo_type}",
+                        geo_values=[{geo_values_str}],
+                        reference_time=EpiRange("{start_date}", "{end_date}"),
+                    ).df()
+                """
+                )
+            )
+            r_code_blocks.append(
+                dedent(
+                    f"""\
+                    epidata_{v5_source}_{geo_type}_v5 <- epidata_snapshot(
+                        source = "{v5_source}",
+                        signals = c({signals_list}),
+                        geo_type = "{geo_type}",
+                        geo_values = c({geo_values_str}),
+                        reference_time = epirange("{start_date}", "{end_date}")
+                    )
+                """
+                )
+            )
+    return python_code_blocks, r_code_blocks
+
+
+def generate_v4_epiweek_snippet(source, data_source, geos, start_date, end_date):
+    """Build the ``pub_{data_source}`` snippet for an epiweek-based endpoint.
+
+    ``data_source`` is the actual v4 URL segment to call. It is often the same
+    as ``source.key``, but not always: one :class:`EpiweekSource` (one geo
+    widget, one ``_endpoint``) can cover several data sources that live at
+    different v4 endpoints, so the caller passes the indicator's own
+    ``data_source`` rather than letting this assume ``source.key``.
+
+    These endpoints return every signal unfiltered, so this always covers the
+    full geo list regardless of which indicators are still on v4.
     """
     geo_values = ",".join([geo["id"] for geo in geos])
     start_week, end_week = get_epiweek(start_date, end_date)
+    var_name = data_source.replace("-", "_")
     python_code_block = dedent(
         f"""\
-        {source.key}_df = epidata.pub_{source.key}(
+        {var_name}_df = epidata.pub_{data_source}(
             {source.geo_param}="{geo_values}",
             epiweeks="{start_week}-{end_week}",
         ).df()
@@ -196,13 +247,56 @@ def generate_query_code_epiweek(source, geos, start_date, end_date):
     )
     r_code_block = dedent(
         f"""\
-        epidata_{source.key} <- pub_{source.key}(
+        epidata_{var_name} <- pub_{data_source}(
             {source.geo_param} = "{geo_values}",
             epiweeks = epirange({start_week}, {end_week})
         )
     """
     )
-    return [python_code_block], [r_code_block]
+    return python_code_block, r_code_block
+
+
+def generate_query_code_epiweek(source, geos, start_date, end_date, indicators):
+    """Generate snippets for an epiweek-based endpoint, routing per indicator.
+
+    Signals whose source has migrated to v5 get an ``epidata_snapshot()``
+    call, batched per v5 source. Anything still on v4 keeps a
+    ``pub_{data_source}`` call, one per distinct v4 ``data_source`` still
+    present -- one endpoint can cover several data sources, and they can
+    migrate independently. Those v4 calls are unfiltered, since these
+    endpoints return every signal regardless of what's requested.
+
+    ``get_v5_source`` fails closed to v4, so a source that has not migrated
+    keeps emitting exactly the snippet it did before.
+
+    Args:
+        source: The :class:`EpiweekSource` describing the endpoint.
+        geos: Selected geos, each a dict with an ``id`` key.
+        indicators: All submitted indicators; only ones for this source are used.
+
+    Returns:
+        A ``(python_code_blocks, r_code_blocks)`` pair.
+    """
+    python_code_blocks = []
+    r_code_blocks = []
+    source_indicators = [i for i in indicators if i["_endpoint"] == source.key]
+    v5_indicators, v4_indicators, _ = split_v4_v5_indicators(source_indicators)
+    v5_python_blocks, v5_r_blocks = generate_v5_fluview_snippets(
+        v5_indicators, geos, start_date, end_date
+    )
+    python_code_blocks.extend(v5_python_blocks)
+    r_code_blocks.extend(v5_r_blocks)
+    if v4_indicators or not v5_indicators:
+        v4_data_sources = sorted({i["data_source"] for i in v4_indicators}) or [
+            source.key
+        ]
+        for data_source in v4_data_sources:
+            v4_python_block, v4_r_block = generate_v4_epiweek_snippet(
+                source, data_source, geos, start_date, end_date
+            )
+            python_code_blocks.append(v4_python_block)
+            r_code_blocks.append(v4_r_block)
+    return python_code_blocks, r_code_blocks
 
 
 def generate_query_code_pophive(

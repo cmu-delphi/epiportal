@@ -468,7 +468,7 @@ def generate_export_data_url(request):
                 if geos:
                     data_export_commands.extend(
                         generate_epiweek_export_url(
-                            source, geos, start_date, end_date, api_key, data_format
+                            source, geos, start_date, end_date, api_key, data_format, indicators
                         )
                     )
             if pophive_geos:
@@ -539,7 +539,7 @@ def preview_data(request):
                 if geos:
                     preview_data.extend(
                         preview_epiweek_data(
-                            source, geos, start_date, end_date, api_key, data_format
+                            source, geos, start_date, end_date, api_key, data_format, indicators
                         )
                     )
             if pophive_geos and pophive_age_group:
@@ -632,7 +632,7 @@ def create_query_code(request):
             geos = data.get(source.form_key, [])
             if geos:
                 python_code_block, r_code_block = generate_query_code_epiweek(
-                    source, geos, start_date, end_date
+                    source, geos, start_date, end_date, all_indicators
                 )
                 python_code_blocks.extend(python_code_block)
                 r_code_blocks.extend(r_code_block)
