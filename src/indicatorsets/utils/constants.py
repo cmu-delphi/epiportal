@@ -19,4 +19,6 @@ MIGRATED_DATASOURCES = {
     "beta_nssp": "nssp",
     "beta_nssp_github": "nssp",
     "fluview": "fluview_ilinet",
+    "fluview_clinical": "fluview_resp_lab_clinical",
+    "nchs-mortality": "nchs_mortality"
 }

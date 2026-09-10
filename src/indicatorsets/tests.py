@@ -51,7 +51,12 @@ from indicatorsets.utils import (
 from indicatorsets.proxy_views import VIZ_SOURCES
 from indicatorsets.utils.constants import MIGRATED_DATASOURCES
 from indicatorsets.utils.caching import safe_cache_get, safe_cache_set
-from indicatorsets.utils.epidata import get_v5_metadata, get_v5_source
+from indicatorsets.utils.epidata import (
+    get_v5_metadata,
+    get_v5_source,
+    group_fluview_geos_by_v5_type,
+    map_fluview_geo_to_v5,
+)
 from indicatorsets.utils.query_code import (
     generate_query_code_covidcast,
     generate_query_code_nwss,
@@ -1135,7 +1140,16 @@ class V5RoutingTestMixin:
         metadata_error=None,
         has_data=True,
         metadata_source="nhsn",
+        metadata=None,
     ):
+        """Fake requests.get dispatching on URL.
+
+        ``metadata`` serves the whole v5 metadata payload verbatim, for cases
+        that need more than one migrated source live at once; otherwise the
+        single ``metadata_source``/``metadata_signals`` pair is wrapped into
+        one.
+        """
+
         def fake_get(url, params=None, timeout=None):
             response = MagicMock()
             response.status_code = 200
@@ -1143,9 +1157,11 @@ class V5RoutingTestMixin:
             if "metadata/" in url:
                 if metadata_error is not None:
                     raise metadata_error
-                response.json.return_value = {
-                    metadata_source: {"signals": list(metadata_signals or [])}
-                }
+                response.json.return_value = (
+                    metadata
+                    if metadata is not None
+                    else {metadata_source: {"signals": list(metadata_signals or [])}}
+                )
                 return response
             response.json.return_value = (
                 {"epidata": [{"value": 1}], "result": 1, "message": "success"}
@@ -1161,6 +1177,72 @@ class V5RoutingTestMixin:
         return [
             call for call in mock_get.call_args_list if "metadata/" not in call.args[0]
         ]
+
+
+class FluviewGeoMappingTests(TestCase):
+    """Pins fluview's geo id -> v5 (geo_type, geo_value) mapping.
+
+    Expectations are taken from the live v5 API rather than inferred: the
+    geo_type list is fluview_ilinet's ``geo_types`` from v5 metadata, and the
+    state geo_values are the 55 distinct values fluview_ilinet actually
+    returns. Both fluview and fluview_clinical share this geo widget and
+    expose the same geo_types, so one mapping serves both.
+    """
+
+    # fluview_ilinet / fluview_resp_lab_clinical geo_types in v5 metadata.
+    V5_GEO_TYPES = {"census_division", "hhs", "nation", "state"}
+
+    def test_geo_type_buckets_match_the_v5_vocabulary(self):
+        ids = (
+            ["nat"]
+            + [f"hhs{n}" for n in range(1, 11)]
+            + [f"cen{n}" for n in range(1, 10)]
+            + ["PA", "ny", "jfk", "ny_minus_jfk", "pr", "vi"]
+        )
+        for geo_id in ids:
+            with self.subTest(geo_id=geo_id):
+                geo_type, _ = map_fluview_geo_to_v5(geo_id)
+                self.assertIn(geo_type, self.V5_GEO_TYPES)
+
+    def test_nation_hhs_and_census_division_ids(self):
+        self.assertEqual(map_fluview_geo_to_v5("nat"), ("nation", "us"))
+        self.assertEqual(map_fluview_geo_to_v5("hhs1"), ("hhs", "1"))
+        self.assertEqual(map_fluview_geo_to_v5("hhs10"), ("hhs", "10"))
+        self.assertEqual(map_fluview_geo_to_v5("cen9"), ("census_division", "9"))
+
+    def test_state_ids_are_lowercased(self):
+        self.assertEqual(map_fluview_geo_to_v5("PA"), ("state", "pa"))
+        self.assertEqual(map_fluview_geo_to_v5("ny"), ("state", "ny"))
+        self.assertEqual(map_fluview_geo_to_v5("pr"), ("state", "pr"))
+
+    def test_new_york_city_ids_are_renamed_to_the_v5_spelling(self):
+        """v4 keys these on JFK airport, v5 on the city. Verified to be the
+        same series -- identical values for the same week on both APIs."""
+        self.assertEqual(map_fluview_geo_to_v5("jfk"), ("state", "nyc"))
+        self.assertEqual(
+            map_fluview_geo_to_v5("ny_minus_jfk"), ("state", "ny_minus_nyc")
+        )
+
+    def test_grouping_buckets_by_geo_type_preserving_order(self):
+        grouped = group_fluview_geos_by_v5_type(
+            [
+                {"id": "nat"},
+                {"id": "hhs3"},
+                {"id": "cen2"},
+                {"id": "PA"},
+                {"id": "jfk"},
+                {"id": "hhs1"},
+            ]
+        )
+        self.assertEqual(
+            grouped,
+            {
+                "nation": ["us"],
+                "hhs": ["3", "1"],
+                "census_division": ["2"],
+                "state": ["pa", "nyc"],
+            },
+        )
 
 
 class SafeCacheTests(TestCase):
@@ -2477,9 +2559,15 @@ class EpiweekPreviewRequestTests(TestCase):
 
 
 class EpiweekPreviewV5RoutingTests(V5RoutingTestMixin, TestCase):
-    """fluview previews must route migrated signals to v5, using the real
-    v5 param names (reference_times/token), and keep the v4 fallback for
-    anything else."""
+    """Epiweek previews must route migrated signals to v5, using the real v5
+    param names (reference_times/token), and keep the v4 fallback for anything
+    else.
+
+    One epiweek endpoint can cover several data sources, which migrate
+    independently and map to different v5 sources, so routing has to be per
+    data source rather than per endpoint. fluview is the case that exists
+    today (ILINet plus clinical labs) and stands in for the general rule.
+    """
 
     def _indicators(self, signals=("wili",), data_source="fluview"):
         return [
@@ -2554,6 +2642,81 @@ class EpiweekPreviewV5RoutingTests(V5RoutingTestMixin, TestCase):
         calls = self._probe_calls(mock_get)
         self.assertEqual(len(calls), 1)
         self.assertNotIn("/v5/", calls[0].args[0])
+
+    @patch("indicatorsets.utils.epidata.requests.get")
+    def test_unmigrated_fluview_clinical_hits_the_clinical_v4_endpoint(self, mock_get):
+        """A second data source under the same _endpoint/geo widget is still
+        a distinct v4 endpoint, and must not be queried as the first one."""
+        mock_get.side_effect = self._fake_get()
+
+        preview_epiweek_data(
+            EPIWEEK_SOURCES["fluview"],
+            [{"id": "nat"}],
+            "2020-01-01",
+            "2020-01-20",
+            None,
+            "json",
+            self._indicators(data_source="fluview_clinical"),
+        )
+        calls = self._probe_calls(mock_get)
+        self.assertEqual(len(calls), 1)
+        self.assertTrue(calls[0].args[0].endswith("fluview_clinical"))
+
+    @patch("indicatorsets.utils.epidata.requests.get")
+    def test_mixed_fluview_and_fluview_clinical_hit_both_v4_endpoints(self, mock_get):
+        mock_get.side_effect = self._fake_get()
+
+        preview_epiweek_data(
+            EPIWEEK_SOURCES["fluview"],
+            [{"id": "nat"}],
+            "2020-01-01",
+            "2020-01-20",
+            None,
+            "json",
+            self._indicators(signals=["wili"], data_source="fluview")
+            + self._indicators(signals=["ili"], data_source="fluview_clinical"),
+        )
+        calls = self._probe_calls(mock_get)
+        self.assertEqual(len(calls), 2)
+        urls = {call.args[0] for call in calls}
+        self.assertIn(f"{settings.EPIDATA_URL}fluview", urls)
+        self.assertIn(f"{settings.EPIDATA_URL}fluview_clinical", urls)
+
+    @patch("indicatorsets.utils.epidata.requests.get")
+    def test_two_migrated_v5_sources_are_previewed_from_their_own_source(
+        self, mock_get
+    ):
+        """Each migrated signal must be previewed from the v5 source it
+        actually belongs to, not from whichever one came first in the group."""
+        mock_get.side_effect = self._fake_get(
+            metadata={
+                "fluview_ilinet": {"signals": ["wili"]},
+                "fluview_resp_lab_clinical": {"signals": ["pct_positive"]},
+            }
+        )
+
+        preview_epiweek_data(
+            EPIWEEK_SOURCES["fluview"],
+            [{"id": "nat"}],
+            "2020-01-01",
+            "2020-01-20",
+            None,
+            "json",
+            self._indicators(signals=["wili"], data_source="fluview")
+            + self._indicators(
+                signals=["pct_positive"], data_source="fluview_clinical"
+            ),
+        )
+        calls = self._probe_calls(mock_get)
+        self.assertEqual(len(calls), 2)
+        source_by_signal = {
+            call.kwargs["params"]["signal"]: call.kwargs["params"]["source"]
+            for call in calls
+        }
+        self.assertEqual(
+            source_by_signal,
+            {"wili": "fluview_ilinet", "pct_positive": "fluview_resp_lab_clinical"},
+        )
 
 
 class QueryCodeViewEpiweekOrderingTests(TestCase):
@@ -2734,7 +2897,7 @@ class EpiweekQueryCodeTests(V5RoutingTestMixin, TestCase):
         self.assertNotIn("pub_fluview", python_code)
         self.assertNotIn("pub_fluview", r_code)
         self.assertIn(
-            "fluview_nation_v5_df = epidata.epidata_snapshot(\n"
+            "fluview_ilinet_nation_v5_df = epidata.epidata_snapshot(\n"
             '    source="fluview_ilinet",\n'
             '    signals=["wili"],\n'
             '    geo_type="nation",\n'
@@ -2744,7 +2907,7 @@ class EpiweekQueryCodeTests(V5RoutingTestMixin, TestCase):
             python_code,
         )
         self.assertIn(
-            "fluview_hhs_v5_df = epidata.epidata_snapshot(\n"
+            "fluview_ilinet_hhs_v5_df = epidata.epidata_snapshot(\n"
             '    source="fluview_ilinet",\n'
             '    signals=["wili"],\n'
             '    geo_type="hhs",\n'
@@ -2754,7 +2917,7 @@ class EpiweekQueryCodeTests(V5RoutingTestMixin, TestCase):
             python_code,
         )
         self.assertIn(
-            "fluview_census_division_v5_df = epidata.epidata_snapshot(\n"
+            "fluview_ilinet_census_division_v5_df = epidata.epidata_snapshot(\n"
             '    source="fluview_ilinet",\n'
             '    signals=["wili"],\n'
             '    geo_type="census_division",\n'
@@ -2764,7 +2927,7 @@ class EpiweekQueryCodeTests(V5RoutingTestMixin, TestCase):
             python_code,
         )
         self.assertIn(
-            "fluview_state_v5_df = epidata.epidata_snapshot(\n"
+            "fluview_ilinet_state_v5_df = epidata.epidata_snapshot(\n"
             '    source="fluview_ilinet",\n'
             '    signals=["wili"],\n'
             '    geo_type="state",\n'
@@ -2774,7 +2937,7 @@ class EpiweekQueryCodeTests(V5RoutingTestMixin, TestCase):
             python_code,
         )
         self.assertIn(
-            "epidata_fluview_nation_v5 <- epidata_snapshot(\n"
+            "epidata_fluview_ilinet_nation_v5 <- epidata_snapshot(\n"
             '    source = "fluview_ilinet",\n'
             '    signals = c("wili"),\n'
             '    geo_type = "nation",\n'
@@ -2783,6 +2946,69 @@ class EpiweekQueryCodeTests(V5RoutingTestMixin, TestCase):
             ")\n",
             r_code,
         )
+
+    BOTH_FLUVIEW_SOURCES_V5 = {
+        "fluview_ilinet": {"signals": ["wili"]},
+        "fluview_resp_lab_clinical": {"signals": ["pct_positive"]},
+    }
+
+    @patch("indicatorsets.utils.epidata.requests.get")
+    def test_two_migrated_v5_sources_get_separate_snapshot_calls(self, mock_get):
+        """Data sources sharing one _endpoint can map to different v5
+        sources, so their signals must not be batched into a single call --
+        that would ask one v5 source for another's signal."""
+        mock_get.side_effect = self._fake_get(metadata=self.BOTH_FLUVIEW_SOURCES_V5)
+        indicators = self._indicators(
+            "fluview", signals=["wili"], data_source="fluview"
+        ) + self._indicators(
+            "fluview", signals=["pct_positive"], data_source="fluview_clinical"
+        )
+        python_blocks, _ = generate_query_code_epiweek(
+            EPIWEEK_SOURCES["fluview"],
+            [{"id": "nat"}],
+            self.START,
+            self.END,
+            indicators,
+        )
+        python_code = "".join(python_blocks)
+        # Two separate snapshot calls, each asking its own source for its own
+        # signal -- and no v4 fallback, since everything migrated.
+        self.assertEqual(len(python_blocks), 2)
+        self.assertNotIn("pub_fluview", python_code)
+        self.assertIn(
+            "fluview_ilinet_nation_v5_df = epidata.epidata_snapshot(\n"
+            '    source="fluview_ilinet",\n'
+            '    signals=["wili"],\n',
+            python_code,
+        )
+        self.assertIn(
+            "fluview_resp_lab_clinical_nation_v5_df = epidata.epidata_snapshot(\n"
+            '    source="fluview_resp_lab_clinical",\n'
+            '    signals=["pct_positive"],\n',
+            python_code,
+        )
+
+    @patch("indicatorsets.utils.epidata.requests.get")
+    def test_two_migrated_v5_sources_do_not_clobber_variable_names(self, mock_get):
+        """Each v5 source needs its own dataframe variable; sharing one name
+        would make the second assignment silently overwrite the first."""
+        mock_get.side_effect = self._fake_get(metadata=self.BOTH_FLUVIEW_SOURCES_V5)
+        indicators = self._indicators(
+            "fluview", signals=["wili"], data_source="fluview"
+        ) + self._indicators(
+            "fluview", signals=["pct_positive"], data_source="fluview_clinical"
+        )
+        python_blocks, r_blocks = generate_query_code_epiweek(
+            EPIWEEK_SOURCES["fluview"],
+            [{"id": "nat"}, {"id": "hhs3"}],
+            self.START,
+            self.END,
+            indicators,
+        )
+        for blocks, sep in ((python_blocks, "_df ="), (r_blocks, " <-")):
+            names = [block.split(sep)[0].strip() for block in blocks]
+            self.assertEqual(len(names), 4)
+            self.assertEqual(len(set(names)), len(names), names)
 
     @patch("indicatorsets.utils.epidata.requests.get")
     def test_partially_migrated_fluview_keeps_v4_call(self, mock_get):
@@ -2808,7 +3034,7 @@ class EpiweekQueryCodeTests(V5RoutingTestMixin, TestCase):
         mock_get.side_effect = self._fake_get(
             metadata_signals=["wili"], metadata_source="fluview_ilinet"
         )
-        python_blocks, _ = generate_query_code_epiweek(
+        python_blocks, r_blocks = generate_query_code_epiweek(
             EPIWEEK_SOURCES["fluview"],
             self.GEOS,
             self.START,
@@ -2818,8 +3044,35 @@ class EpiweekQueryCodeTests(V5RoutingTestMixin, TestCase):
             ),
         )
         python_code = "".join(python_blocks)
+        r_code = "".join(r_blocks)
+        # Shares the endpoint/geo widget, but is a distinct v4 source that
+        # must not be folded into the other source's call.
         self.assertNotIn("epidata_snapshot", python_code)
-        self.assertIn("epidata.pub_fluview(", python_code)
+        self.assertNotIn("pub_fluview(", python_code)
+        self.assertIn("epidata.pub_fluview_clinical(", python_code)
+        self.assertIn("pub_fluview_clinical(", r_code)
+
+    @patch("indicatorsets.utils.epidata.requests.get")
+    def test_mixed_fluview_and_fluview_clinical_emit_separate_v4_calls(self, mock_get):
+        mock_get.side_effect = self._fake_get()
+        indicators = self._indicators(
+            "fluview", signals=["wili"], data_source="fluview"
+        ) + self._indicators("fluview", signals=["ili"], data_source="fluview_clinical")
+        python_blocks, r_blocks = generate_query_code_epiweek(
+            EPIWEEK_SOURCES["fluview"],
+            self.GEOS,
+            self.START,
+            self.END,
+            indicators,
+        )
+        python_code = "".join(python_blocks)
+        r_code = "".join(r_blocks)
+        self.assertIn("fluview_df = epidata.pub_fluview(", python_code)
+        self.assertIn(
+            "fluview_clinical_df = epidata.pub_fluview_clinical(", python_code
+        )
+        self.assertIn("epidata_fluview <- pub_fluview(", r_code)
+        self.assertIn("epidata_fluview_clinical <- pub_fluview_clinical(", r_code)
 
     @patch("indicatorsets.utils.epidata.requests.get")
     def test_ignores_indicators_from_other_endpoints(self, mock_get):
@@ -2920,9 +3173,15 @@ class EpiweekExportUrlTests(TestCase):
 
 
 class EpiweekExportUrlV5RoutingTests(V5RoutingTestMixin, TestCase):
-    """fluview exports must route migrated signals to v5, using the real v5
+    """Epiweek exports must route migrated signals to v5, using the real v5
     param names (reference_times/token), and keep the v4 fallback for anything
-    else."""
+    else.
+
+    One epiweek endpoint can cover several data sources, which migrate
+    independently and map to different v5 sources, so routing has to be per
+    data source rather than per endpoint. fluview is the case that exists
+    today (ILINet plus clinical labs) and stands in for the general rule.
+    """
 
     def _indicators(self, signals=("wili",), data_source="fluview"):
         return [
@@ -2995,6 +3254,87 @@ class EpiweekExportUrlV5RoutingTests(V5RoutingTestMixin, TestCase):
         )
         self.assertEqual(len(result), 1)
         self.assertIn("wget", result[0])
+
+    @patch("indicatorsets.utils.epidata.requests.get")
+    def test_unmigrated_fluview_clinical_hits_the_clinical_v4_endpoint(self, mock_get):
+        """A second data source under the same _endpoint/geo widget is still
+        a distinct v4 endpoint, and must not be exported as the first one."""
+        mock_get.side_effect = self._fake_get()
+
+        result = generate_epiweek_export_url(
+            EPIWEEK_SOURCES["fluview"],
+            [{"id": "nat"}],
+            "2020-01-01",
+            "2020-01-20",
+            None,
+            "csv",
+            self._indicators(data_source="fluview_clinical"),
+        )
+        self.assertEqual(len(result), 1)
+        self.assertIn("wget", result[0])
+        self.assertIn(f"{settings.EPIDATA_URL}fluview_clinical/", result[0])
+
+    @patch("indicatorsets.utils.epidata.requests.get")
+    def test_mixed_fluview_and_fluview_clinical_emit_two_v4_commands(self, mock_get):
+        mock_get.side_effect = self._fake_get()
+
+        result = generate_epiweek_export_url(
+            EPIWEEK_SOURCES["fluview"],
+            [{"id": "nat"}],
+            "2020-01-01",
+            "2020-01-20",
+            None,
+            "csv",
+            self._indicators(signals=["wili"], data_source="fluview")
+            + self._indicators(signals=["ili"], data_source="fluview_clinical"),
+        )
+        self.assertEqual(len(result), 2)
+        self.assertTrue(
+            any(f"{settings.EPIDATA_URL}fluview/" in command for command in result)
+        )
+        self.assertTrue(
+            any(
+                f"{settings.EPIDATA_URL}fluview_clinical/" in command
+                for command in result
+            )
+        )
+
+    @patch("indicatorsets.utils.epidata.requests.get")
+    def test_two_migrated_v5_sources_are_exported_separately(self, mock_get):
+        """Each migrated signal must be exported from the v5 source it actually
+        belongs to, in its own command, rather than batched into one request
+        against whichever source came first in the group."""
+        mock_get.side_effect = self._fake_get(
+            metadata={
+                "fluview_ilinet": {"signals": ["wili"]},
+                "fluview_resp_lab_clinical": {"signals": ["pct_positive"]},
+            }
+        )
+
+        result = generate_epiweek_export_url(
+            EPIWEEK_SOURCES["fluview"],
+            [{"id": "nat"}],
+            "2020-01-01",
+            "2020-01-20",
+            None,
+            "csv",
+            self._indicators(signals=["wili"], data_source="fluview")
+            + self._indicators(
+                signals=["pct_positive"], data_source="fluview_clinical"
+            ),
+        )
+        # Two v5 commands, no v4 fallback since everything migrated.
+        self.assertEqual(len(result), 2)
+        self.assertFalse(any("wget" in command for command in result))
+
+        probe_params = [call.kwargs["params"] for call in self._probe_calls(mock_get)]
+        self.assertEqual(
+            {params["signal"]: params["source"] for params in probe_params},
+            {"wili": "fluview_ilinet", "pct_positive": "fluview_resp_lab_clinical"},
+        )
+        # Distinct filenames, so one download cannot overwrite the other.
+        self.assertIn("fluview_ilinet_nation.csv", result[0] + result[1])
+        self.assertIn("fluview_resp_lab_clinical_nation.csv", result[0] + result[1])
 
 
 @override_settings(EPIDATA_URL="https://api.example.com/epidata/")

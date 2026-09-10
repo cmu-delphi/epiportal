@@ -9,6 +9,7 @@ from indicatorsets.utils.epidata import (
     get_time_values,
     get_v5_source,
     group_fluview_geos_by_v5_type,
+    group_v5_indicators_by_source,
     has_epidata_results,
     split_v4_v5_indicators,
 )
@@ -120,11 +121,12 @@ def generate_v5_fluview_export_snippet(
     data_format,
     api_key,
 ):
-    """Build the export command for a migrated fluview geo_type bucket.
+    """Build the export command for one v5 source's geo_type bucket.
 
-    Mirrors the covidcast v5 branch: every migrated signal is checked and
-    downloaded in one batched request, keyed by ``reference_times``/``token``
-    (the real v5 param names, distinct from v4's ``time_values``/``api_key``).
+    Mirrors the covidcast v5 branch: every migrated signal for this source is
+    checked and downloaded in one batched request, keyed by
+    ``reference_times``/``token`` (the real v5 param names, distinct from v4's
+    ``time_values``/``api_key``).
     """
     data_export_commands = []
     label = f"{v5_source} ({geo_type})"
@@ -169,12 +171,20 @@ def generate_v5_fluview_export_snippet(
 
 
 def generate_v4_fluview_export_snippet(
-    source, geos, start_date, end_date, data_format, api_key
+    source, data_source, geos, start_date, end_date, data_format, api_key
 ):
+    """Build the v4 export command for one data source on an epiweek endpoint.
+
+    ``data_source`` is the actual v4 URL segment. It is often the same as
+    ``source.key``, but not always: one :class:`EpiweekSource` (one geo
+    widget, one ``_endpoint``) can cover several data sources that live at
+    different v4 endpoints, so the caller passes the indicator's own
+    ``data_source`` rather than letting this assume ``source.key``.
+    """
     geo_values = ",".join([geo["id"] for geo in geos])
     date_from, date_to = get_epiweek(start_date, end_date)
     data_export_url = (
-        f"{settings.EPIDATA_URL}{source.key}/"
+        f"{settings.EPIDATA_URL}{data_source}/"
         f"?{source.geo_param}={geo_values}"
         f"&epiweeks={date_from}-{date_to}"
         f"&format={data_format}"
@@ -193,9 +203,13 @@ def generate_epiweek_export_url(
 ):
     """Build the export command(s) for an epiweek-based endpoint, routing per indicator.
 
-    Only fluview has a v5 counterpart today; everything else always falls
-    through to the v4 branch (see ``generate_query_code_epiweek`` for the
-    equivalent routing in the query-code generator).
+    Migrated signals get a v5 export command, built per v5 source; anything
+    still on v4 gets one command per distinct v4 ``data_source`` still
+    present, since one endpoint can cover several data sources that migrate
+    independently. ``get_v5_source`` fails closed to v4, so a source that has
+    not migrated emits exactly the command it did before. See
+    ``generate_query_code_epiweek`` for the equivalent routing in the
+    query-code generator.
 
     Args:
         source: The :class:`EpiweekSource` describing the endpoint.
@@ -204,13 +218,18 @@ def generate_epiweek_export_url(
     """
     data_export_commands = []
     source_indicators = [i for i in indicators if i["_endpoint"] == source.key]
-    v5_indicators, v4_indicators, v5_source = split_v4_v5_indicators(source_indicators)
-    if v5_indicators:
+    v5_indicators, v4_indicators, _ = split_v4_v5_indicators(source_indicators)
+    # Per v5 source, not per endpoint: one endpoint can cover several data
+    # sources mapping to different v5 sources, and batching one source's
+    # signals into another's request would export the wrong data silently.
+    for v5_source, source_v5_indicators in group_v5_indicators_by_source(
+        v5_indicators
+    ).items():
         for geo_type, geo_values in group_fluview_geos_by_v5_type(geos).items():
             geo_values_str = ",".join(geo_values)
             data_export_commands.extend(
                 generate_v5_fluview_export_snippet(
-                    v5_indicators,
+                    source_v5_indicators,
                     v5_source,
                     geo_type,
                     geo_values_str,
@@ -221,11 +240,21 @@ def generate_epiweek_export_url(
                 )
             )
     if v4_indicators or not v5_indicators:
-        data_export_commands.append(
-            generate_v4_fluview_export_snippet(
-                source, geos, start_date, end_date, data_format, api_key
+        v4_data_sources = sorted({i["data_source"] for i in v4_indicators}) or [
+            source.key
+        ]
+        for data_source in v4_data_sources:
+            data_export_commands.append(
+                generate_v4_fluview_export_snippet(
+                    source,
+                    data_source,
+                    geos,
+                    start_date,
+                    end_date,
+                    data_format,
+                    api_key,
+                )
             )
-        )
     return data_export_commands
 
 

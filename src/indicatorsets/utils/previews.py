@@ -120,19 +120,24 @@ def preview_covidcast_data(
 
 
 def preview_v5_fluview_data(
-    v5_indicators, v5_source, geos, start_date, end_date, api_key, data_format
+    v5_indicators, geos, start_date, end_date, api_key, data_format
 ):
-    """Fetch preview rows for fluview signals whose source has migrated to v5.
+    """Fetch preview rows for epiweek signals whose source has migrated to v5.
 
     One request per (signal, v5 geo_type bucket), the same per-indicator shape
     ``preview_pophive_data``/``preview_nwss_data`` use, keyed by
     ``reference_times``/``token`` (the real v5 param names).
+
+    The v5 source is resolved per indicator rather than once for the group:
+    one endpoint can cover several data sources mapping to different v5
+    sources, and querying one source for another's signal returns the wrong
+    data rather than an error.
     """
     preview_data = []
     for indicator in v5_indicators:
         for geo_type, geo_values in group_fluview_geos_by_v5_type(geos).items():
             params = {
-                "source": v5_source,
+                "source": get_v5_source(indicator),
                 "signal": indicator["indicator"],
                 "geo_type": geo_type,
                 "geo_value": ",".join(geo_values),
@@ -158,8 +163,16 @@ def preview_v5_fluview_data(
     return preview_data
 
 
-def preview_v4_epiweek_data(source, geos, start_date, end_date, api_key, data_format):
+def preview_v4_epiweek_data(
+    source, data_source, geos, start_date, end_date, api_key, data_format
+):
     """Fetch one preview row for an epiweek-based endpoint's v4 signals.
+
+    ``data_source`` is the actual v4 URL segment to call. It is often the same
+    as ``source.key``, but not always: one :class:`EpiweekSource` (one geo
+    widget, one ``_endpoint``) can cover several data sources that live at
+    different v4 endpoints, so the caller passes the indicator's own
+    ``data_source`` rather than letting this assume ``source.key``.
 
     These endpoints return every signal unfiltered, so this always covers the
     full geo list regardless of which indicators are still on v4.
@@ -176,14 +189,14 @@ def preview_v4_epiweek_data(source, geos, start_date, end_date, api_key, data_fo
     }
     try:
         response = requests.get(
-            f"{settings.EPIDATA_URL}{source.key}", params=params, timeout=(5, 30)
+            f"{settings.EPIDATA_URL}{data_source}", params=params, timeout=(5, 30)
         )
         if response.status_code == 401:
             raise InvalidApiKeyError(INVALID_API_KEY_MESSAGE)
         response.raise_for_status()
     except requests.RequestException:
         logger.exception(
-            f"Error getting {source.key} data", extra={"regions": geo_values}
+            f"Error getting {data_source} data", extra={"regions": geo_values}
         )
         return preview_data
     preview_data.append(get_preview_data(response, data_format))
@@ -195,9 +208,12 @@ def preview_epiweek_data(
 ):
     """Fetch preview rows for an epiweek-based endpoint, routing per indicator.
 
-    Only fluview has a v5 counterpart today; everything else always falls
-    through to the v4 branch (see ``generate_query_code_epiweek`` for the
-    equivalent routing in the query-code generator).
+    Migrated signals are previewed from v5; anything still on v4 is previewed
+    once per distinct v4 ``data_source`` still present, since one endpoint can
+    cover several data sources that migrate independently. ``get_v5_source``
+    fails closed to v4, so a source that has not migrated is previewed exactly
+    as it was before. See ``generate_query_code_epiweek`` for the equivalent
+    routing in the query-code generator.
 
     Args:
         source: The :class:`EpiweekSource` describing the endpoint.
@@ -209,12 +225,11 @@ def preview_epiweek_data(
     """
     preview_data = []
     source_indicators = [i for i in indicators if i["_endpoint"] == source.key]
-    v5_indicators, v4_indicators, v5_source = split_v4_v5_indicators(source_indicators)
+    v5_indicators, v4_indicators, _ = split_v4_v5_indicators(source_indicators)
     if v5_indicators:
         preview_data.extend(
             preview_v5_fluview_data(
                 v5_indicators,
-                v5_source,
                 geos,
                 start_date,
                 end_date,
@@ -223,11 +238,21 @@ def preview_epiweek_data(
             )
         )
     if v4_indicators or not v5_indicators:
-        preview_data.extend(
-            preview_v4_epiweek_data(
-                source, geos, start_date, end_date, api_key, data_format
+        v4_data_sources = sorted({i["data_source"] for i in v4_indicators}) or [
+            source.key
+        ]
+        for data_source in v4_data_sources:
+            preview_data.extend(
+                preview_v4_epiweek_data(
+                    source,
+                    data_source,
+                    geos,
+                    start_date,
+                    end_date,
+                    api_key,
+                    data_format,
+                )
             )
-        )
     return preview_data
 
 

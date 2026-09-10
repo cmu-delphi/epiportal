@@ -82,9 +82,15 @@ def split_v4_v5_indicators(indicators):
     """Partition ``indicators`` by whether their source has migrated to v5.
 
     Returns ``(v5_indicators, v4_indicators, v5_source)``, where ``v5_source``
-    is the v5 name shared by every v5 indicator (all indicators in a group
-    share one data source), or ``None`` if nothing has migrated. Shared by the
-    covidcast and epiweek query-code generators.
+    is the v5 name taken from the first v5 indicator, or ``None`` if nothing
+    has migrated.
+
+    ``v5_source`` is only meaningful when every indicator passed in shares one
+    ``data_source``. That holds for callers that group by ``data_source``
+    before calling this (covidcast), but not for callers that group by
+    ``_endpoint``, since one endpoint can serve several data sources that map
+    to different v5 sources. Those callers must use
+    ``group_v5_indicators_by_source`` instead of this single ``v5_source``.
     """
     v5_indicators = [indicator for indicator in indicators if get_v5_source(indicator)]
     v4_indicators = [
@@ -92,6 +98,22 @@ def split_v4_v5_indicators(indicators):
     ]
     v5_source = get_v5_source(v5_indicators[0]) if v5_indicators else None
     return v5_indicators, v4_indicators, v5_source
+
+
+def group_v5_indicators_by_source(indicators):
+    """Bucket migrated indicators into ``{v5 source name: [indicators]}``.
+
+    One endpoint can serve several data sources, and those can map to
+    different v5 sources. Asking one v5 source for another's signals returns
+    the wrong data rather than an error, so every v5 request has to be built
+    per v5 source rather than per endpoint.
+    """
+    grouped = {}
+    for indicator in indicators:
+        v5_source = get_v5_source(indicator)
+        if v5_source:
+            grouped.setdefault(v5_source, []).append(indicator)
+    return grouped
 
 
 def get_time_values(indicator, start_date, end_date, get_from_v5):
@@ -108,6 +130,16 @@ def get_time_values(indicator, start_date, end_date, get_from_v5):
     return time_values, dates
 
 
+# v4 keys ILINet's two New York City series on JFK airport; v5 keys them on
+# the city. Verified as pure renames against the dev v5 API -- v4 jfk and v5
+# nyc report identical values for the same week, likewise ny_minus_jfk and
+# ny_minus_nyc.
+FLUVIEW_V5_GEO_RENAMES = {
+    "jfk": "nyc",
+    "ny_minus_jfk": "ny_minus_nyc",
+}
+
+
 def map_fluview_geo_to_v5(geo_id):
     """Map one of fluview's ``regions`` ids to a v5 ``(geo_type, geo_value)`` pair.
 
@@ -115,6 +147,11 @@ def map_fluview_geo_to_v5(geo_id):
     nation, "hhsN"/"cenN" for HHS regions and census divisions, bare two-letter
     codes for states) instead of carrying it alongside, the way covidcast_geos
     does.
+
+    A handful of ids in the picker (``ord``, ``lax``, ``as``, ``mp``, ``gu``)
+    have no data on either API, so they fall through to a ``state`` pair that
+    returns nothing -- the same empty result they already give on v4, not a
+    regression.
     """
     if geo_id == "nat":
         return "nation", "us"
@@ -122,7 +159,8 @@ def map_fluview_geo_to_v5(geo_id):
         return "hhs", geo_id[len("hhs") :]
     if geo_id.startswith("cen"):
         return "census_division", geo_id[len("cen") :]
-    return "state", geo_id.lower()
+    geo_value = geo_id.lower()
+    return "state", FLUVIEW_V5_GEO_RENAMES.get(geo_value, geo_value)
 
 
 def group_fluview_geos_by_v5_type(geos):
