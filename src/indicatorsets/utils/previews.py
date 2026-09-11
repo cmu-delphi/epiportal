@@ -13,7 +13,6 @@ from indicatorsets.utils.epidata import (
     get_time_values,
     get_v5_source,
     split_v4_v5_indicators,
-    group_fluview_geos_by_v5_type,
 )
 from indicatorsets.utils.exceptions import InvalidApiKeyError
 from indicatorsets.utils.helpers import get_epiweek
@@ -119,14 +118,18 @@ def preview_covidcast_data(
     return preview_data
 
 
-def preview_v5_fluview_data(
-    v5_indicators, geos, start_date, end_date, api_key, data_format
+def preview_v5_epiweek_data(
+    source, v5_indicators, geos, start_date, end_date, api_key, data_format
 ):
     """Fetch preview rows for epiweek signals whose source has migrated to v5.
 
     One request per (signal, v5 geo_type bucket), the same per-indicator shape
     ``preview_pophive_data``/``preview_nwss_data`` use, keyed by
     ``reference_times``/``token`` (the real v5 param names).
+
+    Epiweek geo ids do not carry an explicit geo_type the way covidcast_geos
+    does, and every endpoint spells them differently, so ``source`` supplies
+    the bucketing.
 
     The v5 source is resolved per indicator rather than once for the group:
     one endpoint can cover several data sources mapping to different v5
@@ -135,7 +138,7 @@ def preview_v5_fluview_data(
     """
     preview_data = []
     for indicator in v5_indicators:
-        for geo_type, geo_values in group_fluview_geos_by_v5_type(geos).items():
+        for geo_type, geo_values in source.group_geos_by_v5_type(geos).items():
             params = {
                 "source": get_v5_source(indicator),
                 "signal": indicator["indicator"],
@@ -155,7 +158,7 @@ def preview_v5_fluview_data(
                 response.raise_for_status()
             except requests.RequestException:
                 logger.exception(
-                    "Error getting fluview v5 data",
+                    "Error getting epiweek v5 data",
                     extra={"signal": indicator["indicator"], "geo_type": geo_type},
                 )
                 continue
@@ -228,7 +231,8 @@ def preview_epiweek_data(
     v5_indicators, v4_indicators, _ = split_v4_v5_indicators(source_indicators)
     if v5_indicators:
         preview_data.extend(
-            preview_v5_fluview_data(
+            preview_v5_epiweek_data(
+                source,
                 v5_indicators,
                 geos,
                 start_date,

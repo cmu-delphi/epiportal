@@ -54,8 +54,8 @@ from indicatorsets.utils.caching import safe_cache_get, safe_cache_set
 from indicatorsets.utils.epidata import (
     get_v5_metadata,
     get_v5_source,
-    group_fluview_geos_by_v5_type,
     map_fluview_geo_to_v5,
+    map_flusurv_geo_to_v5,
 )
 from indicatorsets.utils.query_code import (
     generate_query_code_covidcast,
@@ -1224,7 +1224,7 @@ class FluviewGeoMappingTests(TestCase):
         )
 
     def test_grouping_buckets_by_geo_type_preserving_order(self):
-        grouped = group_fluview_geos_by_v5_type(
+        grouped = EPIWEEK_SOURCES["fluview"].group_geos_by_v5_type(
             [
                 {"id": "nat"},
                 {"id": "hhs3"},
@@ -1243,6 +1243,120 @@ class FluviewGeoMappingTests(TestCase):
                 "state": ["pa", "nyc"],
             },
         )
+
+
+class FlusurvGeoMappingTests(TestCase):
+    """Pins flusurv's geo id -> v5 (geo_type, geo_value) mapping.
+
+    Expectations are taken from the live v5 API rather than inferred: the
+    geo_type list is flusurv's ``geo_types`` from v5 metadata, and the
+    geo_values are the distinct values v5 flusurv actually returns for each
+    of them. v5 keeps every v4 id intact but lowercases it and splits the
+    flat picker list across two geo_types -- the FluSurv-Net sites and the
+    participating states.
+    """
+
+    # flusurv's geo_types in v5 metadata.
+    V5_GEO_TYPES = {"flusurv_site", "state"}
+
+    # Every id the flusurv geo picker offers.
+    PICKER_IDS = [
+        "network_all",
+        "network_eip",
+        "network_ihsp",
+        "CA",
+        "CO",
+        "CT",
+        "GA",
+        "IA",
+        "ID",
+        "MD",
+        "MI",
+        "MN",
+        "NM",
+        "NY_albany",
+        "NY_rochester",
+        "OH",
+        "OK",
+        "OR",
+        "RI",
+        "SD",
+        "TN",
+        "UT",
+    ]
+
+    def test_geo_type_buckets_match_the_v5_vocabulary(self):
+        for geo_id in self.PICKER_IDS:
+            with self.subTest(geo_id=geo_id):
+                geo_type, _ = map_flusurv_geo_to_v5(geo_id)
+                self.assertIn(geo_type, self.V5_GEO_TYPES)
+
+    def test_network_ids_map_to_the_site_geo_type_unchanged(self):
+        self.assertEqual(
+            map_flusurv_geo_to_v5("network_all"), ("flusurv_site", "network_all")
+        )
+        self.assertEqual(
+            map_flusurv_geo_to_v5("network_eip"), ("flusurv_site", "network_eip")
+        )
+        self.assertEqual(
+            map_flusurv_geo_to_v5("network_ihsp"), ("flusurv_site", "network_ihsp")
+        )
+
+    def test_new_york_site_ids_are_sites_rather_than_states(self):
+        """These two are FluSurv-Net catchment areas, not the state of NY."""
+        self.assertEqual(
+            map_flusurv_geo_to_v5("NY_albany"), ("flusurv_site", "ny_albany")
+        )
+        self.assertEqual(
+            map_flusurv_geo_to_v5("NY_rochester"), ("flusurv_site", "ny_rochester")
+        )
+
+    def test_state_ids_are_lowercased(self):
+        self.assertEqual(map_flusurv_geo_to_v5("CA"), ("state", "ca"))
+        self.assertEqual(map_flusurv_geo_to_v5("UT"), ("state", "ut"))
+
+
+class EpiweekSourceGeoGroupingTests(TestCase):
+    """Each epiweek endpoint carries its own v5 geo mapper in the registry.
+
+    Epiweek geo ids bake the geo type into the id itself, and every endpoint
+    spells that differently, so the mapping cannot be shared. Routing it
+    through the source keeps a single call site in previews, exports and
+    query code.
+    """
+
+    def test_flusurv_splits_sites_from_states_preserving_order(self):
+        grouped = EPIWEEK_SOURCES["flusurv"].group_geos_by_v5_type(
+            [
+                {"id": "network_all"},
+                {"id": "CA"},
+                {"id": "NY_albany"},
+                {"id": "UT"},
+                {"id": "network_eip"},
+            ]
+        )
+        self.assertEqual(
+            grouped,
+            {
+                "flusurv_site": ["network_all", "ny_albany", "network_eip"],
+                "state": ["ca", "ut"],
+            },
+        )
+
+    def test_fluview_uses_its_own_mapper(self):
+        grouped = EPIWEEK_SOURCES["fluview"].group_geos_by_v5_type(
+            [{"id": "nat"}, {"id": "hhs3"}, {"id": "PA"}]
+        )
+        self.assertEqual(grouped, {"nation": ["us"], "hhs": ["3"], "state": ["pa"]})
+
+    def test_sources_that_have_not_migrated_group_to_nothing(self):
+        """No mapper means no v5 request can be built, so no bucket is offered."""
+        for key in ("nidss_flu", "nidss_dengue"):
+            with self.subTest(source=key):
+                self.assertEqual(
+                    EPIWEEK_SOURCES[key].group_geos_by_v5_type([{"id": "taipei"}]),
+                    {},
+                )
 
 
 class SafeCacheTests(TestCase):
@@ -3335,6 +3449,210 @@ class EpiweekExportUrlV5RoutingTests(V5RoutingTestMixin, TestCase):
         # Distinct filenames, so one download cannot overwrite the other.
         self.assertIn("fluview_ilinet_nation.csv", result[0] + result[1])
         self.assertIn("fluview_resp_lab_clinical_nation.csv", result[0] + result[1])
+
+
+class FlusurvV5RoutingTests(V5RoutingTestMixin, TestCase):
+    """flusurv previews, exports and query code must route migrated signals to v5.
+
+    flusurv is the first epiweek endpoint whose geo ids span more than one v5
+    geo_type: the FluSurv-Net sites and the participating states arrive in one
+    flat picker list and have to be split into two requests. v5 keeps the v4
+    source name and signal names, so the routing is exercised here rather than
+    any renaming.
+    """
+
+    SIGNALS = ["rate_overall", "rate_age_0"]
+
+    def _indicators(self, signals=("rate_overall",)):
+        return [
+            {"_endpoint": "flusurv", "data_source": "flusurv", "indicator": signal}
+            for signal in signals
+        ]
+
+    def _fake_flusurv_get(self, signals=SIGNALS, **kwargs):
+        return self._fake_get(
+            metadata_signals=signals, metadata_source="flusurv", **kwargs
+        )
+
+    @patch("indicatorsets.utils.epidata.requests.get")
+    def test_preview_splits_sites_and_states_into_two_v5_requests(self, mock_get):
+        mock_get.side_effect = self._fake_flusurv_get()
+
+        preview_epiweek_data(
+            EPIWEEK_SOURCES["flusurv"],
+            [{"id": "network_all"}, {"id": "CA"}, {"id": "NY_albany"}],
+            "2020-01-01",
+            "2020-01-20",
+            "user-key",
+            "json",
+            self._indicators(),
+        )
+        calls = self._probe_calls(mock_get)
+        self.assertEqual(len(calls), 2)
+        params_by_geo_type = {
+            call.kwargs["params"]["geo_type"]: call.kwargs["params"] for call in calls
+        }
+        self.assertEqual(
+            params_by_geo_type["flusurv_site"]["geo_value"], "network_all,ny_albany"
+        )
+        self.assertEqual(params_by_geo_type["state"]["geo_value"], "ca")
+        for call in calls:
+            self.assertIn("/v5/viz/", call.args[0])
+        for params in params_by_geo_type.values():
+            self.assertEqual(params["source"], "flusurv")
+            self.assertEqual(params["reference_times"], "2020-01-01:2020-01-20")
+            self.assertEqual(params["token"], "user-key")
+            self.assertNotIn("api_key", params)
+
+    @patch("indicatorsets.utils.epidata.requests.get")
+    def test_preview_falls_back_to_v4_when_the_signal_is_not_in_v5(self, mock_get):
+        """A signal v5 does not carry keeps the v4 locations/epiweeks call."""
+        mock_get.side_effect = self._fake_flusurv_get(signals=[])
+
+        preview_epiweek_data(
+            EPIWEEK_SOURCES["flusurv"],
+            [{"id": "network_all"}, {"id": "CA"}],
+            "2020-01-01",
+            "2020-01-20",
+            None,
+            "json",
+            self._indicators(),
+        )
+        calls = self._probe_calls(mock_get)
+        self.assertEqual(len(calls), 1)
+        self.assertNotIn("/v5/", calls[0].args[0])
+        self.assertIn("flusurv", calls[0].args[0])
+        self.assertEqual(calls[0].kwargs["params"]["locations"], "network_all,CA")
+
+    @patch("indicatorsets.utils.epidata.requests.get")
+    def test_preview_partially_migrated_keeps_the_v4_call(self, mock_get):
+        mock_get.side_effect = self._fake_flusurv_get(signals=["rate_overall"])
+
+        preview_epiweek_data(
+            EPIWEEK_SOURCES["flusurv"],
+            [{"id": "CA"}],
+            "2020-01-01",
+            "2020-01-20",
+            None,
+            "json",
+            self._indicators(signals=["rate_overall", "rate_age_0"]),
+        )
+        calls = self._probe_calls(mock_get)
+        self.assertEqual(len([c for c in calls if "/v5/" in c.args[0]]), 1)
+        self.assertEqual(len([c for c in calls if "/v5/" not in c.args[0]]), 1)
+
+    @patch("indicatorsets.utils.epidata.requests.get")
+    def test_export_batches_every_migrated_signal_per_geo_type(self, mock_get):
+        mock_get.side_effect = self._fake_flusurv_get()
+
+        result = generate_epiweek_export_url(
+            EPIWEEK_SOURCES["flusurv"],
+            [{"id": "network_all"}, {"id": "CA"}, {"id": "NY_albany"}],
+            "2020-01-01",
+            "2020-01-20",
+            "user-key",
+            "csv",
+            self._indicators(signals=self.SIGNALS),
+        )
+        self.assertEqual(len(result), 2)
+        for command in result:
+            self.assertIn("curl -o", command)
+            self.assertIn("source=flusurv", command)
+            self.assertIn("signal=rate_overall,rate_age_0", command)
+            self.assertIn("reference_times=2020-01-01:2020-01-20", command)
+            self.assertIn("token=user-key", command)
+        self.assertFalse(any("wget" in command for command in result))
+
+        geo_by_type = {
+            call.kwargs["params"]["geo_type"]: call.kwargs["params"]["geo_value"]
+            for call in self._probe_calls(mock_get)
+        }
+        self.assertEqual(
+            geo_by_type, {"flusurv_site": "network_all,ny_albany", "state": "ca"}
+        )
+
+    @patch("indicatorsets.utils.epidata.requests.get")
+    def test_export_falls_back_to_v4_when_the_signal_is_not_in_v5(self, mock_get):
+        mock_get.side_effect = self._fake_flusurv_get(signals=[])
+
+        result = generate_epiweek_export_url(
+            EPIWEEK_SOURCES["flusurv"],
+            [{"id": "network_all"}, {"id": "CA"}],
+            "2020-01-01",
+            "2020-01-20",
+            None,
+            "csv",
+            self._indicators(),
+        )
+        self.assertEqual(len(result), 1)
+        self.assertIn("wget", result[0])
+        self.assertIn("flusurv/?locations=network_all,CA", result[0])
+
+    @patch("indicatorsets.utils.epidata.requests.get")
+    def test_query_code_emits_one_snapshot_call_per_geo_type(self, mock_get):
+        mock_get.side_effect = self._fake_flusurv_get()
+
+        python_blocks, r_blocks = generate_query_code_epiweek(
+            EPIWEEK_SOURCES["flusurv"],
+            [{"id": "network_all"}, {"id": "CA"}, {"id": "NY_albany"}],
+            "2020-01-01",
+            "2020-01-20",
+            self._indicators(signals=self.SIGNALS),
+        )
+        self.assertEqual(len(python_blocks), 2)
+        self.assertEqual(len(r_blocks), 2)
+        self.assertFalse(any("pub_flusurv" in block for block in python_blocks))
+        self.assertIn(
+            'flusurv_flusurv_site_v5_df = epidata.epidata_snapshot(\n'
+            '    source="flusurv",\n'
+            '    signals=["rate_overall", "rate_age_0"],\n'
+            '    geo_type="flusurv_site",\n'
+            '    geo_values=["network_all", "ny_albany"],\n'
+            '    reference_time=EpiRange("2020-01-01", "2020-01-20"),\n'
+            ').df()\n',
+            python_blocks,
+        )
+        self.assertIn(
+            'epidata_flusurv_state_v5 <- epidata_snapshot(\n'
+            '    source = "flusurv",\n'
+            '    signals = c("rate_overall", "rate_age_0"),\n'
+            '    geo_type = "state",\n'
+            '    geo_values = c("ca"),\n'
+            '    reference_time = epirange("2020-01-01", "2020-01-20")\n'
+            ')\n',
+            r_blocks,
+        )
+
+    @patch("indicatorsets.utils.epidata.requests.get")
+    def test_query_code_falls_back_to_v4_when_the_signal_is_not_in_v5(self, mock_get):
+        mock_get.side_effect = self._fake_flusurv_get(signals=[])
+
+        python_blocks, r_blocks = generate_query_code_epiweek(
+            EPIWEEK_SOURCES["flusurv"],
+            [{"id": "network_all"}, {"id": "CA"}],
+            "2020-01-01",
+            "2020-01-20",
+            self._indicators(),
+        )
+        self.assertEqual(len(python_blocks), 1)
+        self.assertIn("epidata.pub_flusurv(", python_blocks[0])
+        self.assertIn('locations="network_all,CA"', python_blocks[0])
+        self.assertIn("pub_flusurv(", r_blocks[0])
+
+    @patch("indicatorsets.utils.epidata.requests.get")
+    def test_query_code_partially_migrated_keeps_the_v4_call(self, mock_get):
+        mock_get.side_effect = self._fake_flusurv_get(signals=["rate_overall"])
+
+        python_blocks, _ = generate_query_code_epiweek(
+            EPIWEEK_SOURCES["flusurv"],
+            [{"id": "CA"}],
+            "2020-01-01",
+            "2020-01-20",
+            self._indicators(signals=self.SIGNALS),
+        )
+        self.assertEqual(len(python_blocks), 2)
+        self.assertTrue(any("epidata_snapshot(" in block for block in python_blocks))
+        self.assertTrue(any("pub_flusurv(" in block for block in python_blocks))
 
 
 @override_settings(EPIDATA_URL="https://api.example.com/epidata/")

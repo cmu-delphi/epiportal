@@ -8,7 +8,6 @@ from django.urls import reverse
 from indicatorsets.utils.epidata import (
     get_time_values,
     get_v5_source,
-    group_fluview_geos_by_v5_type,
     group_v5_indicators_by_source,
     has_epidata_results,
     split_v4_v5_indicators,
@@ -111,7 +110,7 @@ def generate_covidcast_indicators_export_url(
     return data_export_commands
 
 
-def generate_v5_fluview_export_snippet(
+def generate_v5_epiweek_export_snippet(
     v5_indicators,
     v5_source,
     geo_type,
@@ -170,7 +169,7 @@ def generate_v5_fluview_export_snippet(
     return data_export_commands
 
 
-def generate_v4_fluview_export_snippet(
+def generate_v4_epiweek_export_snippet(
     source, data_source, geos, start_date, end_date, data_format, api_key
 ):
     """Build the v4 export command for one data source on an epiweek endpoint.
@@ -225,10 +224,10 @@ def generate_epiweek_export_url(
     for v5_source, source_v5_indicators in group_v5_indicators_by_source(
         v5_indicators
     ).items():
-        for geo_type, geo_values in group_fluview_geos_by_v5_type(geos).items():
+        for geo_type, geo_values in source.group_geos_by_v5_type(geos).items():
             geo_values_str = ",".join(geo_values)
             data_export_commands.extend(
-                generate_v5_fluview_export_snippet(
+                generate_v5_epiweek_export_snippet(
                     source_v5_indicators,
                     v5_source,
                     geo_type,
@@ -245,7 +244,7 @@ def generate_epiweek_export_url(
         ]
         for data_source in v4_data_sources:
             data_export_commands.append(
-                generate_v4_fluview_export_snippet(
+                generate_v4_epiweek_export_snippet(
                     source,
                     data_source,
                     geos,
