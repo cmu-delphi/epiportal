@@ -1,11 +1,20 @@
 from django.urls import path
 from django.urls.resolvers import URLPattern
 
-from indicatorsets.views import (IndicatorSetListView,
-                                 check_fluview_geo_coverage, create_query_code,
-                                 epivis, generate_export_data_url,
-                                 get_available_geos,
-                                 get_related_indicators_json, preview_data, get_table_stats_info, get_pophive_age_groups)
+from indicatorsets.proxy_views import download_viz_export
+from indicatorsets.views import (
+    IndicatorSetListView,
+    check_fluview_geo_coverage,
+    create_query_code,
+    epivis,
+    generate_export_data_url,
+    get_available_geos,
+    get_related_indicators_json,
+    preview_data,
+    get_table_stats_info,
+    get_pophive_age_groups,
+    get_nwss_county_mapping,
+)
 
 urlpatterns: list[URLPattern] = [
     path("", IndicatorSetListView.as_view(), name="indicatorsets"),
@@ -33,5 +42,15 @@ urlpatterns: list[URLPattern] = [
         "get_pophive_age_groups/",
         get_pophive_age_groups,
         name="get_pophive_age_groups",
+    ),
+    path(
+        "get_nwss_county_mapping/",
+        get_nwss_county_mapping,
+        name="get_nwss_county_mapping",
+    ),
+    path(
+        "download_export/",
+        download_viz_export,
+        name="download_export",
     ),
 ]

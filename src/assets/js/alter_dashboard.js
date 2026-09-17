@@ -1309,7 +1309,6 @@ async function loadAvailableGeographies(pathogen = '', preservedGeography = '') 
         }
         
         const data = await response.json();
-        console.log(data.available_geos);
 
         
         if (data && data.available_geos) {

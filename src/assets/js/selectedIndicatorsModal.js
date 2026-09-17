@@ -105,30 +105,32 @@ function handleModeChange(mode) {
     $('#modeSubmitResult').html('');
 
     var choose_dates = document.getElementsByName('choose_date');
+    var data_format_div = document.getElementsByName('data_format_div');
+
+    currentMode = mode;
 
     if (mode === 'epivis') {
-        currentMode = 'epivis';
         choose_dates.forEach((el) => {
             el.style.display = 'none';
-        });
-        $('#modeSubmitResult').html('');
-    } else if (mode === 'export') {
-        currentMode = 'export';
+        })
+    } else {
         choose_dates.forEach((el) => {
             el.style.display = 'flex';
-        });
-        $('#modeSubmitResult').html('');
-    } else if (mode === 'preview') {
-        currentMode = 'preview';
-        choose_dates.forEach((el) => {
-            el.style.display = 'flex';
-        });
-    } else if (mode === 'create_query_code') {
-        currentMode = 'create_query_code'
-        choose_dates.forEach((el) => {
-            el.style.display = 'flex';
-        });
+        })
     }
+
+    if (mode === 'export' || mode === 'preview') {
+        data_format_div.forEach((el) => {
+            el.style.display = 'flex';
+        })
+    } else {
+        data_format_div.forEach((el) => {
+            el.style.display = 'none';
+        })
+    }
+    $('#modeSubmitResult').html('');
+
+    
     document.getElementsByName("modes").forEach((el) => {
         if (currentMode === el.value) {
             el.checked = true;
@@ -335,7 +337,7 @@ function showPophiveLocationSelect() {
 
 function showNwssFieldsSelect() {
     if (indicatorHandler.getNwssIndicators().length > 0) {
-        if (document.getElementsByName("nwssPcrTarget").length === 0) {
+        if (document.getElementsByName("nwssGeographicValue").length === 0) {
             indicatorHandler.showNwssFields();
         } else {
             $("#nwssDiv").show();
@@ -351,8 +353,7 @@ function showNwssFieldsSelect() {
 
 function showNonDelphiIndicatorSetsLocations() {
     if (indicatorHandler.nonCovidcastIndicatorSets.length > 0) {
-
-        var otherEndpointIndicatorSetsLocationMessage = `<div class="alert alert-info" data-mdb-alert-init role="alert">For indicator set(s) ${indicatorHandler.nonCovidcastIndicatorSets.join(", ")}, please use the Location menu(s) below:</div>`
+        var otherEndpointIndicatorSetsLocationMessage = `<div class="alert alert-info" data-mdb-alert-init role="alert">For indicator set(s): ${indicatorHandler.nonCovidcastIndicatorSets.join(", ")}, instead of the Location(s) menu, please use the Geographic Value menu below.</div>`
         $("#differentLocationNote").html(otherEndpointIndicatorSetsLocationMessage);
         showFluviewLocationSelect();
         showNIDSSFluLocationSelect();

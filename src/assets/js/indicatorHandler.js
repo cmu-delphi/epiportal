@@ -430,6 +430,10 @@ class IndicatorHandler {
         if (pophiveAgeGroupData && pophiveAgeGroupData.length > 0) {
             payload.pophiveAgeGroup = pophiveAgeGroupData[0].id;
         }
+        var nwssGeographicValue = $("#nwssGeographicValue").val();
+        if (nwssGeographicValue && nwssGeographicValue.length > 0) {
+            payload.nwssGeographicValue = nwssGeographicValue;
+        }
         return payload;
 
     }
@@ -557,55 +561,76 @@ class IndicatorHandler {
                     data: ageGroups,
                     allowClear: true,
                     width: "100%",
+                    dropdownParent: $("#selectedIndicatorsModal"),
                 });
             });
         }
     }
 
+
+    // TODO: to return this fields -> move them to nwssFields below and uncomment corresponding code in showNwssFields function
+    // <div class="col-2">
+    //     <label for="nwssPcrTarget" class="col-form-label">PCR Target:</label>
+    // </div>
+    // <div class="col-10">
+    //     <select id="nwssPcrTarget" name="nwssPcrTarget" class="form-select"></select>
+    // </div>
+
+    
+
     showNwssFields() {
         var nwssFields = `
         <hr>
-        <div class="row margin-top-1rem" id="nwssDiv">
-            <div class="col-2">
-                <label for="nwssPcrTarget" class="col-form-label">PCR Target:</label>
+        <div id="nwssDiv">
+            <div class="row margin-top-1rem">
+                <div class="col-2">
+                    <label for="nwssSource" class="col-form-label">NWSS Source:</label>
+                </div>
+                <div class="col-10">
+                    <select id="nwssSource" name="nwssSource" class="form-select" multiple="multiple"></select>
+                </div>
             </div>
-            <div class="col-10">
-                <select id="nwssPcrTarget" name="nwssPcrTarget" class="form-select"></select>
-            </div>
-
-            <div class="col-2 margin-top-1rem">
-                <label for="nwssSource" class="col-form-label">NWSS Source:</label>
-            </div>
-            <div class="col-10 margin-top-1rem">
-                <select id="nwssSource" name="nwssSource" class="form-select"></select>
-            </div>
-
-            <div class="col-2 margin-top-1rem">
-                <label for="nwssGeographicValue" class="col-form-label">Geographic Value:</label>
-            </div>
-            <div class="col-10 margin-top-1rem">
-                <input type="text" id="nwssGeographicValue" name="nwssGeographicValue" class="form-control" placeholder="Enter geographic value">
+            <div class="row margin-top-1rem">
+                <div class="col-2">
+                    <label for="nwssGeographicValue" class="col-form-label">Geographic Value:</label>
+                </div>
+                <div class="col-10">
+                    <select id="nwssGeographicValue" name="nwssGeographicValue" class="form-select" multiple="multiple"></select>
+                </div>
             </div>
         </div><hr>`;
         if ($("#otherEndpointLocations").length) {
             $("#otherEndpointLocations").append(nwssFields);
-            var pcrTargets = this.nwssPcrTargets.map(function (t) {
-                return { id: t, text: t };
-            });
-            $("#nwssPcrTarget").select2({
-                placeholder: "Select PCR Target",
-                data: pcrTargets,
-                allowClear: true,
-                width: "100%",
-            });
+            // var pcrTargets = this.nwssPcrTargets.map(function (t) {
+            //     return { id: t, text: t };
+            // });
+            // $("#nwssPcrTarget").select2({
+            //     placeholder: "Select PCR Target",
+            //     data: pcrTargets,
+            //     allowClear: true,
+            //     width: "100%",
+            //     dropdownParent: $("#selectedIndicatorsModal"),
+            // });
             var sources = this.nwssSources.map(function (s) {
                 return { id: s, text: s };
             });
             $("#nwssSource").select2({
                 placeholder: "Select NWSS Source",
+                maximumSelectionLength: 5,
+                minimumSelectionLength: 1,
                 data: sources,
                 allowClear: true,
                 width: "100%",
+            });
+            $.get("get_nwss_county_mapping/", function (response) {
+                $("#nwssGeographicValue").select2({
+                    placeholder: "Select Geographic Value",
+                    data: response.nwss_county_mapping,
+                    maximumSelectionLength: 5,
+                    minimumSelectionLength: 1,
+                    allowClear: true,
+                    width: "100%",
+                });
             });
         }
     }
@@ -621,7 +646,6 @@ class IndicatorHandler {
         const flusurvLocations = $("#flusurvLocations").select2("data");
         const pophiveLocations = $("#pophiveLocations").select2("data");
         const pophiveAgeGroup = $("#pophiveAgeGroup").select2("data");
-        const nwssPcrTarget = $("#nwssPcrTarget").select2("data");
         const nwssSource = $("#nwssSource").select2("data");
         const nwssGeographicValue = $("#nwssGeographicValue").val();
         const submitData = {
@@ -633,7 +657,6 @@ class IndicatorHandler {
             flusurvLocations: flusurvLocations,
             pophiveLocations: pophiveLocations,
             pophiveAgeGroup: pophiveAgeGroup,
-            nwssPcrTarget: nwssPcrTarget,
             nwssSource: nwssSource,
             nwssGeographicValue: nwssGeographicValue,
             nwssFillMethod: "source",
@@ -699,9 +722,12 @@ class IndicatorHandler {
         const pophiveLocations = $("#pophiveLocations").select2("data");
         const pophiveAgeGroup = $("#pophiveAgeGroup").select2("data");
         const nwssGeographicValue = $("#nwssGeographicValue").val();
-        const nwssPcrTarget = $("#nwssPcrTarget").select2("data");
         const nwssSource = $("#nwssSource").select2("data");
         const nwssFillMethod = $("#nwssFillMethod").select2("data");
+        let dataFormat = 'csv';
+        if ($("#data_format_json").is(":checked")) {
+            dataFormat = 'json';
+        }
         var covidCastGeographicValues = Object.groupBy(
             $("#geographic_value").select2("data"),
             ({ geoType }) => [geoType]
@@ -718,11 +744,11 @@ class IndicatorHandler {
             pophiveLocations: pophiveLocations,
             pophiveAgeGroup: pophiveAgeGroup,
             nwssGeographicValue: nwssGeographicValue,
-            nwssPcrTarget: nwssPcrTarget,
             nwssSource: nwssSource,
             nwssFillMethod: nwssFillMethod,
             apiKey: document.getElementById("apiKey").value ? document.getElementById("apiKey").value : "",
             clientId: clientId ? clientId : "Not available",
+            dataFormat: dataFormat,
         }
         const csrftoken = Cookies.get("csrftoken");
         $.ajax({
@@ -745,6 +771,45 @@ class IndicatorHandler {
             });
     }
 
+    escapeHtml(value) {
+        return String(value)
+            .replace(/&/g, "&amp;")
+            .replace(/</g, "&lt;")
+            .replace(/>/g, "&gt;")
+            .replace(/"/g, "&quot;")
+            .replace(/'/g, "&#39;");
+    }
+
+    generatePreviewDataCSV(previewBlocks) {
+        if (!Array.isArray(previewBlocks) || previewBlocks.length === 0) {
+            return '<p>No preview data available.</p>';
+        }
+        const blocks = previewBlocks
+            .filter((block) => block !== null && block !== undefined)
+            .map((block) => {
+                if (!Array.isArray(block)) {
+                    const message = (block && block.message) || 'No preview data available.';
+                    return `<p class="preview-no-data">${this.escapeHtml(message)}</p>`;
+                }
+                if (block.length === 0) {
+                    return '';
+                }
+                const [header, ...dataRows] = block;
+                const headerHtml = header
+                    .map((cell) => `<th>${this.escapeHtml(cell)}</th>`)
+                    .join('');
+                const bodyHtml = dataRows
+                    .map((row) => `<tr>${row.map((cell) => `<td>${this.escapeHtml(cell)}</td>`).join('')}</tr>`)
+                    .join('');
+                return `<table class="table table-bordered table-sm preview-table">
+                    <thead><tr>${headerHtml}</tr></thead>
+                    <tbody>${bodyHtml}</tbody>
+                </table>`;
+            })
+            .filter((html) => html !== '');
+        return blocks.length ? blocks.join('') : '<p>No preview data available.</p>';
+    }
+
     previewData() {
         $('#loader').show();
         const fluviewLocations = $("#fluviewLocations").select2("data");
@@ -753,13 +818,16 @@ class IndicatorHandler {
         const flusurvLocations = $("#flusurvLocations").select2("data");
         const pophiveLocations = $("#pophiveLocations").select2("data");
         const pophiveAgeGroup = $("#pophiveAgeGroup").select2("data");
-        const nwssPcrTarget = $("#nwssPcrTarget").select2("data");
         const nwssSource = $("#nwssSource").select2("data");
         const nwssGeographicValue = $("#nwssGeographicValue").val();
         const covidCastGeographicValues = Object.groupBy(
             $("#geographic_value").select2("data"),
             ({ geoType }) => [geoType]
         );
+        let dataFormat = 'csv';
+        if ($("#data_format_json").is(":checked")) {
+            dataFormat = 'json';
+        }
         const submitData = {
             start_date: document.getElementById("start_date").value,
             end_date: document.getElementById("end_date").value,
@@ -771,26 +839,35 @@ class IndicatorHandler {
             flusurvLocations: flusurvLocations,
             pophiveLocations: pophiveLocations,
             pophiveAgeGroup: pophiveAgeGroup,
-            nwssPcrTarget: nwssPcrTarget,
             nwssSource: nwssSource,
             nwssGeographicValue: nwssGeographicValue,
             nwssFillMethod: "source",
             apiKey: document.getElementById("apiKey").value ? document.getElementById("apiKey").value : "",
             clientId: clientId ? clientId : "Not available",
+            dataFormat: dataFormat,
         }
         const csrftoken = Cookies.get("csrftoken");
         $.ajax({
             url: "preview_data/",
             type: "POST",
-            dataType: "json",
-            contentType: "application/json",
+            dataType: 'json',
+            contentType: 'application/json',
             headers: { "X-CSRFToken": csrftoken },
             data: JSON.stringify(submitData),
         }).done((data) => {
             const payload = this.prepareDataLayerPayload("previewData");
             dataLayerPush(payload);
             $('#loader').hide();
-            $('#modeSubmitResult').html(JSON.stringify(data, null, 2));
+            if (dataFormat === 'csv') {
+                $('#modeSubmitResult').html(this.generatePreviewDataCSV(data));
+            } else {
+                $('#modeSubmitResult').html(JSON.stringify(data, null, 2));
+            }
+        }).fail(() => {
+            $('#loader').hide();
+            $('#modeSubmitResult').html(
+                '<div class="alert alert-danger" role="alert">Preview failed. Please try again.</div>'
+            );
         });
     }
 
@@ -801,7 +878,6 @@ class IndicatorHandler {
         const flusurvLocations = $("#flusurvLocations").select2("data");
         const pophiveLocations = $("#pophiveLocations").select2("data");
         const pophiveAgeGroup = $("#pophiveAgeGroup").select2("data");
-        const nwssPcrTarget = $("#nwssPcrTarget").select2("data");
         const nwssSource = $("#nwssSource").select2("data");
         const nwssGeographicValue = $("#nwssGeographicValue").val();
         const covidCastGeographicValues = Object.groupBy(
@@ -820,7 +896,6 @@ class IndicatorHandler {
             flusurvLocations: flusurvLocations,
             pophiveLocations: pophiveLocations,
             pophiveAgeGroup: pophiveAgeGroup,
-            nwssPcrTarget: nwssPcrTarget,
             nwssSource: nwssSource,
             nwssGeographicValue: nwssGeographicValue,
             nwssFillMethod: "source",

@@ -50,6 +50,10 @@ urlpatterns = [
         f"{settings.MAIN_PAGE}/" if settings.MAIN_PAGE else "",
         include("alternative_interface.urls"),
     ),
+    path(
+        f"{settings.MAIN_PAGE}/" if settings.MAIN_PAGE else "",
+        include("rest.urls"),
+    ),
 ]
 
 urlpatterns += [path("health/", include("health_check.urls"))]

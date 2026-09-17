@@ -1445,3 +1445,7 @@
   div[name="choose_date"] {
       display: none;
   }
+
+  div[name="data_format_div"] {
+    display: none;
+}

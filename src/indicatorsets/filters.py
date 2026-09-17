@@ -153,8 +153,8 @@ class IndicatorSetFilter(django_filters.FilterSet):
         filtered_indicators = get_list_of_indicators_filtered_by_geo(value)
         include_fluview = self.include_fluview(value)
         query = Q()
-        if filtered_indicators["epidata"]:
-            for item in filtered_indicators["epidata"]:
+        if filtered_indicators:
+            for item in filtered_indicators:
                 query |= Q(source__name=item["source"], name=item["signal"])
         if include_fluview:
             query |= Q(indicator_set__epidata_endpoint="fluview")

@@ -25,7 +25,7 @@ import sentry_sdk
 from sentry_sdk.integrations.django import DjangoIntegration
 from sentry_sdk.integrations.redis import RedisIntegration
 
-APP_VERSION = "1.1.1"
+APP_VERSION = "1.2.2"
 ALTERNATIVE_INTERFACE_VERSION = "1.0.11"
 
 
@@ -133,6 +133,7 @@ LOCAL_APPS: list[str] = [
     'indicatorsets',
     'indicators',
     'alternative_interface',
+    'rest',
 ]
 
 INSTALLED_APPS: list[str] = DEFAULT_APPS + EXTERNAL_APPS + LOCAL_APPS
