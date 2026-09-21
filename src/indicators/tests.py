@@ -15,6 +15,7 @@ from indicators.models import (
 from indicators.resources import (
     IndicatorResource,
     NonDelphiIndicatorResource,
+    USStateIndicatorResource,
     fix_boolean_fields,
     process_category,
     process_format_type,
@@ -222,6 +223,53 @@ class IndicatorImportResourceTests(TestCase):
         self.assertTrue(Indicator.objects.filter(pk=non_delphi_indicator.pk).exists())
         self.assertTrue(Indicator.objects.filter(pk=kept_covidcast.pk).exists())
         self.assertFalse(Indicator.objects.filter(pk=removed_covidcast.pk).exists())
+
+
+class SkipRowIndicatorSetColumnTests(TestCase):
+    """skip_row must look at the indicator set column each resource declares."""
+
+    @classmethod
+    def setUpTestData(cls):
+        cls.indicator_set = IndicatorSet.objects.create(
+            name="Alabama COVID-19 ED visits",
+            source_type="us_state",
+        )
+
+    def test_us_state_row_with_known_indicator_set_is_not_skipped(self):
+        row = {
+            "Indicator Name": "Alabama COVID % ED visits",
+            "Include in indicator app": True,
+            "Indicator Set Name": self.indicator_set.pk,
+        }
+
+        self.assertFalse(USStateIndicatorResource().skip_row(None, None, row))
+
+    def test_us_state_row_with_unknown_indicator_set_is_skipped(self):
+        row = {
+            "Indicator Name": "Alabama COVID % ED visits",
+            "Include in indicator app": True,
+            "Indicator Set Name": None,
+        }
+
+        self.assertTrue(USStateIndicatorResource().skip_row(None, None, row))
+
+    def test_covidcast_row_still_uses_indicator_set_column(self):
+        row = {
+            "Signal": "covidcast_sig",
+            "Include in indicator app": True,
+            "Indicator Set": self.indicator_set.pk,
+        }
+
+        self.assertFalse(IndicatorResource().skip_row(None, None, row))
+
+    def test_covidcast_row_without_indicator_set_is_skipped(self):
+        row = {
+            "Signal": "covidcast_sig",
+            "Include in indicator app": True,
+            "Indicator Set": None,
+        }
+
+        self.assertTrue(IndicatorResource().skip_row(None, None, row))
 
 
 class IndicatorCategoryTests(TestCase):
