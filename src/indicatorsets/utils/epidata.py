@@ -163,10 +163,32 @@ def map_fluview_geo_to_v5(geo_id):
     return "state", FLUVIEW_V5_GEO_RENAMES.get(geo_value, geo_value)
 
 
-def group_fluview_geos_by_v5_type(geos):
-    """Bucket fluview's flat geo id list into ``{v5 geo_type: [v5 geo_values]}``."""
+def map_flusurv_geo_to_v5(geo_id):
+    """Map one of flusurv's ``locations`` ids to a v5 ``(geo_type, geo_value)`` pair.
+
+    v5 splits flusurv's flat picker list across two geo_types. The
+    FluSurv-Net sites -- the three networks and the two New York catchment
+    areas -- become ``flusurv_site``; the participating states stay
+    ``state``. Site ids are the only ones carrying an underscore, which is
+    what separates ``NY_albany`` (a site) from ``NY`` (a state, were it ever
+    offered). The ids are otherwise unchanged from v4, just lowercased.
+    """
+    geo_value = geo_id.lower()
+    if "_" in geo_value:
+        return "flusurv_site", geo_value
+    return "state", geo_value
+
+
+def group_geos_by_v5_type(geos, mapper):
+    """Bucket a flat epiweek geo id list into ``{v5 geo_type: [v5 geo_values]}``.
+
+    ``mapper`` is the endpoint's own id -> ``(geo_type, geo_value)`` function;
+    every epiweek endpoint spells its geo ids differently, so the mapping
+    cannot be shared. Callers reach this through
+    :meth:`EpiweekSource.group_geos_by_v5_type` rather than naming a mapper.
+    """
     grouped = {}
     for geo in geos:
-        geo_type, geo_value = map_fluview_geo_to_v5(geo["id"])
+        geo_type, geo_value = mapper(geo["id"])
         grouped.setdefault(geo_type, []).append(geo_value)
     return grouped

@@ -476,7 +476,7 @@ class NonDelphiIndicatorSetResource(IndicatorSetBaseResource):
 class USStateIndicatorSetResource(IndicatorSetBaseResource):
     import_source_types = ("us_state",)
 
-    name = Field(attribute="name", column_name="Indicator Set name* ")
+    name = Field(attribute="name", column_name="Indicator Set Name")
     state = Field(attribute="state", column_name="State")
     description = Field(
         attribute="description", column_name="Indicator Set Description*"
@@ -569,7 +569,7 @@ class USStateIndicatorSetResource(IndicatorSetBaseResource):
         )
 
     def get_instance(self, instance_loader, row):
-        name = row.get("Indicator Set name* ")
+        name = row.get("Indicator Set Name")
 
         # Try to match by (name, source)
         if name:
