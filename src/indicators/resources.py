@@ -203,6 +203,7 @@ def process_indicator_geography(row):
 class ModelResource(CustomModelResource):
     import_source_types: tuple[str, ...] = ()
     skip_row_name_column = "Signal"
+    indicator_set_column = "Indicator Set"
 
     def get_import_deletion_queryset(self):
         queryset = Indicator.objects.all()
@@ -257,7 +258,7 @@ class ModelResource(CustomModelResource):
                 if indicators.exists():
                     indicators.delete()
                 return True
-        if row.get("Indicator Set") is None:
+        if row.get(self.indicator_set_column) is None:
             return True
         return False
 
@@ -700,6 +701,7 @@ class NonDelphiIndicatorResource(ModelResource):
 
 class USStateIndicatorResource(ModelResource):
     import_source_types = ("us_state",)
+    indicator_set_column = "Indicator Set Name"
     imported_rows_pks = []
     name = Field(attribute="name", column_name="Indicator Name")
     indicator_set = Field(
@@ -721,7 +723,7 @@ class USStateIndicatorResource(ModelResource):
         """Post-processes each row after importing."""
         strip_all_string_values(row)
         fix_boolean_fields(row)
-        process_indicator_set(row, "Indicator Set Name")
+        process_indicator_set(row, self.indicator_set_column)
 
     def after_save_instance(self, instance, row, **kwargs):
         instance.source_type = "us_state"
