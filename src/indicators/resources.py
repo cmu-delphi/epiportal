@@ -704,7 +704,7 @@ class USStateIndicatorResource(ModelResource):
     name = Field(attribute="name", column_name="Indicator Name")
     indicator_set = Field(
         attribute="indicator_set",
-        column_name="Indicator Set",
+        column_name="Indicator Set Name",
         widget=PermissiveForeignKeyWidget(IndicatorSet),
     )
 

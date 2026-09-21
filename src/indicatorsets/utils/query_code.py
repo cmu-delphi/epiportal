@@ -3,7 +3,6 @@
 from textwrap import dedent
 
 from indicatorsets.utils.epidata import (
-    group_fluview_geos_by_v5_type,
     group_v5_indicators_by_source,
     split_v4_v5_indicators,
 )
@@ -164,18 +163,14 @@ def generate_query_code_covidcast(
 
 
 
-def generate_v5_fluview_snippets(v5_indicators, geos, start_date, end_date):
+def generate_v5_epiweek_snippets(source, v5_indicators, geos, start_date, end_date):
     """Build the v5 snippets for epiweek indicators whose source has migrated.
 
     Mirrors ``generate_v5_covidcast_snippets``: migrated signals are batched
     into one ``epidata_snapshot()`` call per v5 geo_type. Epiweek geo ids do
-    not carry an explicit geo_type the way covidcast_geos does, so they are
-    bucketed into v5 geo_type/geo_value pairs first.
-
-    Note the bucketing still goes through ``group_fluview_geos_by_v5_type``,
-    which only understands fluview's geo id format. Other epiweek endpoints
-    use different conventions, so each will need its own mapper before it can
-    be migrated -- see ``map_fluview_geo_to_v5``.
+    not carry an explicit geo_type the way covidcast_geos does, and every
+    endpoint spells them differently, so ``source`` supplies the bucketing --
+    see ``EpiweekSource.group_geos_by_v5_type``.
 
     Batching is also per v5 source, not per endpoint: one endpoint can serve
     several data sources mapping to different v5 sources, and asking one
@@ -186,7 +181,7 @@ def generate_v5_fluview_snippets(v5_indicators, geos, start_date, end_date):
     """
     python_code_blocks = []
     r_code_blocks = []
-    grouped_geos = group_fluview_geos_by_v5_type(geos)
+    grouped_geos = source.group_geos_by_v5_type(geos)
     for v5_source, indicators in group_v5_indicators_by_source(v5_indicators).items():
         signals_list = ", ".join(
             f'"{indicator["indicator"]}"' for indicator in indicators
@@ -281,8 +276,8 @@ def generate_query_code_epiweek(source, geos, start_date, end_date, indicators):
     r_code_blocks = []
     source_indicators = [i for i in indicators if i["_endpoint"] == source.key]
     v5_indicators, v4_indicators, _ = split_v4_v5_indicators(source_indicators)
-    v5_python_blocks, v5_r_blocks = generate_v5_fluview_snippets(
-        v5_indicators, geos, start_date, end_date
+    v5_python_blocks, v5_r_blocks = generate_v5_epiweek_snippets(
+        source, v5_indicators, geos, start_date, end_date
     )
     python_code_blocks.extend(v5_python_blocks)
     r_code_blocks.extend(v5_r_blocks)
