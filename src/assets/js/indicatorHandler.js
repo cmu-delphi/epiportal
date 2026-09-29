@@ -659,7 +659,7 @@ class IndicatorHandler {
             pophiveAgeGroup: pophiveAgeGroup,
             nwssSource: nwssSource,
             nwssGeographicValue: nwssGeographicValue,
-            nwssFillMethod: "source",
+            fillMethod: getFillMethod(),
             apiKey: document.getElementById("apiKey").value ? document.getElementById("apiKey").value : "",
             clientId: clientId ? clientId : "Not available",
         };
@@ -723,7 +723,6 @@ class IndicatorHandler {
         const pophiveAgeGroup = $("#pophiveAgeGroup").select2("data");
         const nwssGeographicValue = $("#nwssGeographicValue").val();
         const nwssSource = $("#nwssSource").select2("data");
-        const nwssFillMethod = $("#nwssFillMethod").select2("data");
         let dataFormat = 'csv';
         if ($("#data_format_json").is(":checked")) {
             dataFormat = 'json';
@@ -745,7 +744,7 @@ class IndicatorHandler {
             pophiveAgeGroup: pophiveAgeGroup,
             nwssGeographicValue: nwssGeographicValue,
             nwssSource: nwssSource,
-            nwssFillMethod: nwssFillMethod,
+            fillMethod: getFillMethod(),
             apiKey: document.getElementById("apiKey").value ? document.getElementById("apiKey").value : "",
             clientId: clientId ? clientId : "Not available",
             dataFormat: dataFormat,
@@ -841,7 +840,7 @@ class IndicatorHandler {
             pophiveAgeGroup: pophiveAgeGroup,
             nwssSource: nwssSource,
             nwssGeographicValue: nwssGeographicValue,
-            nwssFillMethod: "source",
+            fillMethod: getFillMethod(),
             apiKey: document.getElementById("apiKey").value ? document.getElementById("apiKey").value : "",
             clientId: clientId ? clientId : "Not available",
             dataFormat: dataFormat,
@@ -898,7 +897,7 @@ class IndicatorHandler {
             pophiveAgeGroup: pophiveAgeGroup,
             nwssSource: nwssSource,
             nwssGeographicValue: nwssGeographicValue,
-            nwssFillMethod: "source",
+            fillMethod: getFillMethod(),
             apiKey: document.getElementById("apiKey").value ? document.getElementById("apiKey").value : "",
             clientId: clientId ? clientId : "Not available",
         }

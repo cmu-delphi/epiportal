@@ -5,6 +5,7 @@ from urllib.parse import urlencode
 from django.conf import settings
 from django.urls import reverse
 
+from indicatorsets.utils.constants import DEFAULT_FILL_METHOD
 from indicatorsets.utils.epidata import (
     get_time_values,
     get_v5_source,
@@ -16,7 +17,13 @@ from indicatorsets.utils.helpers import get_epiweek
 
 
 def generate_covidcast_indicators_export_url(
-    indicators, start_date, end_date, covidcast_geos, api_key, data_format
+    indicators,
+    start_date,
+    end_date,
+    covidcast_geos,
+    api_key,
+    data_format,
+    fill_method=DEFAULT_FILL_METHOD,
 ):
     data_export_commands = []
     for indicator in indicators:
@@ -44,6 +51,7 @@ def generate_covidcast_indicators_export_url(
                         "signal": indicator["indicator"],
                         "geo_type": geo_type,
                         "geo_value": geo_values,
+                        "fill_method": fill_method,
                         "reference_times": time_values,
                         "token": api_key if api_key else settings.EPIDATA_API_KEY,
                     }
@@ -67,7 +75,7 @@ def generate_covidcast_indicators_export_url(
                     )
                     continue
                 if get_from_v5:
-                    data_export_url = f"{settings.EPIDATA_V5_URL}viz/?source={v5_source}&signal={indicator['indicator']}&geo_type={geo_type}&geo_value={geo_values}&reference_times={time_values}&format={data_format}"
+                    data_export_url = f"{settings.EPIDATA_V5_URL}viz/?source={v5_source}&signal={indicator['indicator']}&geo_type={geo_type}&geo_value={geo_values}&fill_method={fill_method}&reference_times={time_values}&format={data_format}"
                 else:
                     data_export_url = f"{settings.EPIDATA_URL}covidcast/csv?signal={indicator['data_source']}:{indicator['indicator']}&start_day={dates[0]}&end_day={dates[1]}&geo_type={geo_type}&geo_values={geo_values}&format={data_format}"
                 if data_format == "csv":
@@ -90,6 +98,7 @@ def generate_covidcast_indicators_export_url(
                         "signal": indicator["indicator"],
                         "geo_type": geo_type,
                         "geo_value": geo_values,
+                        "fill_method": fill_method,
                         "reference_times": time_values,
                         "format": data_format,
                         "header": "true" if data_format == "csv" else "false",
@@ -119,6 +128,7 @@ def generate_v5_epiweek_export_snippet(
     end_date,
     data_format,
     api_key,
+    fill_method=DEFAULT_FILL_METHOD,
 ):
     """Build the export command for one v5 source's geo_type bucket.
 
@@ -135,6 +145,7 @@ def generate_v5_epiweek_export_snippet(
         "signal": ",".join([indicator["indicator"] for indicator in v5_indicators]),
         "geo_type": geo_type,
         "geo_value": geo_values,
+        "fill_method": fill_method,
         "reference_times": reference_times,
         "token": api_key if api_key else settings.EPIDATA_API_KEY,
     }
@@ -143,7 +154,7 @@ def generate_v5_epiweek_export_snippet(
             f'<span class="text-muted">No data found for {label}. Export skipped.</span>'
         )
         return data_export_commands
-    data_export_url = f"{settings.EPIDATA_V5_URL}viz/?source={check_params['source']}&signal={check_params['signal']}&geo_type={check_params['geo_type']}&geo_value={check_params['geo_value']}&reference_times={reference_times}&format={data_format}"
+    data_export_url = f"{settings.EPIDATA_V5_URL}viz/?source={check_params['source']}&signal={check_params['signal']}&geo_type={check_params['geo_type']}&geo_value={check_params['geo_value']}&fill_method={fill_method}&reference_times={reference_times}&format={data_format}"
     if data_format == "csv":
         data_export_url += "&header=true"
     if api_key:
@@ -155,6 +166,7 @@ def generate_v5_epiweek_export_snippet(
         "signal": check_params["signal"],
         "geo_type": check_params["geo_type"],
         "geo_value": check_params["geo_value"],
+        "fill_method": fill_method,
         "reference_times": reference_times,
         "format": data_format,
         "header": "true" if data_format == "csv" else "false",
@@ -198,7 +210,14 @@ def generate_v4_epiweek_export_snippet(
 
 
 def generate_epiweek_export_url(
-    source, geos, start_date, end_date, api_key, data_format, indicators
+    source,
+    geos,
+    start_date,
+    end_date,
+    api_key,
+    data_format,
+    indicators,
+    fill_method=DEFAULT_FILL_METHOD,
 ):
     """Build the export command(s) for an epiweek-based endpoint, routing per indicator.
 
@@ -236,6 +255,7 @@ def generate_epiweek_export_url(
                     end_date,
                     data_format,
                     api_key,
+                    fill_method,
                 )
             )
     if v4_indicators or not v5_indicators:
@@ -265,6 +285,7 @@ def generate_pophive_export_url(
     pophive_age_group,
     api_key,
     data_format,
+    fill_method=DEFAULT_FILL_METHOD,
 ):
     data_export_commands = []
     for indicator in indicators:
@@ -276,6 +297,7 @@ def generate_pophive_export_url(
                     "signal": indicator["indicator"],
                     "geo_type": geo["geo_type"],
                     "geo_value": geo["id"],
+                    "fill_method": fill_method,
                     "reference_times": f"{start_date}:{end_date}",
                     "extra_keys": f"age_group:{pophive_age_group[0]['id']}",
                     "token": api_key if api_key else settings.EPIDATA_API_KEY,
@@ -287,7 +309,7 @@ def generate_pophive_export_url(
                         f'<span class="text-muted">No data found for {label}. Export skipped.</span>'
                     )
                     continue
-                data_export_url = f"{settings.EPIDATA_V5_URL}viz/?source=pophive&signal={indicator['indicator']}&geo_type={geo['geo_type']}&geo_value={geo['id']}&reference_times={start_date}:{end_date}&extra_keys=age_group:{pophive_age_group[0]['id']}&format={data_format}"
+                data_export_url = f"{settings.EPIDATA_V5_URL}viz/?source=pophive&signal={indicator['indicator']}&geo_type={geo['geo_type']}&geo_value={geo['id']}&fill_method={fill_method}&reference_times={start_date}:{end_date}&extra_keys=age_group:{pophive_age_group[0]['id']}&format={data_format}"
                 if data_format == "csv":
                     data_export_url += "&header=true"
                 if api_key:
@@ -298,6 +320,7 @@ def generate_pophive_export_url(
                     "signal": indicator["indicator"],
                     "geo_type": geo["geo_type"],
                     "geo_value": geo["id"],
+                    "fill_method": fill_method,
                     "reference_times": f"{start_date}:{end_date}",
                     "extra_keys": f"age_group:{pophive_age_group[0]['id']}",
                     "format": data_format,
@@ -321,7 +344,7 @@ def generate_nwss_export_url(
     end_date,
     nwss_geographic_value,
     nwss_source,
-    nwss_fill_method,
+    fill_method,
     api_key,
     data_format,
 ):
@@ -339,7 +362,7 @@ def generate_nwss_export_url(
                     "signal": indicator["indicator"],
                     "geo_type": "sewershed",
                     "geo_value": geo_value,
-                    "fill_method": nwss_fill_method,
+                    "fill_method": fill_method,
                     "reference_times": f"{start_date}:{end_date}",
                     "extra_keys": f"nwss_source:{source['id']}",
                     "token": api_key if api_key else settings.EPIDATA_API_KEY,
@@ -351,7 +374,7 @@ def generate_nwss_export_url(
                         f'<span class="text-muted">No data found for {label}. Export skipped.</span>'
                     )
                     continue
-                data_export_url = f"{settings.EPIDATA_V5_URL}viz/?source=nwss&signal={indicator['indicator']}&geo_type=sewershed&geo_value={geo_value}&fill_method={nwss_fill_method}&reference_times={start_date}:{end_date}&extra_keys=nwss_source:{source['id']}&format={data_format}"
+                data_export_url = f"{settings.EPIDATA_V5_URL}viz/?source=nwss&signal={indicator['indicator']}&geo_type=sewershed&geo_value={geo_value}&fill_method={fill_method}&reference_times={start_date}:{end_date}&extra_keys=nwss_source:{source['id']}&format={data_format}"
                 if data_format == "csv":
                     data_export_url += "&header=true"
                 if api_key:
@@ -364,7 +387,7 @@ def generate_nwss_export_url(
                     "signal": indicator["indicator"],
                     "geo_type": "sewershed",
                     "geo_value": geo_value,
-                    "fill_method": nwss_fill_method,
+                    "fill_method": fill_method,
                     "reference_times": f"{start_date}:{end_date}",
                     "extra_keys": f"nwss_source:{source['id']}",
                     "format": data_format,

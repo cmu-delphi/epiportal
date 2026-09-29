@@ -6,9 +6,12 @@ Prefer importing from the specific submodule in new code.
 """
 
 from indicatorsets.utils.constants import (
+    DEFAULT_FILL_METHOD,
+    FILL_METHODS,
     FLUVIEW_INDICATORS_MAPPING,
     INVALID_API_KEY_MESSAGE,
     NO_DATA_MESSAGE,
+    V5_NATIVE_ENDPOINTS,
 )
 from indicatorsets.utils.data_providers import (
     get_grouped_original_data_provider_choices,
@@ -43,6 +46,7 @@ from indicatorsets.utils.helpers import (
     get_epiweek,
     group_by_property,
     list_to_dict,
+    normalize_fill_method,
 )
 from indicatorsets.utils.previews import (
     get_preview_data,
@@ -60,11 +64,14 @@ from indicatorsets.utils.query_code import (
 )
 
 __all__ = [
+    "DEFAULT_FILL_METHOD",
     "EPIWEEK_SOURCES",
     "EpiweekSource",
+    "FILL_METHODS",
     "FLUVIEW_INDICATORS_MAPPING",
     "INVALID_API_KEY_MESSAGE",
     "NO_DATA_MESSAGE",
+    "V5_NATIVE_ENDPOINTS",
     "InvalidApiKeyError",
     "generate_covidcast_dataset_epivis",
     "generate_covidcast_indicators_export_url",
@@ -93,6 +100,7 @@ __all__ = [
     "list_to_dict",
     "log_form_data",
     "log_form_stats",
+    "normalize_fill_method",
     "parse_original_data_provider_ids",
     "preview_covidcast_data",
     "preview_epiweek_data",

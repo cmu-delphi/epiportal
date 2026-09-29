@@ -101,6 +101,50 @@ const appendAlert = (message, type) => {
 
 var currentMode = "epivis";
 
+/* fill_method is a key column on every Epidata v5 source, so one control
+ * covers the whole submission rather than one per source. The lists come from
+ * the server so they stay in step with MIGRATED_DATASOURCES. */
+const V5_DATA_SOURCES = typeof v5DataSources !== "undefined" ? v5DataSources : [];
+const V5_ENDPOINTS = typeof v5Endpoints !== "undefined" ? v5Endpoints : [];
+
+function isV5Indicator(indicator) {
+    return (
+        V5_ENDPOINTS.includes(indicator._endpoint) ||
+        V5_DATA_SOURCES.includes(indicator.data_source)
+    );
+}
+
+function getFillMethod() {
+    return $("#fillMethod").val() || "source";
+}
+
+/* Plotting never offers the control. EpiVis picks v4 vs v5 itself and its
+ * covidcast and epiweek loaders take no fill_method argument, so a value
+ * chosen for those would be dropped in silence; only its nwss loader accepts
+ * one. Rather than show a setting that applies to some series and not others,
+ * Plot always uses each source's own fill method. Export, Preview and Create
+ * query code build their own v5 requests, so they honour the choice.
+ * See https://github.com/cmu-delphi/www-epivis for the missing param. */
+function hideFillMethod() {
+    // Reset as well as hide: the control keeps its value across mode changes,
+    // so a hidden one would otherwise still be read into the payload.
+    $("#fillMethod").val("source");
+    $("#fillMethodDiv").hide();
+}
+
+function updateFillMethodVisibility() {
+    if (currentMode === "epivis") {
+        hideFillMethod();
+        return;
+    }
+    if (!checkedIndicatorMembers.some(isV5Indicator)) {
+        hideFillMethod();
+        return;
+    }
+    $("#fillMethodDiv").show();
+    $("#fillMethodHelp").text("How gaps in the reported series are filled.");
+}
+
 function handleModeChange(mode) {
     $('#modeSubmitResult').html('');
 
@@ -130,7 +174,8 @@ function handleModeChange(mode) {
     }
     $('#modeSubmitResult').html('');
 
-    
+    updateFillMethodVisibility();
+
     document.getElementsByName("modes").forEach((el) => {
         if (currentMode === el.value) {
             el.checked = true;
@@ -372,6 +417,7 @@ function showNonDelphiIndicatorSetsLocations() {
 
 $("#showSelectedIndicatorsButton").click(async function () {
     showNonDelphiIndicatorSetsLocations();
+    updateFillMethodVisibility();
     alertPlaceholder.innerHTML = "";
 
     const prevSelectedIds = $('#geographic_value').val() || [];

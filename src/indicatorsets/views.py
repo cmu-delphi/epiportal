@@ -20,6 +20,7 @@ from indicatorsets.filters import IndicatorSetFilter
 from indicatorsets.forms import IndicatorSetFilterForm
 from indicatorsets.models import ColumnDescription, FilterDescription, IndicatorSet
 from indicatorsets.utils.caching import safe_cache_get, safe_cache_set
+from indicatorsets.utils.constants import MIGRATED_DATASOURCES, V5_NATIVE_ENDPOINTS
 from indicatorsets.utils.sources import EPIWEEK_SOURCES
 from indicatorsets.utils import (
     InvalidApiKeyError,
@@ -36,6 +37,7 @@ from indicatorsets.utils import (
     parse_original_data_provider_ids,
     log_form_data,
     log_form_stats,
+    normalize_fill_method,
     preview_covidcast_data,
     preview_epiweek_data,
     get_num_locations_from_meta,
@@ -376,6 +378,11 @@ class IndicatorSetListView(ListView):
             )
         context["geographic_granularities"] = geographic_granularities
         context["grouped_data_providers"] = get_grouped_original_data_provider_choices()
+        # The fill_method picker only applies to sources served from Epidata
+        # v5, so the page needs to know which those are. Rendered from the
+        # same mapping the backend routes on, rather than copied into JS.
+        context["v5_data_sources"] = json.dumps(sorted(MIGRATED_DATASOURCES))
+        context["v5_endpoints"] = json.dumps(list(V5_NATIVE_ENDPOINTS))
         return context
 
 
@@ -390,7 +397,7 @@ def epivis(request):
         pophive_age_group = data.get("pophiveAgeGroup", [])
         nwss_source = data.get("nwssSource", [])
         nwss_geographic_value = data.get("nwssGeographicValue", "")
-        nwss_fill_method = data.get("nwssFillMethod", "source")
+        fill_method = normalize_fill_method(data.get("fillMethod"))
         log_form_stats(request, data, "epivis")
         log_form_data(request, data, "epivis")
         for indicator in indicators:
@@ -424,7 +431,7 @@ def epivis(request):
                         "sewershed",
                         nwss_geographic_value,
                         nwss_source,
-                        nwss_fill_method,
+                        fill_method,
                     )
                 )
         if datasets:
@@ -452,7 +459,7 @@ def generate_export_data_url(request):
         pophive_age_group = data.get("pophiveAgeGroup", [])
         nwss_geographic_value = data.get("nwssGeographicValue", "")
         nwss_source = data.get("nwssSource", [])
-        nwss_fill_method = data.get("nwssFillMethod", "source")
+        fill_method = normalize_fill_method(data.get("fillMethod"))
         data_format = data.get("dataFormat", "json")
 
         log_form_stats(request, data, "export")
@@ -460,7 +467,13 @@ def generate_export_data_url(request):
         try:
             data_export_commands.extend(
                 generate_covidcast_indicators_export_url(
-                    indicators, start_date, end_date, covidcast_geos, api_key, data_format
+                    indicators,
+                    start_date,
+                    end_date,
+                    covidcast_geos,
+                    api_key,
+                    data_format,
+                    fill_method,
                 )
             )
             for source in EPIWEEK_SOURCES.values():
@@ -468,7 +481,14 @@ def generate_export_data_url(request):
                 if geos:
                     data_export_commands.extend(
                         generate_epiweek_export_url(
-                            source, geos, start_date, end_date, api_key, data_format, indicators
+                            source,
+                            geos,
+                            start_date,
+                            end_date,
+                            api_key,
+                            data_format,
+                            indicators,
+                            fill_method,
                         )
                     )
             if pophive_geos:
@@ -480,7 +500,8 @@ def generate_export_data_url(request):
                         pophive_geos,
                         pophive_age_group,
                         api_key,
-                        data_format
+                        data_format,
+                        fill_method,
                     )
                 )
             if nwss_geographic_value:
@@ -491,7 +512,7 @@ def generate_export_data_url(request):
                         end_date,
                         nwss_geographic_value,
                         nwss_source,
-                        nwss_fill_method,
+                        fill_method,
                         api_key,
                         data_format
                     )
@@ -523,7 +544,7 @@ def preview_data(request):
         pophive_age_group = data.get("pophiveAgeGroup", [])
         nwss_source = data.get("nwssSource", [])
         nwss_geographic_value = data.get("nwssGeographicValue", "")
-        nwss_fill_method = data.get("nwssFillMethod", "source")
+        fill_method = normalize_fill_method(data.get("fillMethod"))
         api_key = data.get("apiKey", None)
         data_format = data.get("dataFormat", "json")
 
@@ -531,7 +552,13 @@ def preview_data(request):
         try:
             preview_data.extend(
                 preview_covidcast_data(
-                    indicators, start_date, end_date, covidcast_geos, api_key, data_format
+                    indicators,
+                    start_date,
+                    end_date,
+                    covidcast_geos,
+                    api_key,
+                    data_format,
+                    fill_method,
                 )
             )
             for source in EPIWEEK_SOURCES.values():
@@ -539,7 +566,14 @@ def preview_data(request):
                 if geos:
                     preview_data.extend(
                         preview_epiweek_data(
-                            source, geos, start_date, end_date, api_key, data_format, indicators
+                            source,
+                            geos,
+                            start_date,
+                            end_date,
+                            api_key,
+                            data_format,
+                            indicators,
+                            fill_method,
                         )
                     )
             if pophive_geos and pophive_age_group:
@@ -551,7 +585,8 @@ def preview_data(request):
                         pophive_geos,
                         pophive_age_group,
                         api_key,
-                        data_format
+                        data_format,
+                        fill_method,
                     )
                 )
             if nwss_geographic_value:
@@ -562,7 +597,7 @@ def preview_data(request):
                         end_date,
                         nwss_geographic_value,
                         nwss_source,
-                        nwss_fill_method,
+                        fill_method,
                         api_key,
                         data_format
                     )
@@ -591,7 +626,7 @@ def create_query_code(request):
         pophive_age_group = data.get("pophiveAgeGroup", [])
         nwss_source = data.get("nwssSource", [])
         nwss_geographic_value = data.get("nwssGeographicValue", "")
-        nwss_fill_method = data.get("nwssFillMethod", "source")
+        fill_method = normalize_fill_method(data.get("fillMethod"))
         python_code_blocks = [
             dedent(
                 """\
@@ -625,6 +660,7 @@ def create_query_code(request):
                     end_date,
                     data_source,
                     indicators_str,
+                    fill_method,
                 )
                 python_code_blocks.extend(python_code_block)
                 r_code_blocks.extend(r_code_block)
@@ -632,13 +668,18 @@ def create_query_code(request):
             geos = data.get(source.form_key, [])
             if geos:
                 python_code_block, r_code_block = generate_query_code_epiweek(
-                    source, geos, start_date, end_date, all_indicators
+                    source, geos, start_date, end_date, all_indicators, fill_method
                 )
                 python_code_blocks.extend(python_code_block)
                 r_code_blocks.extend(r_code_block)
         if pophive_geos and pophive_age_group:
             python_code_block, r_code_block = generate_query_code_pophive(
-                all_indicators, start_date, end_date, pophive_geos, pophive_age_group
+                all_indicators,
+                start_date,
+                end_date,
+                pophive_geos,
+                pophive_age_group,
+                fill_method,
             )
             python_code_blocks.extend(python_code_block)
             r_code_blocks.extend(r_code_block)
@@ -649,7 +690,7 @@ def create_query_code(request):
                 end_date,
                 nwss_geographic_value,
                 nwss_source,
-                nwss_fill_method,
+                fill_method,
             )
             python_code_blocks.extend(python_code_block)
             r_code_blocks.extend(r_code_block)

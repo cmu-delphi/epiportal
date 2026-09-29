@@ -50,6 +50,7 @@ from indicatorsets.utils import (
 )
 from indicatorsets.proxy_views import VIZ_SOURCES
 from indicatorsets.utils.constants import MIGRATED_DATASOURCES
+from indicatorsets.utils.helpers import normalize_fill_method
 from indicatorsets.utils.caching import safe_cache_get, safe_cache_set
 from indicatorsets.utils.epidata import (
     get_v5_metadata,
@@ -1755,6 +1756,7 @@ class GenerateQueryCodeCovidcastTests(V5RoutingTestMixin, TestCase):
             '    geo_type="state",\n'
             '    geo_values=["pa", "ny"],\n'
             '    reference_time=EpiRange("2024-01-01", "2024-03-01"),\n'
+            '    fill_method="source",\n'
             ").df()\n",
             python_code,
         )
@@ -1764,7 +1766,8 @@ class GenerateQueryCodeCovidcastTests(V5RoutingTestMixin, TestCase):
             '    signals = c("sig_a", "sig_b"),\n'
             '    geo_type = "state",\n'
             '    geo_values = c("pa", "ny"),\n'
-            '    reference_time = epirange("2024-01-01", "2024-03-01")\n'
+            '    reference_time = epirange("2024-01-01", "2024-03-01"),\n'
+            '    fill_method = "source"\n'
             ")\n",
             r_code,
         )
@@ -1849,6 +1852,7 @@ class GenerateQueryCodePophiveTests(TestCase):
             '    geo_type="state",\n'
             '    geo_values="ca",\n'
             '    reference_time=EpiRange("2024-01-01", "2024-03-01"),\n'
+            '    fill_method="source",\n'
             ").df()\n"
             'pophive_state_ca_df = pophive_state_ca_df[pophive_state_ca_df["age_group"] == "0-17"]\n'
             "pophive_county_06001_df = epidata.epidata_snapshot(\n"
@@ -1857,6 +1861,7 @@ class GenerateQueryCodePophiveTests(TestCase):
             '    geo_type="county",\n'
             '    geo_values="06001",\n'
             '    reference_time=EpiRange("2024-01-01", "2024-03-01"),\n'
+            '    fill_method="source",\n'
             ").df()\n"
             'pophive_county_06001_df = pophive_county_06001_df[pophive_county_06001_df["age_group"] == "0-17"]\n',
         )
@@ -1868,6 +1873,7 @@ class GenerateQueryCodePophiveTests(TestCase):
             '    geo_type = "state",\n'
             '    geo_values = "ca",\n'
             '    reference_time = epirange("2024-01-01", "2024-03-01"),\n'
+            '    fill_method = "source",\n'
             '    age_group = "0-17"\n'
             ")\n"
             "epidata_pophive_county_06001 <- epidata_snapshot(\n"
@@ -1876,6 +1882,7 @@ class GenerateQueryCodePophiveTests(TestCase):
             '    geo_type = "county",\n'
             '    geo_values = "06001",\n'
             '    reference_time = epirange("2024-01-01", "2024-03-01"),\n'
+            '    fill_method = "source",\n'
             '    age_group = "0-17"\n'
             ")\n",
         )
@@ -3017,6 +3024,7 @@ class EpiweekQueryCodeTests(V5RoutingTestMixin, TestCase):
             '    geo_type="nation",\n'
             '    geo_values=["us"],\n'
             '    reference_time=EpiRange("2024-01-01", "2024-02-01"),\n'
+            '    fill_method="source",\n'
             ").df()\n",
             python_code,
         )
@@ -3027,6 +3035,7 @@ class EpiweekQueryCodeTests(V5RoutingTestMixin, TestCase):
             '    geo_type="hhs",\n'
             '    geo_values=["3"],\n'
             '    reference_time=EpiRange("2024-01-01", "2024-02-01"),\n'
+            '    fill_method="source",\n'
             ").df()\n",
             python_code,
         )
@@ -3037,6 +3046,7 @@ class EpiweekQueryCodeTests(V5RoutingTestMixin, TestCase):
             '    geo_type="census_division",\n'
             '    geo_values=["2"],\n'
             '    reference_time=EpiRange("2024-01-01", "2024-02-01"),\n'
+            '    fill_method="source",\n'
             ").df()\n",
             python_code,
         )
@@ -3047,6 +3057,7 @@ class EpiweekQueryCodeTests(V5RoutingTestMixin, TestCase):
             '    geo_type="state",\n'
             '    geo_values=["pa"],\n'
             '    reference_time=EpiRange("2024-01-01", "2024-02-01"),\n'
+            '    fill_method="source",\n'
             ").df()\n",
             python_code,
         )
@@ -3056,7 +3067,8 @@ class EpiweekQueryCodeTests(V5RoutingTestMixin, TestCase):
             '    signals = c("wili"),\n'
             '    geo_type = "nation",\n'
             '    geo_values = c("us"),\n'
-            '    reference_time = epirange("2024-01-01", "2024-02-01")\n'
+            '    reference_time = epirange("2024-01-01", "2024-02-01"),\n'
+            '    fill_method = "source"\n'
             ")\n",
             r_code,
         )
@@ -3609,6 +3621,7 @@ class FlusurvV5RoutingTests(V5RoutingTestMixin, TestCase):
             '    geo_type="flusurv_site",\n'
             '    geo_values=["network_all", "ny_albany"],\n'
             '    reference_time=EpiRange("2020-01-01", "2020-01-20"),\n'
+            '    fill_method="source",\n'
             ').df()\n',
             python_blocks,
         )
@@ -3618,7 +3631,8 @@ class FlusurvV5RoutingTests(V5RoutingTestMixin, TestCase):
             '    signals = c("rate_overall", "rate_age_0"),\n'
             '    geo_type = "state",\n'
             '    geo_values = c("ca"),\n'
-            '    reference_time = epirange("2020-01-01", "2020-01-20")\n'
+            '    reference_time = epirange("2020-01-01", "2020-01-20"),\n'
+            '    fill_method = "source"\n'
             ')\n',
             r_blocks,
         )
@@ -3755,3 +3769,336 @@ class ExportDataViewTests(TestCase):
             content_type="application/json",
         )
         self.assertEqual(response.status_code, 401)
+
+
+class FillMethodNormalizationTests(TestCase):
+    """``fill_method`` is user-supplied and lands in URLs, so it is whitelisted."""
+
+    def test_accepts_every_supported_fill_method(self):
+        for value in ("source", "fill_ave", "fill_zero"):
+            self.assertEqual(normalize_fill_method(value), value)
+
+    def test_falls_back_to_source_for_unknown_value(self):
+        self.assertEqual(normalize_fill_method("fill_everything"), "source")
+
+    def test_falls_back_to_source_for_missing_value(self):
+        self.assertEqual(normalize_fill_method(None), "source")
+
+    def test_rejects_value_that_would_inject_into_an_export_url(self):
+        self.assertEqual(normalize_fill_method("source&token=stolen"), "source")
+
+
+class CovidcastFillMethodTests(V5RoutingTestMixin, TestCase):
+    """The chosen fill_method reaches every v5 covidcast request."""
+
+    INDICATOR = {
+        "_endpoint": "covidcast",
+        "data_source": "nssp",
+        "indicator": "pct_ed_visits_covid",
+        "time_type": "week",
+        "display_name": "COVID ED Visits",
+    }
+    GEOS = {"state": [{"id": "state:pa", "geoType": "state"}]}
+
+    def _fake_nssp_get(self):
+        return self._fake_get(
+            metadata_source="nssp", metadata_signals=["pct_ed_visits_covid"]
+        )
+
+    @patch("indicatorsets.utils.epidata.requests.get")
+    def test_export_probe_carries_fill_method(self, mock_get):
+        mock_get.side_effect = self._fake_nssp_get()
+
+        generate_covidcast_indicators_export_url(
+            [self.INDICATOR], "2024-01-01", "2024-03-01", self.GEOS, None, "csv",
+            fill_method="fill_ave",
+        )
+
+        params = self._probe_calls(mock_get)[0].kwargs["params"]
+        self.assertEqual(params["fill_method"], "fill_ave")
+
+    @patch("indicatorsets.utils.epidata.requests.get")
+    def test_export_url_and_download_link_carry_fill_method(self, mock_get):
+        mock_get.side_effect = self._fake_nssp_get()
+
+        result = generate_covidcast_indicators_export_url(
+            [self.INDICATOR], "2024-01-01", "2024-03-01", self.GEOS, None, "csv",
+            fill_method="fill_zero",
+        )
+
+        self.assertIn("fill_method=fill_zero", result[0])
+        download_url = re.search(r'href="([^"]+)"', result[0]).group(1)
+        query = parse_qs(urlparse(download_url).query)
+        self.assertEqual(query["fill_method"], ["fill_zero"])
+
+    @patch("indicatorsets.utils.epidata.requests.get")
+    def test_v4_export_is_left_alone(self, mock_get):
+        mock_get.side_effect = self._fake_get(metadata_signals=[])
+
+        result = generate_covidcast_indicators_export_url(
+            [{**self.INDICATOR, "data_source": "src"}],
+            "2024-01-01", "2024-03-01", self.GEOS, None, "csv",
+            fill_method="fill_ave",
+        )
+
+        self.assertNotIn("fill_method", result[0])
+
+    @patch("indicatorsets.utils.previews.requests.get")
+    def test_preview_request_carries_fill_method(self, mock_get):
+        # previews and epidata share one ``requests`` module, so one patch
+        # serves both the metadata lookup and the preview fetch.
+        mock_get.side_effect = self._fake_nssp_get()
+
+        preview_covidcast_data(
+            [self.INDICATOR], "2024-01-01", "2024-03-01", self.GEOS, None, "json",
+            fill_method="fill_ave",
+        )
+
+        params = self._probe_calls(mock_get)[0].kwargs["params"]
+        self.assertEqual(params["fill_method"], "fill_ave")
+
+    @patch("indicatorsets.utils.epidata.requests.get")
+    def test_query_code_snippets_pin_fill_method(self, mock_get):
+        mock_get.side_effect = self._fake_nssp_get()
+
+        python_blocks, r_blocks = generate_query_code_covidcast(
+            [self.INDICATOR], self.GEOS, "2024-01-01", "2024-03-01", "nssp",
+            "pct_ed_visits_covid", fill_method="fill_ave",
+        )
+
+        self.assertIn('fill_method="fill_ave",', "".join(python_blocks))
+        self.assertIn('fill_method = "fill_ave"', "".join(r_blocks))
+
+
+class EpiweekFillMethodTests(V5RoutingTestMixin, TestCase):
+    """Migrated epiweek endpoints honour the shared fill_method too."""
+
+    INDICATOR = {
+        "_endpoint": "flusurv",
+        "data_source": "flusurv",
+        "indicator": "rate_overall",
+        "time_type": "week",
+    }
+    GEOS = [{"id": "CA", "text": "CA"}]
+
+    def _fake_flusurv_get(self):
+        return self._fake_get(
+            metadata_source="flusurv", metadata_signals=["rate_overall"]
+        )
+
+    @patch("indicatorsets.utils.epidata.requests.get")
+    def test_export_probe_and_url_carry_fill_method(self, mock_get):
+        mock_get.side_effect = self._fake_flusurv_get()
+
+        result = generate_epiweek_export_url(
+            EPIWEEK_SOURCES["flusurv"], self.GEOS, "2024-01-01", "2024-03-01",
+            None, "csv", [self.INDICATOR], fill_method="fill_ave",
+        )
+
+        params = self._probe_calls(mock_get)[0].kwargs["params"]
+        self.assertEqual(params["fill_method"], "fill_ave")
+        self.assertIn("fill_method=fill_ave", result[0])
+
+    @patch("indicatorsets.utils.previews.requests.get")
+    def test_preview_request_carries_fill_method(self, mock_get):
+        # previews and epidata share one ``requests`` module, so one patch
+        # serves both the metadata lookup and the preview fetch.
+        mock_get.side_effect = self._fake_flusurv_get()
+
+        preview_epiweek_data(
+            EPIWEEK_SOURCES["flusurv"], self.GEOS, "2024-01-01", "2024-03-01",
+            None, "json", [self.INDICATOR], fill_method="fill_zero",
+        )
+
+        params = self._probe_calls(mock_get)[0].kwargs["params"]
+        self.assertEqual(params["fill_method"], "fill_zero")
+
+    @patch("indicatorsets.utils.epidata.requests.get")
+    def test_query_code_snippets_pin_fill_method(self, mock_get):
+        mock_get.side_effect = self._fake_flusurv_get()
+
+        python_blocks, r_blocks = generate_query_code_epiweek(
+            EPIWEEK_SOURCES["flusurv"], self.GEOS, "2024-01-01", "2024-03-01",
+            [self.INDICATOR], fill_method="fill_ave",
+        )
+
+        self.assertIn('fill_method="fill_ave",', "".join(python_blocks))
+        self.assertIn('fill_method = "fill_ave"', "".join(r_blocks))
+
+
+class PophiveFillMethodTests(TestCase):
+    """pophive is v5-native, so it takes the shared fill_method as well."""
+
+    INDICATORS = [{"_endpoint": "pophive", "indicator": "sig", "display_name": "Sig"}]
+    GEOS = [{"id": "pa", "geo_type": "state", "text": "PA"}]
+    AGE_GROUP = [{"id": "0-4"}]
+
+    @patch("indicatorsets.utils.epidata.requests.get")
+    def test_export_url_carries_fill_method(self, mock_get):
+        response = MagicMock()
+        response.status_code = 200
+        response.raise_for_status = MagicMock()
+        response.json.return_value = [{"value": 1}]
+        mock_get.return_value = response
+
+        result = generate_pophive_export_url(
+            self.INDICATORS, "2024-01-01", "2024-03-01", self.GEOS, self.AGE_GROUP,
+            None, "csv", fill_method="fill_ave",
+        )
+
+        self.assertIn("fill_method=fill_ave", result[0])
+        self.assertEqual(
+            mock_get.call_args.kwargs["params"]["fill_method"], "fill_ave"
+        )
+
+    @patch("indicatorsets.utils.previews.requests.get")
+    def test_preview_request_carries_fill_method(self, mock_get):
+        response = MagicMock()
+        response.status_code = 200
+        response.raise_for_status = MagicMock()
+        response.json.return_value = [{"value": 1}]
+        mock_get.return_value = response
+
+        preview_pophive_data(
+            self.INDICATORS, "2024-01-01", "2024-03-01", self.GEOS, self.AGE_GROUP,
+            None, "json", fill_method="fill_zero",
+        )
+
+        self.assertEqual(
+            mock_get.call_args.kwargs["params"]["fill_method"], "fill_zero"
+        )
+
+    def test_query_code_snippets_pin_fill_method(self):
+        python_blocks, r_blocks = generate_query_code_pophive(
+            self.INDICATORS, "2024-01-01", "2024-03-01", self.GEOS, self.AGE_GROUP,
+            fill_method="fill_ave",
+        )
+
+        self.assertIn('fill_method="fill_ave",', "".join(python_blocks))
+        self.assertIn('fill_method = "fill_ave"', "".join(r_blocks))
+
+
+class FillMethodViewTests(TestCase):
+    """The views read one shared ``fillMethod`` key and normalize it."""
+
+    NWSS_INDICATOR = {
+        "_endpoint": "nwss",
+        "data_source": "nwss",
+        "indicator": "covid_avg_conc",
+        "indicator_set_short_name": "NWSS",
+    }
+
+    def _nwss_epivis_params(self, payload):
+        response = self.client.post(
+            reverse("epivis"),
+            data=json.dumps(payload),
+            content_type="application/json",
+        )
+        self.assertEqual(response.status_code, 200)
+        encoded = response.json()["epivis_url"].split("#", 1)[1]
+        datasets = json.loads(base64.b64decode(encoded).decode("ascii"))["datasets"]
+        return datasets[0]["params"]
+
+    def test_epivis_nwss_uses_shared_fill_method_key(self):
+        params = self._nwss_epivis_params(
+            {
+                "indicators": [self.NWSS_INDICATOR],
+                "covidCastGeographicValues": {},
+                "nwssGeographicValue": ["sewershed_1"],
+                "nwssSource": [{"id": "CDC_Biobot"}],
+                "fillMethod": "fill_ave",
+            }
+        )
+        self.assertEqual(params["fill_method"], "fill_ave")
+
+    def test_epivis_defaults_to_source_when_fill_method_absent(self):
+        params = self._nwss_epivis_params(
+            {
+                "indicators": [self.NWSS_INDICATOR],
+                "covidCastGeographicValues": {},
+                "nwssGeographicValue": ["sewershed_1"],
+                "nwssSource": [{"id": "CDC_Biobot"}],
+            }
+        )
+        self.assertEqual(params["fill_method"], "source")
+
+    def test_epivis_rejects_unknown_fill_method(self):
+        params = self._nwss_epivis_params(
+            {
+                "indicators": [self.NWSS_INDICATOR],
+                "covidCastGeographicValues": {},
+                "nwssGeographicValue": ["sewershed_1"],
+                "nwssSource": [{"id": "CDC_Biobot"}],
+                "fillMethod": "fill_everything",
+            }
+        )
+        self.assertEqual(params["fill_method"], "source")
+
+    @patch("indicatorsets.views.generate_query_code_nwss")
+    def test_query_code_view_forwards_shared_fill_method(self, mock_nwss):
+        mock_nwss.return_value = ([], [])
+        self.client.post(
+            reverse("create_query_code"),
+            data=json.dumps(
+                {
+                    "indicators": [self.NWSS_INDICATOR],
+                    "covidCastGeographicValues": {},
+                    "nwssGeographicValue": ["sewershed_1"],
+                    "nwssSource": [{"id": "CDC_Biobot"}],
+                    "fillMethod": "fill_zero",
+                }
+            ),
+            content_type="application/json",
+        )
+        self.assertEqual(mock_nwss.call_args.args[-1], "fill_zero")
+
+
+class DownloadVizExportFillMethodTests(TestCase):
+    """The download proxy only forwards fill_methods the API actually has."""
+
+    def _upstream(self):
+        response = MagicMock()
+        response.status_code = 200
+        response.content = b"[]"
+        response.headers = {"Content-Type": "application/json"}
+        response.raise_for_status = MagicMock()
+        return response
+
+    @patch("indicatorsets.proxy_views.requests.get")
+    def test_forwards_supported_fill_method(self, mock_get):
+        mock_get.return_value = self._upstream()
+        self.client.get(
+            reverse("download_export"),
+            {"source": "nssp", "signal": "sig", "fill_method": "fill_ave"},
+        )
+        self.assertEqual(mock_get.call_args.kwargs["params"]["fill_method"], "fill_ave")
+
+    @patch("indicatorsets.proxy_views.requests.get")
+    def test_drops_unknown_fill_method(self, mock_get):
+        mock_get.return_value = self._upstream()
+        self.client.get(
+            reverse("download_export"),
+            {"source": "nssp", "signal": "sig", "fill_method": "fill_everything"},
+        )
+        self.assertNotIn("fill_method", mock_get.call_args.kwargs["params"])
+
+
+class FillMethodPageContextTests(TestCase):
+    """The page tells the browser which sources the fill_method picker applies to.
+
+    Rendered from ``MIGRATED_DATASOURCES`` rather than hand-copied into the JS,
+    so migrating a source turns the picker on for it without a second edit.
+    """
+
+    def test_page_exposes_the_migrated_data_sources(self):
+        response = self.client.get(reverse("indicatorsets"))
+        self.assertEqual(
+            json.loads(response.context["v5_data_sources"]),
+            sorted(MIGRATED_DATASOURCES),
+        )
+
+    def test_page_exposes_the_v5_native_endpoints(self):
+        response = self.client.get(reverse("indicatorsets"))
+        self.assertEqual(
+            json.loads(response.context["v5_endpoints"]), ["nwss", "pophive"]
+        )
