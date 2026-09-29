@@ -8,7 +8,11 @@ import requests
 from django.conf import settings
 from delphi_utils import get_structured_logger
 
-from indicatorsets.utils.constants import INVALID_API_KEY_MESSAGE, NO_DATA_MESSAGE
+from indicatorsets.utils.constants import (
+    DEFAULT_FILL_METHOD,
+    INVALID_API_KEY_MESSAGE,
+    NO_DATA_MESSAGE,
+)
 from indicatorsets.utils.epidata import (
     get_time_values,
     get_v5_source,
@@ -44,7 +48,13 @@ def get_preview_data(response, data_format, no_data_message=NO_DATA_MESSAGE):
 
 
 def preview_covidcast_data(
-    indicators, start_date, end_date, covidcast_geos, api_key, data_format
+    indicators,
+    start_date,
+    end_date,
+    covidcast_geos,
+    api_key,
+    data_format,
+    fill_method=DEFAULT_FILL_METHOD,
 ):
     preview_data = []
     for indicator in indicators:
@@ -71,6 +81,7 @@ def preview_covidcast_data(
                         "signal": indicator["indicator"],
                         "geo_type": geo_type,
                         "geo_value": geo_values,
+                        "fill_method": fill_method,
                         "reference_times": time_values,
                         "token": api_key if api_key else settings.EPIDATA_API_KEY,
                         "format": data_format,
@@ -119,7 +130,14 @@ def preview_covidcast_data(
 
 
 def preview_v5_epiweek_data(
-    source, v5_indicators, geos, start_date, end_date, api_key, data_format
+    source,
+    v5_indicators,
+    geos,
+    start_date,
+    end_date,
+    api_key,
+    data_format,
+    fill_method=DEFAULT_FILL_METHOD,
 ):
     """Fetch preview rows for epiweek signals whose source has migrated to v5.
 
@@ -144,6 +162,7 @@ def preview_v5_epiweek_data(
                 "signal": indicator["indicator"],
                 "geo_type": geo_type,
                 "geo_value": ",".join(geo_values),
+                "fill_method": fill_method,
                 "reference_times": f"{start_date}:{end_date}",
                 "format": data_format,
                 "header": "true" if data_format == "csv" else "false",
@@ -207,7 +226,14 @@ def preview_v4_epiweek_data(
 
 
 def preview_epiweek_data(
-    source, geos, start_date, end_date, api_key, data_format, indicators
+    source,
+    geos,
+    start_date,
+    end_date,
+    api_key,
+    data_format,
+    indicators,
+    fill_method=DEFAULT_FILL_METHOD,
 ):
     """Fetch preview rows for an epiweek-based endpoint, routing per indicator.
 
@@ -239,6 +265,7 @@ def preview_epiweek_data(
                 end_date,
                 api_key,
                 data_format,
+                fill_method,
             )
         )
     if v4_indicators or not v5_indicators:
@@ -268,6 +295,7 @@ def preview_pophive_data(
     pophive_age_group,
     api_key,
     data_format,
+    fill_method=DEFAULT_FILL_METHOD,
 ):
     preview_data = []
     for indicator in indicators:
@@ -278,6 +306,7 @@ def preview_pophive_data(
                     "signal": indicator["indicator"],
                     "geo_type": geo["geo_type"],
                     "geo_value": geo["id"],
+                    "fill_method": fill_method,
                     "reference_times": f"{start_date}:{end_date}",
                     "extra_keys": f"age_group:{pophive_age_group[0]['id']}",
                     "format": data_format,
@@ -318,7 +347,7 @@ def preview_nwss_data(
     end_date,
     nwss_geographic_value,
     nwss_source,
-    nwss_fill_method,
+    fill_method,
     api_key,
     data_format,
 ):
@@ -332,7 +361,7 @@ def preview_nwss_data(
                     "signal": indicator["indicator"],
                     "geo_type": "sewershed",
                     "geo_value": geo_value,
-                    "fill_method": nwss_fill_method,
+                    "fill_method": fill_method,
                     "reference_times": f"{start_date}:{end_date}",
                     "extra_keys": f"nwss_source:{source['id']}",
                     "format": data_format,

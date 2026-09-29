@@ -2,6 +2,7 @@
 
 from textwrap import dedent
 
+from indicatorsets.utils.constants import DEFAULT_FILL_METHOD
 from indicatorsets.utils.epidata import (
     group_v5_indicators_by_source,
     split_v4_v5_indicators,
@@ -10,7 +11,14 @@ from indicatorsets.utils.helpers import get_epiweek
 
 
 def generate_v5_covidcast_snippets(
-    v5_indicators, v5_source, data_source, geo_type, geo_values, start_date, end_date
+    v5_indicators,
+    v5_source,
+    data_source,
+    geo_type,
+    geo_values,
+    start_date,
+    end_date,
+    fill_method=DEFAULT_FILL_METHOD,
 ):
     """Build the v5 snippets for indicators whose source has migrated.
 
@@ -37,6 +45,7 @@ def generate_v5_covidcast_snippets(
                     geo_type="{geo_type}",
                     geo_values=[{geo_values_list}],
                     reference_time=EpiRange("{start_date}", "{end_date}"),
+                    fill_method="{fill_method}",
                 ).df()
             """
             )
@@ -49,7 +58,8 @@ def generate_v5_covidcast_snippets(
                     signals = c({signals_list}),
                     geo_type = "{geo_type}",
                     geo_values = c({geo_values_list}),
-                    reference_time = epirange("{start_date}", "{end_date}")
+                    reference_time = epirange("{start_date}", "{end_date}"),
+                    fill_method = "{fill_method}"
                 )
             """
             )
@@ -108,6 +118,7 @@ def generate_query_code_covidcast(
     end_date,
     data_source,
     indicators_str,
+    fill_method=DEFAULT_FILL_METHOD,
 ):
     """Generate snippets for a covidcast data source, routing per indicator.
 
@@ -141,6 +152,7 @@ def generate_query_code_covidcast(
             geo_values,
             start_date,
             end_date,
+            fill_method,
         )
         python_code_blocks.extend(v5_python_blocks)
         r_code_blocks.extend(v5_r_blocks)
@@ -163,7 +175,14 @@ def generate_query_code_covidcast(
 
 
 
-def generate_v5_epiweek_snippets(source, v5_indicators, geos, start_date, end_date):
+def generate_v5_epiweek_snippets(
+    source,
+    v5_indicators,
+    geos,
+    start_date,
+    end_date,
+    fill_method=DEFAULT_FILL_METHOD,
+):
     """Build the v5 snippets for epiweek indicators whose source has migrated.
 
     Mirrors ``generate_v5_covidcast_snippets``: migrated signals are batched
@@ -197,6 +216,7 @@ def generate_v5_epiweek_snippets(source, v5_indicators, geos, start_date, end_da
                         geo_type="{geo_type}",
                         geo_values=[{geo_values_str}],
                         reference_time=EpiRange("{start_date}", "{end_date}"),
+                        fill_method="{fill_method}",
                     ).df()
                 """
                 )
@@ -209,7 +229,8 @@ def generate_v5_epiweek_snippets(source, v5_indicators, geos, start_date, end_da
                         signals = c({signals_list}),
                         geo_type = "{geo_type}",
                         geo_values = c({geo_values_str}),
-                        reference_time = epirange("{start_date}", "{end_date}")
+                        reference_time = epirange("{start_date}", "{end_date}"),
+                        fill_method = "{fill_method}"
                     )
                 """
                 )
@@ -251,7 +272,14 @@ def generate_v4_epiweek_snippet(source, data_source, geos, start_date, end_date)
     return python_code_block, r_code_block
 
 
-def generate_query_code_epiweek(source, geos, start_date, end_date, indicators):
+def generate_query_code_epiweek(
+    source,
+    geos,
+    start_date,
+    end_date,
+    indicators,
+    fill_method=DEFAULT_FILL_METHOD,
+):
     """Generate snippets for an epiweek-based endpoint, routing per indicator.
 
     Signals whose source has migrated to v5 get an ``epidata_snapshot()``
@@ -277,7 +305,7 @@ def generate_query_code_epiweek(source, geos, start_date, end_date, indicators):
     source_indicators = [i for i in indicators if i["_endpoint"] == source.key]
     v5_indicators, v4_indicators, _ = split_v4_v5_indicators(source_indicators)
     v5_python_blocks, v5_r_blocks = generate_v5_epiweek_snippets(
-        source, v5_indicators, geos, start_date, end_date
+        source, v5_indicators, geos, start_date, end_date, fill_method
     )
     python_code_blocks.extend(v5_python_blocks)
     r_code_blocks.extend(v5_r_blocks)
@@ -295,7 +323,12 @@ def generate_query_code_epiweek(source, geos, start_date, end_date, indicators):
 
 
 def generate_query_code_pophive(
-    indicators, start_date, end_date, pophive_geos, pophive_age_group
+    indicators,
+    start_date,
+    end_date,
+    pophive_geos,
+    pophive_age_group,
+    fill_method=DEFAULT_FILL_METHOD,
 ):
     """Generate epidatpy/epidatr snippets for the pophive endpoint.
 
@@ -323,6 +356,7 @@ def generate_query_code_pophive(
                     geo_type="{geo['geo_type']}",
                     geo_values="{geo['id']}",
                     reference_time=EpiRange("{start_date}", "{end_date}"),
+                    fill_method="{fill_method}",
                 ).df()
                 {name}_df = {name}_df[{name}_df["age_group"] == "{age_group}"]
             """
@@ -337,6 +371,7 @@ def generate_query_code_pophive(
                     geo_type = "{geo['geo_type']}",
                     geo_values = "{geo['id']}",
                     reference_time = epirange("{start_date}", "{end_date}"),
+                    fill_method = "{fill_method}",
                     age_group = "{age_group}"
                 )
             """
@@ -351,7 +386,7 @@ def generate_query_code_nwss(
     end_date,
     nwss_geographic_value,
     nwss_source,
-    nwss_fill_method,
+    fill_method,
 ):
     """Generate epidatpy/epidatr snippets for the nwss endpoint.
 
@@ -380,7 +415,7 @@ def generate_query_code_nwss(
                     geo_type="sewershed",
                     geo_values=[{geo_values_list}],
                     reference_time=EpiRange("{start_date}", "{end_date}"),
-                    fill_method="{nwss_fill_method}",
+                    fill_method="{fill_method}",
                 ).df()
                 {name}_df = {name}_df[{name}_df["nwss_source"] == "{source['id']}"]
             """
@@ -395,7 +430,7 @@ def generate_query_code_nwss(
                     geo_type = "sewershed",
                     geo_values = c({geo_values_list}),
                     reference_time = epirange("{start_date}", "{end_date}"),
-                    fill_method = "{nwss_fill_method}",
+                    fill_method = "{fill_method}",
                     nwss_source = "{source['id']}"
                 )
             """

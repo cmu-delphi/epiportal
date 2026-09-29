@@ -6,6 +6,8 @@ from datetime import datetime as dtime
 
 from epiweeks import Week
 
+from indicatorsets.utils.constants import DEFAULT_FILL_METHOD, FILL_METHODS
+
 
 def list_to_dict(lst):
     result = {}
@@ -53,3 +55,13 @@ def group_by_property(list_of_dicts, property):
     for item in list_of_dicts:
         grouped_dict[item[property]].append(item)
     return dict(grouped_dict)
+
+
+def normalize_fill_method(value):
+    """Return ``value`` if it is a fill_method Epidata offers, else the default.
+
+    The value arrives from the submitted form and is interpolated straight into
+    export URLs and generated snippets, so anything unrecognised is discarded
+    rather than passed through.
+    """
+    return value if value in FILL_METHODS else DEFAULT_FILL_METHOD
