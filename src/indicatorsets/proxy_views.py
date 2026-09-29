@@ -5,7 +5,11 @@ from delphi_utils import get_structured_logger
 from django.conf import settings
 from django.http import HttpResponse, HttpResponseBadRequest, HttpResponseForbidden
 
-from indicatorsets.utils.constants import MIGRATED_DATASOURCES
+from indicatorsets.utils.constants import (
+    FILL_METHODS,
+    MIGRATED_DATASOURCES,
+    V5_NATIVE_ENDPOINTS,
+)
 
 logger = get_structured_logger("indicatorsets.proxy_views")
 
@@ -13,7 +17,7 @@ FILENAME_SANITIZE_RE = re.compile(r"[^A-Za-z0-9_.-]")
 
 # The v5-native endpoints, plus any covidcast source whose exports now route to
 # v5 -- derived so migrating a source does not silently 400 its downloads.
-VIZ_SOURCES = ("nwss", "pophive") + tuple(sorted(set(MIGRATED_DATASOURCES.values())))
+VIZ_SOURCES = V5_NATIVE_ENDPOINTS + tuple(sorted(set(MIGRATED_DATASOURCES.values())))
 
 
 def download_viz_export(request):
@@ -40,8 +44,11 @@ def download_viz_export(request):
     extra_keys = request.GET.get("extra_keys")
     if extra_keys:
         params["extra_keys"] = extra_keys
+    # Unknown values are dropped rather than forwarded: the caller is the
+    # user's own browser, and Epidata treats an unrecognised fill_method as a
+    # filter that matches nothing.
     fill_method = request.GET.get("fill_method")
-    if fill_method:
+    if fill_method in FILL_METHODS:
         params["fill_method"] = fill_method
     api_key = request.GET.get("token") or settings.EPIDATA_API_KEY
     if api_key:
