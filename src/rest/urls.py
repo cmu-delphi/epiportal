@@ -1,8 +1,11 @@
 from django.urls import path, include
 from rest_framework.routers import DefaultRouter
-from rest.views import PathogenViewSet
-from rest.views import IndicatorViewSet
-from rest.views import AvailableIndicatorsViewSet
+from rest.views import (
+    PathogenViewSet,
+    IndicatorViewSet,
+    AvailableIndicatorsViewSet,
+    IndicatorMetaView,
+)
 
 router = DefaultRouter()
 router.register(r"rest/pathogens", PathogenViewSet)
@@ -14,5 +17,10 @@ urlpatterns = [
         "available-indicators/",
         AvailableIndicatorsViewSet.as_view(),
         name="available-indicators",
+    ),
+    path(
+        "rest/meta/indicators/",
+        IndicatorMetaView.as_view(),
+        name="meta-indicators",
     ),
 ]

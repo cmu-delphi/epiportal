@@ -1,6 +1,11 @@
 import base64
 import json
+import os
 import re
+import tempfile
+from io import StringIO
+from pathlib import Path
+from unittest import skipUnless
 from unittest.mock import MagicMock, patch
 from urllib.parse import parse_qs, urlparse
 
@@ -8,6 +13,8 @@ import redis
 import requests
 from django.conf import settings
 from django.core.cache import cache
+from django.core.management import call_command
+from django.core.management.base import CommandError
 from django.test import Client, RequestFactory, TestCase, override_settings
 from django.urls import reverse
 
@@ -63,7 +70,16 @@ from indicatorsets.utils.query_code import (
     generate_query_code_nwss,
     generate_query_code_pophive,
 )
+from indicatorsets.management.commands.diff_v5_indicators import (
+    DEFAULT_MARKDOWN_PATH,
+)
 from indicatorsets.utils.sources import EPIWEEK_SOURCES
+from indicatorsets.utils.v5_diff import (
+    diff_catalogue,
+    diff_source,
+    find_unresolvable_sources,
+    resolve_portal_signal,
+)
 from indicatorsets.views import age_group_sort_key, get_related_indicators
 from indicatorsets.filters import IndicatorSetFilter
 from indicatorsets.resources import (
@@ -4102,3 +4118,353 @@ class FillMethodPageContextTests(TestCase):
         self.assertEqual(
             json.loads(response.context["v5_endpoints"]), ["nwss", "pophive"]
         )
+
+
+class ResolvePortalSignalTests(TestCase):
+    """Mapping one portal signal onto its v5 name, or finding it has none."""
+
+    def test_identical_name_resolves_exactly(self):
+        self.assertEqual(
+            resolve_portal_signal("pct_ed_visits_covid", "nssp", {"pct_ed_visits_covid"}),
+            ("pct_ed_visits_covid", "exact"),
+        )
+
+    def test_known_rename_resolves(self):
+        self.assertEqual(
+            resolve_portal_signal(
+                "percent_positive", "fluview_resp_lab_clinical", {"pct_positive"}
+            ),
+            ("pct_positive", "renamed"),
+        )
+
+    def test_fill_method_suffix_collapses_onto_the_base_signal(self):
+        """v4 spelled the fill method into the name; v5 made it a key column."""
+        self.assertEqual(
+            resolve_portal_signal("x_fa", "nssp", {"x"}), ("x", "fill_ave")
+        )
+        self.assertEqual(
+            resolve_portal_signal("x_fz", "nssp", {"x"}), ("x", "fill_zero")
+        )
+
+    def test_fill_method_suffix_without_a_base_signal_stays_unresolved(self):
+        """The suffix rule must not swallow a signal v5 genuinely lacks."""
+        self.assertEqual(resolve_portal_signal("y_fa", "nssp", {"x"}), (None, None))
+
+    def test_unknown_signal_stays_unresolved(self):
+        self.assertEqual(resolve_portal_signal("nope", "nssp", {"x"}), (None, None))
+
+
+class DiffSourceTests(TestCase):
+    def test_separates_real_gaps_from_renames_and_fill_variants(self):
+        diff = diff_source(
+            "beta_nssp",
+            "nssp",
+            portal_signals={"pct_ed_visits_covid", "pct_ed_visits_covid_fa", "retired"},
+            v5_signals={"pct_ed_visits_covid", "pct_ed_visits_ari"},
+        )
+        self.assertEqual(diff.matched, ["pct_ed_visits_covid"])
+        self.assertEqual(
+            diff.fill_variants, [("pct_ed_visits_covid_fa", "pct_ed_visits_covid", "fill_ave")]
+        )
+        self.assertEqual(diff.missing_from_v5, ["retired"])
+        self.assertEqual(diff.missing_from_portal, ["pct_ed_visits_ari"])
+
+    def test_a_renamed_signal_is_not_reported_missing_from_either_side(self):
+        diff = diff_source(
+            "fluview_clinical",
+            "fluview_resp_lab_clinical",
+            portal_signals={"percent_positive"},
+            v5_signals={"pct_positive"},
+        )
+        self.assertEqual(diff.renamed, [("percent_positive", "pct_positive")])
+        self.assertEqual(diff.missing_from_v5, [])
+        self.assertEqual(diff.missing_from_portal, [])
+        self.assertFalse(diff.has_gaps)
+
+    def test_reports_gaps_when_either_side_has_an_extra(self):
+        self.assertTrue(
+            diff_source("nssp", "nssp", {"a"}, {"a", "b"}).has_gaps
+        )
+
+
+class DiffCatalogueTests(TestCase):
+    V5 = {
+        "nssp": {"signals": ["pct_ed_visits_covid"]},
+        "va_respiratory": {"signals": ["something"]},
+        "nwss": {"signals": ["covid_avg_conc"]},
+    }
+
+    def test_only_maps_sources_the_app_already_routes_on(self):
+        diffs, _, unmapped_portal = diff_catalogue(
+            {"nssp": {"pct_ed_visits_covid"}, "fb-survey": {"smoothed_cli"}}, self.V5
+        )
+        self.assertEqual([d.portal_source for d in diffs], ["nssp"])
+        self.assertEqual(unmapped_portal, ["fb-survey"])
+
+    def test_reports_v5_sources_the_portal_has_no_mapping_for(self):
+        _, unmapped_v5, _ = diff_catalogue({"nssp": {"pct_ed_visits_covid"}}, self.V5)
+        self.assertEqual(unmapped_v5, ["va_respiratory"])
+
+    def test_v5_native_endpoints_are_not_reported_as_unmapped(self):
+        """nwss and pophive are served from v5 without a v4 name to migrate."""
+        _, unmapped_v5, _ = diff_catalogue({}, self.V5)
+        self.assertNotIn("nwss", unmapped_v5)
+
+    def test_sourceless_indicators_are_skipped(self):
+        diffs, _, unmapped_portal = diff_catalogue({None: {"orphan"}}, self.V5)
+        self.assertEqual(diffs, [])
+        self.assertEqual(unmapped_portal, [])
+
+
+class MigratedSourcesResolveInV5Tests(TestCase):
+    """Every MIGRATED_DATASOURCES target must still exist in v5 metadata.
+
+    If Epidata renames one, ``get_v5_source()`` quietly returns None and every
+    user silently drops back to v4 -- no error is raised anywhere, so nothing
+    else in the suite would notice.
+    """
+
+    def test_detects_a_target_missing_from_metadata(self):
+        metadata = {v5: {"signals": []} for v5 in set(MIGRATED_DATASOURCES.values())}
+        metadata.pop("nssp")
+        self.assertEqual(find_unresolvable_sources(metadata), ["nssp"])
+
+    def test_passes_when_every_target_is_present(self):
+        metadata = {v5: {"signals": []} for v5 in set(MIGRATED_DATASOURCES.values())}
+        self.assertEqual(find_unresolvable_sources(metadata), [])
+
+    @skipUnless(
+        os.environ.get("EPIDATA_LIVE_TESTS"),
+        "live Epidata check; set EPIDATA_LIVE_TESTS=1 to run",
+    )
+    def test_live_v5_metadata_still_has_every_migrated_source(self):
+        cache.clear()
+        self.assertEqual(find_unresolvable_sources(get_v5_metadata()), [])
+
+
+class DiffV5IndicatorsCommandTests(TestCase):
+    COMMAND = "diff_v5_indicators"
+    PATCH_TARGET = (
+        "indicatorsets.management.commands.diff_v5_indicators.get_v5_metadata"
+    )
+
+    def setUp(self):
+        source = SourceSubdivision.objects.create(name="nssp")
+        Indicator.objects.create(name="pct_ed_visits_covid", source=source)
+        Indicator.objects.create(name="pct_ed_visits_covid_fa", source=source)
+        Indicator.objects.create(name="orphan", source=None)
+
+    @staticmethod
+    def _metadata(**overrides):
+        """Metadata where every migrated source resolves, so nothing errors."""
+        metadata = {v5: {"signals": []} for v5 in set(MIGRATED_DATASOURCES.values())}
+        metadata.update(overrides)
+        return metadata
+
+    def _run(self, *args, **kwargs):
+        out = StringIO()
+        call_command(self.COMMAND, *args, stdout=out, stderr=StringIO(), **kwargs)
+        return out.getvalue()
+
+    @patch(PATCH_TARGET)
+    def test_reports_a_signal_only_in_v5(self, mock_metadata):
+        mock_metadata.return_value = self._metadata(
+            nssp={"signals": ["pct_ed_visits_covid", "pct_ed_visits_ari"]}
+        )
+        self.assertIn("pct_ed_visits_ari", self._run())
+
+    @patch(PATCH_TARGET)
+    def test_does_not_report_a_fill_method_variant_as_a_gap(self, mock_metadata):
+        mock_metadata.return_value = self._metadata(
+            nssp={"signals": ["pct_ed_visits_covid"]}
+        )
+        output = self._run()
+        self.assertIn("fill_method", output)
+        self.assertNotIn("pct_ed_visits_covid_fa", output.split("fill_method")[-1])
+
+    @patch(PATCH_TARGET)
+    def test_errors_when_a_migrated_source_vanished_from_v5(self, mock_metadata):
+        """The silent-fallback alarm: routing would drop to v4 with no error."""
+        metadata = self._metadata()
+        metadata.pop("nssp")
+        mock_metadata.return_value = metadata
+        with self.assertRaises(CommandError):
+            self._run()
+
+    @patch(PATCH_TARGET)
+    def test_errors_when_v5_metadata_is_unreachable(self, mock_metadata):
+        mock_metadata.return_value = {}
+        with self.assertRaises(CommandError):
+            self._run()
+
+    @patch(PATCH_TARGET)
+    def test_json_output_is_machine_readable(self, mock_metadata):
+        mock_metadata.return_value = self._metadata(
+            nssp={"signals": ["pct_ed_visits_covid", "pct_ed_visits_ari"]}
+        )
+        payload = json.loads(self._run("--json"))
+        nssp = [d for d in payload["sources"] if d["portal_source"] == "nssp"][0]
+        self.assertEqual(nssp["missing_from_portal"], ["pct_ed_visits_ari"])
+
+    @patch(PATCH_TARGET)
+    def test_lists_the_matched_signal_names(self, mock_metadata):
+        """Matched was the one category shown only as a count."""
+        mock_metadata.return_value = self._metadata(
+            nssp={"signals": ["pct_ed_visits_covid"]}
+        )
+        self.assertIn("matched:     pct_ed_visits_covid", self._run())
+
+    def _write_markdown(self, mock_metadata, **signals):
+        """Run --markdown into a temp path and hand back what landed there."""
+        mock_metadata.return_value = self._metadata(**signals)
+        with tempfile.TemporaryDirectory() as tmp:
+            # nested: the command has to create the directory, not assume it
+            path = Path(tmp) / "generated" / "diff.md"
+            output = self._run("--markdown", str(path))
+            return path.read_text(), output, path
+
+    @patch(PATCH_TARGET)
+    def test_markdown_writes_a_document_to_the_given_path(self, mock_metadata):
+        content, _, _ = self._write_markdown(
+            mock_metadata, nssp={"signals": ["pct_ed_visits_covid", "pct_ed_visits_ari"]}
+        )
+        self.assertTrue(content.startswith("# Epidata v5 catalogue diff"))
+        self.assertIn("| portal source | v5 source |", content)
+        self.assertIn("### nssp \u2192 nssp", content)
+        self.assertIn("`pct_ed_visits_ari`", content)
+
+    @patch(PATCH_TARGET)
+    def test_markdown_reports_where_it_wrote(self, mock_metadata):
+        _, output, path = self._write_markdown(
+            mock_metadata, nssp={"signals": ["pct_ed_visits_covid"]}
+        )
+        self.assertIn(str(path), output)
+
+    @patch(PATCH_TARGET)
+    def test_markdown_records_its_own_caveats(self, mock_metadata):
+        """A generated report has to carry the reasons not to over-read it."""
+        content, _, _ = self._write_markdown(
+            mock_metadata, nssp={"signals": ["pct_ed_visits_covid"]}
+        )
+        self.assertIn("Known limitations", content)
+        self.assertIn("sourceless", content.lower())
+
+    def test_default_markdown_path_sits_in_the_reports_directory(self):
+        """Generated output lives apart from the hand-written docs/ prose."""
+        self.assertEqual(DEFAULT_MARKDOWN_PATH.name, "v4-to-v5-catalogue-diff.md")
+        self.assertEqual(DEFAULT_MARKDOWN_PATH.parent.name, "reports")
+
+    @patch(PATCH_TARGET)
+    def test_markdown_and_json_are_mutually_exclusive(self, mock_metadata):
+        mock_metadata.return_value = self._metadata()
+        with self.assertRaises(CommandError):
+            self._run("--markdown", "--json")
+
+    @patch(PATCH_TARGET)
+    def test_gaps_only_hides_sources_that_line_up(self, mock_metadata):
+        mock_metadata.return_value = self._metadata(
+            nssp={"signals": ["pct_ed_visits_covid"]}
+        )
+        self.assertNotIn("nssp ->", self._run("--gaps-only"))
+
+
+class DiffCatalogueSourceMapTests(TestCase):
+    """Sources reachable from v5 by endpoint rather than by data_source name.
+
+    nwss and pophive are served from v5, but the portal keys them by
+    ``_endpoint`` on the indicator set, so they never appear in
+    MIGRATED_DATASOURCES. Without an override they look like v4-only sources.
+    """
+
+    V5 = {"nwss": {"signals": ["covid_avg_conc", "flu_avg_conc"]}}
+
+    def test_override_lets_an_endpoint_native_source_be_compared(self):
+        diffs, _, unmapped_portal = diff_catalogue(
+            {"beta_nwss": {"covid_avg_conc"}},
+            self.V5,
+            source_map={"beta_nwss": "nwss"},
+        )
+        self.assertEqual([d.portal_source for d in diffs], ["beta_nwss"])
+        self.assertEqual(diffs[0].matched, ["covid_avg_conc"])
+        self.assertEqual(diffs[0].missing_from_portal, ["flu_avg_conc"])
+        self.assertEqual(unmapped_portal, [])
+
+    def test_without_the_override_it_reads_as_having_no_v5_counterpart(self):
+        diffs, _, unmapped_portal = diff_catalogue(
+            {"beta_nwss": {"covid_avg_conc"}}, self.V5
+        )
+        self.assertEqual(diffs, [])
+        self.assertEqual(unmapped_portal, ["beta_nwss"])
+
+
+class DiffV5IndicatorsV4OnlyReportTests(TestCase):
+    """The report has to answer "what do we hold that v5 cannot serve?"."""
+
+    PATCH_TARGET = DiffV5IndicatorsCommandTests.PATCH_TARGET
+
+    def setUp(self):
+        nssp = SourceSubdivision.objects.create(name="nssp")
+        legacy = SourceSubdivision.objects.create(name="fb-survey")
+        nwss = SourceSubdivision.objects.create(name="beta_nwss")
+        covidcast_set = IndicatorSet.objects.create(
+            name="Covidcast set", source_type="covidcast", epidata_endpoint="covidcast"
+        )
+        nwss_set = IndicatorSet.objects.create(
+            name="NWSS set", source_type="other_endpoint", epidata_endpoint="nwss"
+        )
+        # migrated source: one signal v5 has, one it does not
+        Indicator.objects.create(
+            name="pct_ed_visits_covid", source=nssp, indicator_set=covidcast_set
+        )
+        Indicator.objects.create(
+            name="retired_signal", source=nssp, indicator_set=covidcast_set
+        )
+        # a source v5 has no counterpart for at all
+        Indicator.objects.create(
+            name="smoothed_cli", source=legacy, indicator_set=covidcast_set
+        )
+        # reachable from v5 by endpoint, not by data_source name
+        Indicator.objects.create(
+            name="covid_avg_conc", source=nwss, indicator_set=nwss_set
+        )
+        # sourceless rows are excluded from the comparison entirely
+        Indicator.objects.create(name="orphan", source=None)
+
+    def _metadata(self):
+        metadata = {v5: {"signals": []} for v5 in set(MIGRATED_DATASOURCES.values())}
+        metadata["nssp"] = {"signals": ["pct_ed_visits_covid"]}
+        metadata["nwss"] = {"signals": ["covid_avg_conc"]}
+        return metadata
+
+    def _json(self):
+        out = StringIO()
+        with patch(self.PATCH_TARGET, return_value=self._metadata()):
+            call_command("diff_v5_indicators", "--json", stdout=out, stderr=StringIO())
+        return json.loads(out.getvalue())
+
+    def test_counts_v4_only_indicators_across_both_causes(self):
+        totals = self._json()["v4_only"]
+        # retired_signal (inside a migrated source) + smoothed_cli (source v5 lacks)
+        self.assertEqual(totals["total"], 2)
+        self.assertEqual(totals["inside_migrated_sources"], 1)
+        self.assertEqual(totals["in_sources_v5_lacks"], 1)
+
+    def test_endpoint_native_source_counts_as_reachable_not_v4_only(self):
+        payload = self._json()
+        self.assertIn(
+            "beta_nwss", [d["portal_source"] for d in payload["sources"]]
+        )
+        self.assertNotIn("beta_nwss", payload["v4_only"]["sources"])
+
+    def test_names_the_v4_only_sources(self):
+        self.assertEqual(self._json()["v4_only"]["sources"], ["fb-survey"])
+
+    def test_report_states_the_v4_only_and_reachable_totals(self):
+        """Sourceless rows are already outside the comparison, not a deduction."""
+        out = StringIO()
+        with patch(self.PATCH_TARGET, return_value=self._metadata()):
+            call_command("diff_v5_indicators", stdout=out, stderr=StringIO())
+        output = out.getvalue()
+        # 4 sourced indicators, 2 of them v4-only
+        self.assertIn("reachable from v5: 2", output)
+        self.assertIn("v4-only:           2", output)

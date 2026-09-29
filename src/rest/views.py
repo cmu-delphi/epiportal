@@ -1,9 +1,12 @@
+from collections import defaultdict
+
 from base.models import Pathogen
 from rest_framework import viewsets
 from rest.serializers import (
     PathogenSerializer,
     IndicatorSerializer,
     AvailableIndicatorsQuerySerializer,
+    MetaIndicatorsSerializer
 )
 from indicators.models import Indicator
 from rest_framework.response import Response
@@ -51,3 +54,25 @@ class AvailableIndicatorsViewSet(APIView):
         return Response(
             {"indicators": IndicatorSerializer(indicators, many=True).data}, status=200
         )
+
+
+# Half the indicator table has no source. They still need a group to sit in,
+# and a name keeps every entry's `source` a string.
+UNKNOWN_SOURCE = "unknown"
+
+
+class IndicatorMetaView(APIView):
+    """Indicator names grouped by the source that publishes them."""
+
+    def get(self, request):
+        grouped = defaultdict(list)
+        # One flat query, grouped in Python: asking per source would be 47
+        # queries, and the whole table is two short columns.
+        rows = Indicator.objects.values_list("source__name", "name").order_by("name")
+        for source_name, indicator_name in rows:
+            grouped[source_name or UNKNOWN_SOURCE].append(indicator_name)
+        groups = [
+            {"source": source, "indicators": indicators}
+            for source, indicators in sorted(grouped.items())
+        ]
+        return Response(MetaIndicatorsSerializer(groups, many=True).data, status=200)
