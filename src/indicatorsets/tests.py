@@ -62,6 +62,7 @@ from indicatorsets.utils.caching import safe_cache_get, safe_cache_set
 from indicatorsets.utils.epidata import (
     get_v5_metadata,
     get_v5_source,
+    split_geos_by_v5_values,
     map_fluview_geo_to_v5,
     map_flusurv_geo_to_v5,
 )
@@ -1180,8 +1181,15 @@ class V5RoutingTestMixin:
                     else {metadata_source: {"signals": list(metadata_signals or [])}}
                 )
                 return response
+            # One row per requested geo: covidcast drops v5 geos without a
+            # real value back to v4, so a row that names no geo would count
+            # as "no data" for every geo.
+            geos = (params or {}).get("geo_value") or (params or {}).get("geo_values")
+            rows = [
+                {"geo_value": geo, "value": 1} for geo in str(geos or "").split(",")
+            ]
             response.json.return_value = (
-                {"epidata": [{"value": 1}], "result": 1, "message": "success"}
+                {"epidata": rows, "result": 1, "message": "success"}
                 if has_data
                 else {"epidata": [], "result": -2, "message": "no results"}
             )
@@ -4468,3 +4476,266 @@ class DiffV5IndicatorsV4OnlyReportTests(TestCase):
         # 4 sourced indicators, 2 of them v4-only
         self.assertIn("reachable from v5: 2", output)
         self.assertIn("v4-only:           2", output)
+
+
+class SplitGeosByV5ValuesTests(TestCase):
+    def test_geo_with_a_real_value_stays_on_v5(self):
+        rows = [{"geo_value": "17031", "value": 1.5}]
+        self.assertEqual(split_geos_by_v5_values(rows, ["17031"]), (["17031"], []))
+
+    def test_geo_whose_every_value_is_null_moves_to_v4(self):
+        rows = [
+            {"geo_value": "42003", "value": None},
+            {"geo_value": "42003", "value": None},
+        ]
+        self.assertEqual(split_geos_by_v5_values(rows, ["42003"]), ([], ["42003"]))
+
+    def test_one_real_value_is_enough_to_stay_on_v5(self):
+        rows = [
+            {"geo_value": "42003", "value": None},
+            {"geo_value": "42003", "value": 0.2},
+        ]
+        self.assertEqual(split_geos_by_v5_values(rows, ["42003"]), (["42003"], []))
+
+    def test_geo_missing_from_the_response_moves_to_v4(self):
+        rows = [{"geo_value": "17031", "value": 1.5}]
+        self.assertEqual(
+            split_geos_by_v5_values(rows, ["17031", "06037"]), (["17031"], ["06037"])
+        )
+
+    def test_empty_csv_cell_counts_as_null(self):
+        rows = [{"geo_value": "42003", "value": ""}]
+        self.assertEqual(split_geos_by_v5_values(rows, ["42003"]), ([], ["42003"]))
+
+    def test_matches_geo_values_case_insensitively_and_keeps_request_order(self):
+        rows = [{"geo_value": "pa", "value": 1}, {"geo_value": "ny", "value": 1}]
+        self.assertEqual(
+            split_geos_by_v5_values(rows, ["NY", "ca", "PA"]), (["NY", "PA"], ["ca"])
+        )
+
+
+class CovidcastV5NullFallbackTests(V5RoutingTestMixin, TestCase):
+    """Geos v5 only has nulls (or nothing) for are served from v4 instead.
+
+    Mirrors Allegheny County (42003): v5 nssp lists the signal and returns rows
+    for it, but every value is null, while v4 has real values.
+    """
+
+    SIGNAL = "smoothed_pct_ed_visits_rsv"
+    INDICATOR = {
+        "_endpoint": "covidcast",
+        "data_source": "nssp",
+        "indicator": SIGNAL,
+        "time_type": "week",
+        "display_name": "RSV ED Visits",
+    }
+    ALLEGHENY_AND_COOK = {
+        "county": [
+            {"id": "county:42003", "geoType": "county"},
+            {"id": "county:17031", "geoType": "county"},
+        ]
+    }
+
+    def _fake(self, v5_values, v4_has_data=True):
+        """``v5_values`` maps geo -> value; geos left out get no v5 rows at all."""
+
+        def rows_as_csv(rows, columns):
+            lines = [",".join(columns)]
+            for row in rows:
+                lines.append(
+                    ",".join("" if row[c] is None else str(row[c]) for c in columns)
+                )
+            return "\n".join(lines) + "\n"
+
+        def fake_get(url, params=None, timeout=None):
+            response = MagicMock()
+            response.status_code = 200
+            response.raise_for_status = MagicMock()
+            if "metadata/" in url:
+                response.json.return_value = {"nssp": {"signals": [self.SIGNAL]}}
+            elif "/v5/" in url:
+                # null rows first, so a naive "first row" preview would show one
+                rows = sorted(
+                    (
+                        {"geo_value": geo, "value": v5_values[geo]}
+                        for geo in params["geo_value"].split(",")
+                        if geo in v5_values
+                    ),
+                    key=lambda row: row["value"] is not None,
+                )
+                response.json.return_value = rows
+                response.text = rows_as_csv(rows, ["geo_value", "value"])
+            else:
+                rows = (
+                    [{"geo_value": g, "value": 1} for g in params["geo_values"].split(",")]
+                    if v4_has_data
+                    else []
+                )
+                response.json.return_value = {
+                    "epidata": rows,
+                    "result": 1 if rows else -2,
+                    "message": "success" if rows else "no results",
+                }
+                response.text = rows_as_csv(rows, ["geo_value", "value"])
+            return response
+
+        return fake_get
+
+    def _export(self, geos=None):
+        return generate_covidcast_indicators_export_url(
+            [self.INDICATOR],
+            "2024-01-01",
+            "2024-03-01",
+            geos or self.ALLEGHENY_AND_COOK,
+            None,
+            "csv",
+        )
+
+    def _preview(self, data_format="json"):
+        return preview_covidcast_data(
+            [self.INDICATOR],
+            "2024-01-01",
+            "2024-03-01",
+            self.ALLEGHENY_AND_COOK,
+            None,
+            data_format,
+        )
+
+    def _v4_calls(self, mock_get):
+        return [c for c in self._probe_calls(mock_get) if "/v5/" not in c.args[0]]
+
+    @patch("indicatorsets.utils.epidata.requests.get")
+    def test_export_serves_null_only_geo_from_v4_and_the_rest_from_v5(self, mock_get):
+        mock_get.side_effect = self._fake({"42003": None, "17031": 0.4})
+
+        result = self._export()
+
+        self.assertEqual(len(result), 2)
+        v5_command, v4_command = result
+        self.assertIn("/v5/viz/", v5_command)
+        self.assertIn("geo_value=17031&", v5_command)
+        self.assertNotIn("42003", v5_command)
+        self.assertIn("wget", v4_command)
+        self.assertIn("covidcast/csv?signal=nssp:smoothed_pct_ed_visits_rsv", v4_command)
+        self.assertIn("geo_values=42003&", v4_command)
+        self.assertNotIn("17031", v4_command)
+
+    @patch("indicatorsets.utils.epidata.requests.get")
+    def test_export_serves_geo_missing_from_v5_from_v4(self, mock_get):
+        mock_get.side_effect = self._fake({"17031": 0.4})
+
+        result = self._export()
+
+        self.assertEqual(len(result), 2)
+        self.assertIn("geo_value=17031&", result[0])
+        self.assertIn("geo_values=42003&", result[1])
+
+    @patch("indicatorsets.utils.epidata.requests.get")
+    def test_export_stays_on_v5_without_a_v4_probe_when_every_geo_has_values(
+        self, mock_get
+    ):
+        mock_get.side_effect = self._fake({"42003": 0.1, "17031": 0.4})
+
+        result = self._export()
+
+        self.assertEqual(len(result), 1)
+        self.assertIn("geo_value=42003,17031&", result[0])
+        self.assertEqual(self._v4_calls(mock_get), [])
+
+    @patch("indicatorsets.utils.epidata.requests.get")
+    def test_export_probes_v4_with_only_the_fallback_geos(self, mock_get):
+        mock_get.side_effect = self._fake({"42003": None, "17031": 0.4})
+
+        self._export()
+
+        v4_calls = self._v4_calls(mock_get)
+        self.assertEqual(len(v4_calls), 1)
+        params = v4_calls[0].kwargs["params"]
+        self.assertEqual(params["geo_values"], "42003")
+        self.assertEqual(params["data_source"], "nssp")
+        self.assertEqual(params["time_values"], "202401-202409")
+
+    @patch("indicatorsets.utils.epidata.requests.get")
+    def test_export_reports_no_data_when_neither_api_has_values(self, mock_get):
+        mock_get.side_effect = self._fake({"42003": None}, v4_has_data=False)
+
+        result = self._export({"county": [{"id": "county:42003", "geoType": "county"}]})
+
+        self.assertEqual(len(result), 1)
+        self.assertIn("No data found for RSV ED Visits (county)", result[0])
+
+    @patch("indicatorsets.utils.epidata.requests.get")
+    def test_export_names_the_geos_neither_api_has_values_for(self, mock_get):
+        mock_get.side_effect = self._fake({"42003": None, "17031": 0.4}, v4_has_data=False)
+
+        result = self._export()
+
+        self.assertEqual(len(result), 2)
+        self.assertIn("geo_value=17031&", result[0])
+        self.assertIn("No data found for RSV ED Visits (county: 42003)", result[1])
+
+    @patch("indicatorsets.utils.exports.logger")
+    @patch("indicatorsets.utils.epidata.requests.get")
+    def test_export_logs_a_warning_when_falling_back(self, mock_get, mock_logger):
+        mock_get.side_effect = self._fake({"42003": None, "17031": 0.4})
+
+        self._export()
+
+        mock_logger.warning.assert_called_once()
+        extra = mock_logger.warning.call_args.kwargs["extra"]
+        self.assertEqual(extra["source"], "nssp")
+        self.assertEqual(extra["signal"], self.SIGNAL)
+        self.assertEqual(extra["geo_values"], ["42003"])
+
+    @patch("indicatorsets.utils.exports.logger")
+    @patch("indicatorsets.utils.epidata.requests.get")
+    def test_export_does_not_warn_when_v5_has_every_geo(self, mock_get, mock_logger):
+        mock_get.side_effect = self._fake({"42003": 0.1, "17031": 0.4})
+
+        self._export()
+
+        mock_logger.warning.assert_not_called()
+
+    @patch("indicatorsets.utils.previews.requests.get")
+    def test_preview_serves_null_only_geo_from_v4(self, mock_get):
+        mock_get.side_effect = self._fake({"42003": None, "17031": 0.4})
+
+        result = self._preview()
+
+        v4_calls = self._v4_calls(mock_get)
+        self.assertEqual(len(v4_calls), 1)
+        self.assertEqual(v4_calls[0].kwargs["params"]["geo_values"], "42003")
+        self.assertEqual(len(result), 2)
+        self.assertEqual(result[0], {"geo_value": "17031", "value": 0.4})
+        self.assertEqual(result[1]["epidata"]["geo_value"], "42003")
+
+    @patch("indicatorsets.utils.previews.requests.get")
+    def test_preview_stays_on_v5_when_every_geo_has_values(self, mock_get):
+        mock_get.side_effect = self._fake({"42003": 0.1, "17031": 0.4})
+
+        result = self._preview()
+
+        self.assertEqual(self._v4_calls(mock_get), [])
+        self.assertEqual(len(result), 1)
+
+    @patch("indicatorsets.utils.previews.requests.get")
+    def test_csv_preview_serves_null_only_geo_from_v4(self, mock_get):
+        mock_get.side_effect = self._fake({"42003": None, "17031": 0.4})
+
+        result = self._preview("csv")
+
+        self.assertEqual(len(result), 2)
+        self.assertEqual(result[0], [["geo_value", "value"], ["17031", "0.4"]])
+        self.assertEqual(result[1], [["geo_value", "value"], ["42003", "1"]])
+
+    @patch("indicatorsets.utils.previews.logger")
+    @patch("indicatorsets.utils.previews.requests.get")
+    def test_preview_logs_a_warning_when_falling_back(self, mock_get, mock_logger):
+        mock_get.side_effect = self._fake({"42003": None, "17031": 0.4})
+
+        self._preview()
+
+        mock_logger.warning.assert_called_once()
+        self.assertEqual(
+            mock_logger.warning.call_args.kwargs["extra"]["geo_values"], ["42003"]
+        )

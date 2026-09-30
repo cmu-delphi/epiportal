@@ -15,8 +15,12 @@ from indicatorsets.utils.helpers import get_epiweek
 logger = get_structured_logger("indicatorsets.utils")
 
 
-def has_epidata_results(url, params):
-    """Check whether an Epidata endpoint has any results for the given params."""
+def get_epidata_rows(url, params):
+    """Return the rows an Epidata endpoint has for ``params``, or ``[]`` on error.
+
+    Handles both response shapes: v4's ``{"epidata": [...]}`` envelope and
+    v5's bare list.
+    """
     check_params = {**params, "format": "json"}
     try:
         response = requests.get(url, params=check_params, timeout=(5, 30))
@@ -25,13 +29,18 @@ def has_epidata_results(url, params):
         response.raise_for_status()
     except requests.RequestException:
         logger.exception("Error checking data availability", extra={"url": url})
-        return False
+        return []
     data = response.json()
     if isinstance(data, dict) and "epidata" in data:
-        return bool(data["epidata"])
+        return data["epidata"] or []
     if isinstance(data, list):
-        return bool(data)
-    return False
+        return data
+    return []
+
+
+def has_epidata_results(url, params):
+    """Check whether an Epidata endpoint has any results for the given params."""
+    return bool(get_epidata_rows(url, params))
 
 
 V5_METADATA_CACHE_KEY = "epidata_v5_metadata"
@@ -192,3 +201,22 @@ def group_geos_by_v5_type(geos, mapper):
         geo_type, geo_value = mapper(geo["id"])
         grouped.setdefault(geo_type, []).append(geo_value)
     return grouped
+
+def split_geos_by_v5_values(rows, geo_values):
+    """Split requested ``geo_values`` into ``(on_v5, fall_back_to_v4)``.
+
+    The v5 metadata only says a source lists a signal; it can still return
+    rows whose every value is null for some geos (v5 nssp for Allegheny County,
+    say, where v4 has real values). A geo stays on v5 if at least one of its
+    rows has a value; any other geo, null-only or absent from ``rows``, falls
+    back to v4. An empty string counts as null, which is how CSV spells it.
+    Request order is kept so the URLs built from each half read predictably.
+    """
+    with_values = {
+        str(row.get("geo_value")).lower()
+        for row in rows
+        if row.get("value") not in (None, "")
+    }
+    on_v5 = [geo for geo in geo_values if geo.lower() in with_values]
+    fall_back = [geo for geo in geo_values if geo.lower() not in with_values]
+    return on_v5, fall_back
