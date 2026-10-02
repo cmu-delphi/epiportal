@@ -2,18 +2,89 @@
 
 from urllib.parse import urlencode
 
+from delphi_utils import get_structured_logger
 from django.conf import settings
 from django.urls import reverse
 
 from indicatorsets.utils.constants import DEFAULT_FILL_METHOD
 from indicatorsets.utils.epidata import (
+    get_epidata_rows,
     get_time_values,
     get_v5_source,
     group_v5_indicators_by_source,
     has_epidata_results,
+    split_geos_by_v5_values,
     split_v4_v5_indicators,
 )
 from indicatorsets.utils.helpers import get_epiweek
+
+logger = get_structured_logger("indicatorsets.utils")
+
+
+def _covidcast_v5_export_command(
+    indicator, v5_source, geo_type, geo_values, time_values, data_format, api_key,
+    fill_method,
+):
+    data_export_url = f"{settings.EPIDATA_V5_URL}viz/?source={v5_source}&signal={indicator['indicator']}&geo_type={geo_type}&geo_value={geo_values}&fill_method={fill_method}&reference_times={time_values}&format={data_format}"
+    if data_format == "csv":
+        data_export_url += "&header=true"
+    if api_key:
+        data_export_url += f"&token={api_key}"
+    # The v5 endpoint sends no Content-Disposition, so link at our own proxy
+    # instead of the API, the same way the pophive and nwss builders do.
+    filename = (
+        f"{indicator['data_source']}_{indicator['indicator']}_{geo_type}.{data_format}"
+    )
+    download_params = {
+        "source": v5_source,
+        "signal": indicator["indicator"],
+        "geo_type": geo_type,
+        "geo_value": geo_values,
+        "fill_method": fill_method,
+        "reference_times": time_values,
+        "format": data_format,
+        "header": "true" if data_format == "csv" else "false",
+        "filename": filename,
+    }
+    if api_key:
+        download_params["token"] = api_key
+    download_url = f"{reverse('download_export')}?{urlencode(download_params)}"
+    return f'curl -o {filename} <a href="{download_url}" download="{filename}">{data_export_url}</a>'
+
+
+def _covidcast_v4_export_command(indicator, geo_type, geo_values, dates, data_format, api_key):
+    data_export_url = f"{settings.EPIDATA_URL}covidcast/csv?signal={indicator['data_source']}:{indicator['indicator']}&start_day={dates[0]}&end_day={dates[1]}&geo_type={geo_type}&geo_values={geo_values}&format={data_format}"
+    if data_format == "csv":
+        data_export_url += "&header=true"
+    if api_key:
+        data_export_url += f"&api_key={api_key}"
+    return f'wget --content-disposition <a href="{data_export_url}">{data_export_url}</a>'
+
+
+def _covidcast_v4_export_commands(
+    indicator, start_date, end_date, geo_type, geo_values, label, data_format, api_key
+):
+    """Probe v4 for ``geo_values`` and return its export command, or a no-data note."""
+    time_values, dates = get_time_values(indicator, start_date, end_date, False)
+    # v4 keys signals by data_source and has a time_type dimension
+    check_params = {
+        "signal": indicator["indicator"],
+        "geo_type": geo_type,
+        "time_values": time_values,
+        "time_type": indicator["time_type"],
+        "data_source": indicator["data_source"],
+        "geo_values": geo_values,
+        "api_key": api_key if api_key else settings.EPIDATA_API_KEY,
+    }
+    if not has_epidata_results(f"{settings.EPIDATA_URL}covidcast", check_params):
+        return [
+            f'<span class="text-muted">No data found for {label}. Export skipped.</span>'
+        ]
+    return [
+        _covidcast_v4_export_command(
+            indicator, geo_type, geo_values, dates, data_format, api_key
+        )
+    ]
 
 
 def generate_covidcast_indicators_export_url(
@@ -25,97 +96,77 @@ def generate_covidcast_indicators_export_url(
     data_format,
     fill_method=DEFAULT_FILL_METHOD,
 ):
+    """Build one export command per (indicator, geo_type), split across v4 and v5.
+
+    A migrated signal is probed on v5 first. Geos v5 has no real values for --
+    only null rows, or no rows at all -- are exported from v4 instead, so one
+    geo_type can yield both a v5 and a v4 command.
+    """
     data_export_commands = []
     for indicator in indicators:
-        if indicator["_endpoint"] == "covidcast":
-            v5_source = get_v5_source(indicator)
-            get_from_v5 = v5_source is not None
-            time_values, dates = get_time_values(
-                indicator, start_date, end_date, get_from_v5
-            )
-            for geo_type, values in covidcast_geos.items():
-                geo_values = ",".join(
-                    [
-                        (
-                            value["id"].split(":")[1].lower()
-                            if value["geoType"] in ["nation", "state"]
-                            else value["id"].split(":")[1]
-                        )
-                        for value in values
-                    ]
+        if indicator["_endpoint"] != "covidcast":
+            continue
+        v5_source = get_v5_source(indicator)
+        for geo_type, values in covidcast_geos.items():
+            geo_value_list = [
+                (
+                    value["id"].split(":")[1].lower()
+                    if value["geoType"] in ["nation", "state"]
+                    else value["id"].split(":")[1]
                 )
-                label = f"{indicator.get('display_name') or indicator['indicator']} ({geo_type})"
-                if get_from_v5:
-                    check_params = {
-                        "source": v5_source,
-                        "signal": indicator["indicator"],
-                        "geo_type": geo_type,
-                        "geo_value": geo_values,
-                        "fill_method": fill_method,
-                        "reference_times": time_values,
-                        "token": api_key if api_key else settings.EPIDATA_API_KEY,
-                    }
-                    epidata_url = f"{settings.EPIDATA_V5_URL}viz/"
-                else:
-                    # v4 keys signals by data_source and has a time_type dimension
-                    check_params = {
-                        "signal": indicator["indicator"],
-                        "geo_type": geo_type,
-                        "time_values": time_values,
-                        "time_type": indicator["time_type"],
-                        "data_source": indicator["data_source"],
-                        "geo_values": geo_values,
-                        "api_key": api_key if api_key else settings.EPIDATA_API_KEY,
-                    }
-                    epidata_url = f"{settings.EPIDATA_URL}covidcast"
+                for value in values
+            ]
+            name = indicator.get("display_name") or indicator["indicator"]
+            label = f"{name} ({geo_type})"
+            if not v5_source:
+                data_export_commands.extend(
+                    _covidcast_v4_export_commands(
+                        indicator, start_date, end_date, geo_type,
+                        ",".join(geo_value_list), label, data_format, api_key,
+                    )
+                )
+                continue
 
-                if not has_epidata_results(epidata_url, check_params):
-                    data_export_commands.append(
-                        f'<span class="text-muted">No data found for {label}. Export skipped.</span>'
+            time_values, _ = get_time_values(indicator, start_date, end_date, True)
+            check_params = {
+                "source": v5_source,
+                "signal": indicator["indicator"],
+                "geo_type": geo_type,
+                "geo_value": ",".join(geo_value_list),
+                "fill_method": fill_method,
+                "reference_times": time_values,
+                "token": api_key if api_key else settings.EPIDATA_API_KEY,
+            }
+            rows = get_epidata_rows(f"{settings.EPIDATA_V5_URL}viz/", check_params)
+            v5_geos, v4_geos = split_geos_by_v5_values(rows, geo_value_list)
+            if v5_geos:
+                data_export_commands.append(
+                    _covidcast_v5_export_command(
+                        indicator, v5_source, geo_type, ",".join(v5_geos),
+                        time_values, data_format, api_key, fill_method,
                     )
-                    continue
-                if get_from_v5:
-                    data_export_url = f"{settings.EPIDATA_V5_URL}viz/?source={v5_source}&signal={indicator['indicator']}&geo_type={geo_type}&geo_value={geo_values}&fill_method={fill_method}&reference_times={time_values}&format={data_format}"
-                else:
-                    data_export_url = f"{settings.EPIDATA_URL}covidcast/csv?signal={indicator['data_source']}:{indicator['indicator']}&start_day={dates[0]}&end_day={dates[1]}&geo_type={geo_type}&geo_values={geo_values}&format={data_format}"
-                if data_format == "csv":
-                    data_export_url += f"&header=true"
-                if get_from_v5:
-                    if api_key:
-                        data_export_url += f"&token={api_key}"
-                elif api_key:
-                    data_export_url += f"&api_key={api_key}"
-                if get_from_v5:
-                    # The v5 endpoint sends no Content-Disposition, so link at our
-                    # own proxy instead of the API, the same way the pophive and
-                    # nwss builders do.
-                    filename = (
-                        f"{indicator['data_source']}_{indicator['indicator']}"
-                        f"_{geo_type}.{data_format}"
-                    )
-                    download_params = {
+                )
+            if v4_geos:
+                logger.warning(
+                    "Epidata v5 has no values for these geos, falling back to v4",
+                    extra={
                         "source": v5_source,
                         "signal": indicator["indicator"],
                         "geo_type": geo_type,
-                        "geo_value": geo_values,
-                        "fill_method": fill_method,
-                        "reference_times": time_values,
-                        "format": data_format,
-                        "header": "true" if data_format == "csv" else "false",
-                        "filename": filename,
-                    }
-                    if api_key:
-                        download_params["token"] = api_key
-                    download_url = (
-                        f"{reverse('download_export')}?{urlencode(download_params)}"
+                        "geo_values": v4_geos,
+                    },
+                )
+                # Only name the geos when some of the selection did export,
+                # otherwise the label alone already covers every geo.
+                fallback_label = (
+                    f"{name} ({geo_type}: {', '.join(v4_geos)})" if v5_geos else label
+                )
+                data_export_commands.extend(
+                    _covidcast_v4_export_commands(
+                        indicator, start_date, end_date, geo_type,
+                        ",".join(v4_geos), fallback_label, data_format, api_key,
                     )
-                    data_export_commands.append(
-                        f'curl -o {filename} <a href="{download_url}" download="{filename}">{data_export_url}</a>'
-                    )
-                else:
-                    data_export_commands.append(
-                        f'wget --content-disposition <a href="{data_export_url}">{data_export_url}</a>'
-                    )
+                )
     return data_export_commands
 
 

@@ -30,8 +30,10 @@ ALTERNATIVE_INTERFACE_VERSION = "1.0.11"
 
 
 EPIVIS_URL = os.environ.get("EPIVIS_URL", "https://delphi.cmu.edu/epivis/")
-EPIDATA_URL = os.environ.get("EPIDATA_URL", "https://api.delphi.cmu.edu/epidata/")
-EPIDATA_V5_URL = os.environ.get("EPIDATA_V5_URL", "https://delphi.cmu.edu/epidata/v5/")
+# Callers append paths directly (f"{EPIDATA_V5_URL}viz/"), so both base URLs
+# must end in a slash; without one every request quietly goes to ".../v5viz/".
+EPIDATA_URL = os.environ.get("EPIDATA_URL", "https://api.delphi.cmu.edu/epidata/").rstrip("/") + "/"
+EPIDATA_V5_URL = os.environ.get("EPIDATA_V5_URL", "https://delphi.cmu.edu/epidata/v5/").rstrip("/") + "/"
 EPIDATA_API_KEY = os.environ.get("EPIDATA_API_KEY", "")
 
 SPREADSHEET_URLS = {

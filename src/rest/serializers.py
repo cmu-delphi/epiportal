@@ -31,3 +31,10 @@ class AvailableIndicatorsQuerySerializer(serializers.Serializer):
         slug_field="name",
         queryset=Pathogen.objects.filter(used_in="indicators")
     )
+
+
+class MetaIndicatorsSerializer(serializers.Serializer):
+    """One source and every indicator name it publishes."""
+
+    source = serializers.CharField()
+    indicators = serializers.ListField(child=serializers.CharField())
