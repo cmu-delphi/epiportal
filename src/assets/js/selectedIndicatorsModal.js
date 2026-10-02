@@ -204,36 +204,53 @@ function showNotCoveredGeoWarningMessage(notCoveredIndicators, geoValue) {
     appendAlert(warningMessage, "warning");
 }
 
+/* Asks the server, which routes each covidcast indicator to v5 or v4 the
+ * same way Export does, whether geoValue has data for it. Only real values
+ * count: an indicator with nothing but nulls on both APIs is not covered.
+ * covered === null means the check itself failed, so no warning is shown. */
 async function checkGeoCoverage(geoValue) {
     const notCoveredIndicators = [];
+    const covidcastIndicators = checkedIndicatorMembers.filter(
+        (indicator) => indicator["_endpoint"] === "covidcast"
+    );
+    if (covidcastIndicators.length === 0) {
+        return notCoveredIndicators;
+    }
 
     try {
         const result = await $.ajax({
-            url: "epidata/covidcast/geo_coverage/",
-            type: "GET",
-            data: {
+            url: "check_covidcast_geo_coverage/",
+            type: "POST",
+            dataType: "json",
+            contentType: "application/json",
+            headers: { "X-CSRFToken": Cookies.get("csrftoken") },
+            data: JSON.stringify({
                 geo: geoValue,
-            },
+                indicators: covidcastIndicators.map((indicator) => ({
+                    _endpoint: indicator["_endpoint"],
+                    data_source: indicator.data_source,
+                    indicator: indicator.indicator,
+                    time_type: indicator.time_type,
+                })),
+            }),
         });
 
-        checkedIndicatorMembers
-            .filter((indicator) => indicator["_endpoint"] === "covidcast")
-            .forEach((indicator) => {
-                const covered = result["epidata"].some(
-                    (e) =>
-                        e.source === indicator.data_source &&
-                        e.signal === indicator.indicator
-                );
-                if (!covered) {
-                    if (!indicator["notCoveredGeos"]) {
-                        indicator["notCoveredGeos"] = [];
-                    }
-                    if (!indicator["notCoveredGeos"].includes(geoValue)) {
-                        indicator["notCoveredGeos"].push(geoValue);
-                    }
-                    notCoveredIndicators.push(indicator);
+        covidcastIndicators.forEach((indicator) => {
+            const entry = result["coverage"].find(
+                (e) =>
+                    e.data_source === indicator.data_source &&
+                    e.indicator === indicator.indicator
+            );
+            if (entry && entry.covered === false) {
+                if (!indicator["notCoveredGeos"]) {
+                    indicator["notCoveredGeos"] = [];
                 }
-            });
+                if (!indicator["notCoveredGeos"].includes(geoValue)) {
+                    indicator["notCoveredGeos"].push(geoValue);
+                }
+                notCoveredIndicators.push(indicator);
+            }
+        });
 
         return notCoveredIndicators;
     } catch (error) {

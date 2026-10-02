@@ -36,6 +36,7 @@ from indicatorsets.utils.exports import (
 )
 from indicatorsets.utils.form_logging import log_form_data, log_form_stats
 from indicatorsets.utils.geos import (
+    get_covidcast_geo_coverage,
     get_indicators_based_on_geo_epidata,
     get_indicators_based_on_geo_epidata_v5,
     get_list_of_indicators_filtered_by_geo,
@@ -88,6 +89,7 @@ __all__ = [
     "generate_query_code_nwss",
     "generate_query_code_pophive",
     "generate_random_color",
+    "get_covidcast_geo_coverage",
     "get_epiweek",
     "get_grouped_original_data_provider_choices",
     "get_indicators_based_on_geo_epidata",

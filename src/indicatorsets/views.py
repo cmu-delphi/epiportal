@@ -49,6 +49,7 @@ from indicatorsets.utils import (
     preview_nwss_data,
     generate_query_code_pophive,
     generate_query_code_nwss,
+    get_covidcast_geo_coverage,
 )
 
 
@@ -879,6 +880,25 @@ def check_fluview_geo_coverage(request):
         return JsonResponse(
             {"not_covered_indicators": not_covered_indicators}, safe=False
         )
+
+
+def check_covidcast_geo_coverage(request):
+    """Tell the selected-indicators modal which covidcast indicators have data
+    for one geo, and whether v5 or v4 will serve them.
+
+    Expects a JSON body ``{"geo": "geo_type:geo_value", "indicators": [...]}``.
+    """
+    if request.method != "POST":
+        return JsonResponse({"error": "POST required"}, status=405)
+    try:
+        data = json.loads(request.body)
+    except ValueError:
+        return JsonResponse({"error": "Invalid JSON body"}, status=400)
+    geo = data.get("geo") or ""
+    indicators = data.get("indicators") or []
+    if ":" not in geo or not isinstance(indicators, list):
+        return JsonResponse({"error": "Expected geo and indicators"}, status=400)
+    return JsonResponse({"coverage": get_covidcast_geo_coverage(geo, indicators)})
 
 
 def age_group_sort_key(value):

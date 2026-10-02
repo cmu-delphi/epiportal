@@ -39,6 +39,7 @@ from indicatorsets.utils import (
     generate_nwss_export_url,
     generate_pophive_export_url,
     generate_random_color,
+    get_covidcast_geo_coverage,
     get_epiweek,
     get_grouped_original_data_provider_choices,
     get_indicators_based_on_geo_epidata,
@@ -586,6 +587,302 @@ class GeoCoverageUtilsTests(TestCase):
     def test_get_list_of_indicators_filtered_by_geo_handles_errors(self, _mock_get):
         result = get_list_of_indicators_filtered_by_geo("['state:pa']")
         self.assertEqual(result, [])
+
+
+def _json_response(payload):
+    response = MagicMock()
+    response.status_code = 200
+    response.raise_for_status = MagicMock()
+    response.json.return_value = payload
+    return response
+
+
+def _row(signal, value):
+    return {
+        "signal": signal,
+        "geo_type": "county",
+        "geo_value": "42003",
+        "value": value,
+    }
+
+
+def _v4_envelope(rows):
+    return {"result": 1 if rows else -2, "epidata": rows, "message": "success"}
+
+
+NSSP_RSV = {
+    "_endpoint": "covidcast",
+    "data_source": "nssp",
+    "indicator": "smoothed_pct_ed_visits_rsv",
+    "time_type": "week",
+}
+NSSP_COVID = {
+    "_endpoint": "covidcast",
+    "data_source": "nssp",
+    "indicator": "smoothed_pct_ed_visits_covid",
+    "time_type": "week",
+}
+V4_ONLY = {
+    "_endpoint": "covidcast",
+    "data_source": "doctor-visits",
+    "indicator": "smoothed_cli",
+    "time_type": "day",
+}
+
+
+@patch(
+    "indicatorsets.utils.epidata.get_v5_metadata",
+    return_value={
+        "nssp": {
+            "signals": [
+                "smoothed_pct_ed_visits_rsv",
+                "smoothed_pct_ed_visits_covid",
+            ]
+        }
+    },
+)
+class CovidcastGeoCoverageTests(TestCase):
+    def _fake_get(self, v5_rows, v4_rows):
+        """``None`` for either side makes that API's request fail."""
+        calls = []
+
+        def fake_get(url, params=None, **kwargs):
+            calls.append((url, params))
+            rows = v5_rows if url.endswith("viz/") else v4_rows
+            if rows is None:
+                raise requests.RequestException("down")
+            return _json_response(rows if url.endswith("viz/") else _v4_envelope(rows))
+
+        return fake_get, calls
+
+    def _by_signal(self, coverage):
+        return {entry["indicator"]: entry for entry in coverage}
+
+    def _v4_calls(self, calls):
+        return [params for url, params in calls if url.endswith("covidcast/")]
+
+    @patch("indicatorsets.utils.geos.requests.get")
+    def test_signal_with_v5_values_routes_to_v5_without_v4_lookup(
+        self, mock_get, _mock_meta
+    ):
+        fake_get, calls = self._fake_get(
+            [_row("smoothed_pct_ed_visits_rsv", 0.17)], []
+        )
+        mock_get.side_effect = fake_get
+
+        coverage = get_covidcast_geo_coverage("county:42003", [NSSP_RSV])
+
+        self.assertEqual(
+            coverage,
+            [
+                {
+                    "data_source": "nssp",
+                    "indicator": "smoothed_pct_ed_visits_rsv",
+                    "covered": True,
+                    "route": "v5",
+                }
+            ],
+        )
+        self.assertEqual(len(calls), 1)
+        self.assertEqual(calls[0][1]["source"], "nssp")
+        self.assertEqual(calls[0][1]["fill_method"], "source")
+
+    @patch("indicatorsets.utils.geos.requests.get")
+    def test_null_only_v5_rows_fall_back_to_v4_values(self, mock_get, _mock_meta):
+        # v5 nssp for Allegheny County: every row present, every value null.
+        fake_get, calls = self._fake_get(
+            [_row("smoothed_pct_ed_visits_rsv", None)] * 3,
+            [_row("smoothed_pct_ed_visits_rsv", None), _row("smoothed_pct_ed_visits_rsv", 0.2)],
+        )
+        mock_get.side_effect = fake_get
+
+        coverage = get_covidcast_geo_coverage("county:42003", [NSSP_RSV])
+
+        self.assertEqual(coverage[0]["covered"], True)
+        self.assertEqual(coverage[0]["route"], "v4")
+        v4_params = self._v4_calls(calls)[0]
+        self.assertEqual(v4_params["data_source"], "nssp")
+        self.assertEqual(v4_params["time_type"], "week")
+        self.assertEqual(v4_params["time_values"], "*")
+
+    @patch("indicatorsets.utils.geos.requests.get")
+    def test_null_only_rows_on_both_apis_are_not_covered(self, mock_get, _mock_meta):
+        fake_get, _calls = self._fake_get(
+            [_row("smoothed_pct_ed_visits_rsv", None)],
+            [_row("smoothed_pct_ed_visits_rsv", None), _row("smoothed_pct_ed_visits_rsv", "")],
+        )
+        mock_get.side_effect = fake_get
+
+        coverage = get_covidcast_geo_coverage("county:42003", [NSSP_RSV])
+
+        self.assertEqual(coverage[0]["covered"], False)
+        self.assertIsNone(coverage[0]["route"])
+
+    @patch("indicatorsets.utils.geos.requests.get")
+    def test_null_only_v4_rows_are_not_covered_for_unmigrated_source(
+        self, mock_get, _mock_meta
+    ):
+        fake_get, calls = self._fake_get([], [_row("smoothed_cli", None)])
+        mock_get.side_effect = fake_get
+
+        coverage = get_covidcast_geo_coverage("state:pa", [V4_ONLY])
+
+        self.assertEqual(coverage[0]["covered"], False)
+        self.assertFalse(any(url.endswith("viz/") for url, _params in calls))
+
+    @patch("indicatorsets.utils.geos.requests.get")
+    def test_signal_without_rows_on_either_api_is_not_covered(
+        self, mock_get, _mock_meta
+    ):
+        fake_get, _calls = self._fake_get([], [])
+        mock_get.side_effect = fake_get
+
+        coverage = get_covidcast_geo_coverage("county:42003", [NSSP_RSV])
+
+        self.assertEqual(coverage[0]["covered"], False)
+
+    @patch("indicatorsets.utils.geos.requests.get")
+    def test_signals_of_one_v5_source_share_one_probe_and_route_separately(
+        self, mock_get, _mock_meta
+    ):
+        fake_get, calls = self._fake_get(
+            [
+                _row("smoothed_pct_ed_visits_covid", 1.2),
+                _row("smoothed_pct_ed_visits_rsv", None),
+            ],
+            [_row("smoothed_pct_ed_visits_rsv", 0.3)],
+        )
+        mock_get.side_effect = fake_get
+
+        coverage = self._by_signal(
+            get_covidcast_geo_coverage("county:42003", [NSSP_RSV, NSSP_COVID])
+        )
+
+        self.assertEqual(coverage["smoothed_pct_ed_visits_covid"]["route"], "v5")
+        self.assertEqual(coverage["smoothed_pct_ed_visits_rsv"]["route"], "v4")
+        viz_calls = [params for url, params in calls if url.endswith("viz/")]
+        self.assertEqual(len(viz_calls), 1)
+        self.assertEqual(
+            set(viz_calls[0]["signal"].split(",")),
+            {"smoothed_pct_ed_visits_rsv", "smoothed_pct_ed_visits_covid"},
+        )
+        # Only the signal v5 could not serve is asked of v4.
+        self.assertEqual(
+            self._v4_calls(calls)[0]["signals"], "smoothed_pct_ed_visits_rsv"
+        )
+
+    @patch("indicatorsets.utils.geos.requests.get")
+    def test_v4_requests_are_split_by_data_source_and_time_type(
+        self, mock_get, _mock_meta
+    ):
+        weekly = {**V4_ONLY, "indicator": "smoothed_cli_weekly", "time_type": "week"}
+        fake_get, calls = self._fake_get(
+            [], [_row("smoothed_cli", 1.0), _row("smoothed_cli_weekly", 2.0)]
+        )
+        mock_get.side_effect = fake_get
+
+        coverage = get_covidcast_geo_coverage("state:PA", [V4_ONLY, weekly])
+
+        self.assertTrue(all(entry["route"] == "v4" for entry in coverage))
+        v4_calls = self._v4_calls(calls)
+        self.assertEqual(
+            sorted((p["time_type"], p["signals"]) for p in v4_calls),
+            [("day", "smoothed_cli"), ("week", "smoothed_cli_weekly")],
+        )
+        self.assertTrue(all(p["geo_values"] == "pa" for p in v4_calls))
+
+    @patch("indicatorsets.utils.geos.requests.get")
+    def test_failed_v4_lookup_reports_unknown_not_uncovered(
+        self, mock_get, _mock_meta
+    ):
+        fake_get, _calls = self._fake_get([], None)
+        mock_get.side_effect = fake_get
+
+        coverage = get_covidcast_geo_coverage("state:pa", [V4_ONLY])
+
+        self.assertIsNone(coverage[0]["covered"])
+        self.assertIsNone(coverage[0]["route"])
+
+    @patch("indicatorsets.utils.geos.requests.get")
+    def test_failed_v5_lookup_without_v4_values_reports_unknown(
+        self, mock_get, _mock_meta
+    ):
+        fake_get, _calls = self._fake_get(None, [])
+        mock_get.side_effect = fake_get
+
+        coverage = get_covidcast_geo_coverage("county:42003", [NSSP_RSV])
+
+        self.assertIsNone(coverage[0]["covered"])
+
+    @patch("indicatorsets.utils.geos.requests.get")
+    def test_failed_v5_lookup_still_finds_v4_values(self, mock_get, _mock_meta):
+        fake_get, _calls = self._fake_get(
+            None, [_row("smoothed_pct_ed_visits_rsv", 0.2)]
+        )
+        mock_get.side_effect = fake_get
+
+        coverage = get_covidcast_geo_coverage("county:42003", [NSSP_RSV])
+
+        self.assertEqual(coverage[0]["route"], "v4")
+
+    @patch("indicatorsets.utils.geos.requests.get")
+    def test_v4_error_envelope_reports_unknown(self, mock_get, _mock_meta):
+        mock_get.return_value = _json_response(
+            {"result": -1, "epidata": [], "message": "bad request"}
+        )
+
+        coverage = get_covidcast_geo_coverage("state:pa", [V4_ONLY])
+
+        self.assertIsNone(coverage[0]["covered"])
+
+    @patch("indicatorsets.utils.geos.requests.get")
+    def test_missing_time_type_reports_unknown_without_v4_lookup(
+        self, mock_get, _mock_meta
+    ):
+        indicator = {key: value for key, value in V4_ONLY.items() if key != "time_type"}
+
+        coverage = get_covidcast_geo_coverage("state:pa", [indicator])
+
+        self.assertIsNone(coverage[0]["covered"])
+        mock_get.assert_not_called()
+
+    @patch("indicatorsets.utils.geos.requests.get")
+    def test_non_covidcast_indicators_are_ignored(self, mock_get, _mock_meta):
+        coverage = get_covidcast_geo_coverage(
+            "state:pa",
+            [{"_endpoint": "fluview", "data_source": "fluview", "indicator": "wili"}],
+        )
+
+        self.assertEqual(coverage, [])
+        mock_get.assert_not_called()
+
+
+class CheckCovidcastGeoCoverageViewTests(TestCase):
+    @patch("indicatorsets.views.get_covidcast_geo_coverage")
+    def test_post_returns_coverage(self, mock_coverage):
+        mock_coverage.return_value = [{"indicator": "sig", "covered": True}]
+
+        response = self.client.post(
+            reverse("check_covidcast_geo_coverage"),
+            data=json.dumps({"geo": "county:42003", "indicators": [NSSP_RSV]}),
+            content_type="application/json",
+        )
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(
+            response.json(), {"coverage": [{"indicator": "sig", "covered": True}]}
+        )
+        mock_coverage.assert_called_once_with("county:42003", [NSSP_RSV])
+
+    def test_get_is_rejected(self):
+        response = self.client.get(reverse("check_covidcast_geo_coverage"))
+        self.assertEqual(response.status_code, 405)
+
+    def test_invalid_body_is_rejected(self):
+        url = reverse("check_covidcast_geo_coverage")
+        for body in ("not json", json.dumps({"geo": "pa", "indicators": []})):
+            response = self.client.post(url, data=body, content_type="application/json")
+            self.assertEqual(response.status_code, 400)
 
 
 class GetPreviewDataTests(TestCase):
