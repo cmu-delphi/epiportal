@@ -97,6 +97,7 @@ const appendAlert = (message, type) => {
     wrapper
         .getElementsByClassName("btn-close")[0]
         .addEventListener("click", () => hideAlert(alertId));
+    return wrapper;
 };
 
 var currentMode = "epivis";
@@ -115,7 +116,7 @@ function isV5Indicator(indicator) {
 }
 
 function getFillMethod() {
-    return $("#fillMethod").val() || "source";
+    return $("#fillMethod").val() || "";
 }
 
 /* Plotting never offers the control. EpiVis picks v4 vs v5 itself and its
@@ -127,8 +128,11 @@ function getFillMethod() {
  * See https://github.com/cmu-delphi/www-epivis for the missing param. */
 function hideFillMethod() {
     // Reset as well as hide: the control keeps its value across mode changes,
-    // so a hidden one would otherwise still be read into the payload.
-    $("#fillMethod").val("source");
+    // so a hidden one would otherwise still be read into the payload. Trigger
+    // change so covidcast coverage is rechecked for the reset value.
+    if ($("#fillMethod").val() !== "") {
+        $("#fillMethod").val("").trigger("change");
+    }
     $("#fillMethodDiv").hide();
 }
 
@@ -201,39 +205,75 @@ function showNotCoveredGeoWarningMessage(notCoveredIndicators, geoValue) {
             warningMessage += `Indicator "${indicator.display_name}" is not available for Location "${geoValue.text}" for the time period from "${startDate}" to "${endDate}" <br>`;
         }
     });
-    appendAlert(warningMessage, "warning");
+    return appendAlert(warningMessage, "warning");
 }
 
+/* Bumped whenever the fill method changes, so a coverage check still in
+ * flight for the old one is ignored rather than raising a stale warning. */
+let coverageCheckGeneration = 0;
+
+/* Asks the server, which routes each covidcast indicator to v5 or v4 the
+ * same way Export does, whether geoValue has data for it. Only real values
+ * count: an indicator with nothing but nulls on both APIs is not covered.
+ * The answer depends on the fill method, since Export only falls back to v4
+ * for "source". covered === null means the check itself failed, so no warning
+ * is shown. Resolves to null when the fill method changed mid-check. */
 async function checkGeoCoverage(geoValue) {
+    const generation = coverageCheckGeneration;
     const notCoveredIndicators = [];
+    const covidcastIndicators = checkedIndicatorMembers.filter(
+        (indicator) => indicator["_endpoint"] === "covidcast"
+    );
+    if (covidcastIndicators.length === 0) {
+        return notCoveredIndicators;
+    }
 
     try {
         const result = await $.ajax({
-            url: "epidata/covidcast/geo_coverage/",
-            type: "GET",
-            data: {
+            url: "check_covidcast_geo_coverage/",
+            type: "POST",
+            dataType: "json",
+            contentType: "application/json",
+            headers: { "X-CSRFToken": Cookies.get("csrftoken") },
+            data: JSON.stringify({
                 geo: geoValue,
-            },
+                fill_method: getFillMethod(),
+                indicators: covidcastIndicators.map((indicator) => ({
+                    _endpoint: indicator["_endpoint"],
+                    data_source: indicator.data_source,
+                    indicator: indicator.indicator,
+                    time_type: indicator.time_type,
+                })),
+            }),
         });
 
-        checkedIndicatorMembers
-            .filter((indicator) => indicator["_endpoint"] === "covidcast")
-            .forEach((indicator) => {
-                const covered = result["epidata"].some(
-                    (e) =>
-                        e.source === indicator.data_source &&
-                        e.signal === indicator.indicator
-                );
-                if (!covered) {
-                    if (!indicator["notCoveredGeos"]) {
-                        indicator["notCoveredGeos"] = [];
-                    }
-                    if (!indicator["notCoveredGeos"].includes(geoValue)) {
-                        indicator["notCoveredGeos"].push(geoValue);
-                    }
-                    notCoveredIndicators.push(indicator);
+        if (generation !== coverageCheckGeneration) {
+            return null;
+        }
+
+        covidcastIndicators.forEach((indicator) => {
+            const entry = result["coverage"].find(
+                (e) =>
+                    e.data_source === indicator.data_source &&
+                    e.indicator === indicator.indicator
+            );
+            if (!entry || entry.covered !== false) {
+                // Covered now, perhaps not under the previous fill method.
+                if (indicator["notCoveredGeos"]) {
+                    indicator["notCoveredGeos"] = indicator["notCoveredGeos"].filter(
+                        (geo) => geo !== geoValue
+                    );
                 }
-            });
+                return;
+            }
+            if (!indicator["notCoveredGeos"]) {
+                indicator["notCoveredGeos"] = [];
+            }
+            if (!indicator["notCoveredGeos"].includes(geoValue)) {
+                indicator["notCoveredGeos"].push(geoValue);
+            }
+            notCoveredIndicators.push(indicator);
+        });
 
         return notCoveredIndicators;
     } catch (error) {
@@ -284,13 +324,29 @@ async function getAvailableGeos(indicators) {
     }
 }
 
-$("#geographic_value").on("select2:select", function (e) {
-    var geo = e.params.data;
+/* Covidcast coverage warnings are tagged so a fill method change can swap
+ * them out without touching the other alerts in the modal. */
+function warnIfCovidcastGeoNotCovered(geo) {
     checkGeoCoverage(geo.id).then((notCoveredIndicators) => {
-        if (notCoveredIndicators.length > 0) {
-            showNotCoveredGeoWarningMessage(notCoveredIndicators, geo);
+        if (notCoveredIndicators && notCoveredIndicators.length > 0) {
+            showNotCoveredGeoWarningMessage(notCoveredIndicators, geo).classList.add(
+                "covidcast-coverage-alert"
+            );
         }
     });
+}
+
+$("#geographic_value").on("select2:select", function (e) {
+    warnIfCovidcastGeoNotCovered(e.params.data);
+});
+
+$("#fillMethod").on("change", function () {
+    coverageCheckGeneration += 1;
+    $("#warning-alert .covidcast-coverage-alert").remove();
+    if (!$("#geographic_value").hasClass("select2-hidden-accessible")) {
+        return;
+    }
+    $("#geographic_value").select2("data").forEach(warnIfCovidcastGeoNotCovered);
 });
 
 $("#otherEndpointLocations").on("select2:select", "#fluviewLocations", function (e) {
@@ -455,13 +511,7 @@ $("#showSelectedIndicatorsButton").click(async function () {
     } else {
         $("#geographic_value").prop("disabled", false);
     }
-    $('#geographic_value').select2("data").forEach(geo => {
-        checkGeoCoverage(geo.id).then((notCoveredIndicators) => {
-            if (notCoveredIndicators.length > 0) {
-                showNotCoveredGeoWarningMessage(notCoveredIndicators, geo);
-            }
-        })
-    });
+    $('#geographic_value').select2("data").forEach(warnIfCovidcastGeoNotCovered);
 });
 
 

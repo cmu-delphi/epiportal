@@ -1,4 +1,6 @@
 from django.db import models
+from django.utils import timezone
+from django.utils.html import strip_tags
 
 USED_IN_CHOICES = (
     ("indicators", "Indicators"),
@@ -185,3 +187,78 @@ class GeographyUnit(models.Model):
 
     def __str__(self):
         return self.display_name if self.display_name else self.name
+
+
+BANNER_STYLE_CHOICES = (
+    ("info", "Info"),
+    ("warning", "Warning"),
+    ("danger", "Danger"),
+)
+
+
+class BannerQuerySet(models.QuerySet):
+    def current(self):
+        """Active banners inside their date window, newest first.
+
+        An empty ``starts_at`` means "already started" and an empty
+        ``ends_at`` means "until switched off".
+        """
+        now = timezone.now()
+        return (
+            self.filter(is_active=True)
+            .filter(models.Q(starts_at__isnull=True) | models.Q(starts_at__lte=now))
+            .filter(models.Q(ends_at__isnull=True) | models.Q(ends_at__gt=now))
+            .order_by("-created_at", "-pk")
+        )
+
+
+class Banner(models.Model):
+    """A site-wide notice shown above the page content, e.g. the v5 migration."""
+
+    message: models.TextField = models.TextField(
+        verbose_name="Message",
+        help_text="Shown as written, HTML included, so links can be added with "
+        '<code>&lt;a href="..."&gt;</code>.',
+    )
+    style: models.CharField = models.CharField(
+        verbose_name="Style",
+        max_length=16,
+        choices=BANNER_STYLE_CHOICES,
+        default="info",
+    )
+    is_active: models.BooleanField = models.BooleanField(
+        verbose_name="Active", default=True
+    )
+    starts_at: models.DateTimeField = models.DateTimeField(
+        verbose_name="Starts at",
+        blank=True,
+        null=True,
+        help_text="Leave empty to show it straight away.",
+    )
+    ends_at: models.DateTimeField = models.DateTimeField(
+        verbose_name="Ends at",
+        blank=True,
+        null=True,
+        help_text="Leave empty to show it until it is switched off.",
+    )
+    created_at: models.DateTimeField = models.DateTimeField(auto_now_add=True)
+    updated_at: models.DateTimeField = models.DateTimeField(auto_now=True)
+
+    objects = BannerQuerySet.as_manager()
+
+    class Meta:
+        verbose_name = "Banner"
+        verbose_name_plural = "Banners"
+        ordering = ["-created_at"]
+
+    def __str__(self):
+        return strip_tags(self.message)[:80]
+
+    @property
+    def dismiss_key(self):
+        """The key a visitor's browser stores when they close this banner.
+
+        It includes the last edit time, so an edited banner reappears for
+        everyone who closed an earlier version.
+        """
+        return f"banner-{self.pk}-{int(self.updated_at.timestamp() * 1_000_000)}"

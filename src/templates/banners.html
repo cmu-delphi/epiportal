@@ -1,0 +1,49 @@
+{% comment %}
+Site-wide banners (base.Banner, managed in admin). Closing one is remembered
+in the visitor's browser under the banner's dismiss_key, which changes when
+the banner is edited, so an edited banner shows again.
+
+Optional ``banner_container_class`` lines the text up with a page whose
+content sits in a centred container, e.g. "container".
+{% endcomment %}
+{% if site_banners %}
+<div class="site-banners" style="flex-shrink: 0;">
+    {% for banner in site_banners %}
+    <div class="site-banner alert alert-{{ banner.style }} mb-0 rounded-0 border-0 border-bottom py-2 {% if not banner_container_class %}px-4{% endif %}"
+         role="status"
+         data-banner-key="{{ banner.dismiss_key }}">
+        <div class="d-flex align-items-center {{ banner_container_class|default:'' }}">
+            <div class="flex-grow-1">{{ banner.message|safe }}</div>
+            <button type="button" class="btn-close ms-3" aria-label="Dismiss this notice" data-banner-dismiss></button>
+        </div>
+    </div>
+    {% endfor %}
+</div>
+<script>
+    // Runs straight after the banners so dismissed ones go before first paint.
+    (function () {
+        function isDismissed(key) {
+            try {
+                return localStorage.getItem(key) === "1";
+            } catch (e) {
+                return false;
+            }
+        }
+        document.querySelectorAll(".site-banner[data-banner-key]").forEach(function (banner) {
+            var key = banner.getAttribute("data-banner-key");
+            if (isDismissed(key)) {
+                banner.remove();
+                return;
+            }
+            banner.querySelector("[data-banner-dismiss]").addEventListener("click", function () {
+                try {
+                    localStorage.setItem(key, "1");
+                } catch (e) {
+                    // Storage blocked: close it for this page view only.
+                }
+                banner.remove();
+            });
+        });
+    })();
+</script>
+{% endif %}

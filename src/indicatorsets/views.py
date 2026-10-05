@@ -21,6 +21,7 @@ from indicatorsets.forms import IndicatorSetFilterForm
 from indicatorsets.models import ColumnDescription, FilterDescription, IndicatorSet
 from indicatorsets.utils.caching import safe_cache_get, safe_cache_set
 from indicatorsets.utils.constants import MIGRATED_DATASOURCES, V5_NATIVE_ENDPOINTS
+from indicatorsets.utils.epidata import epidata_auth
 from indicatorsets.utils.sources import EPIWEEK_SOURCES
 from indicatorsets.utils import (
     InvalidApiKeyError,
@@ -49,6 +50,7 @@ from indicatorsets.utils import (
     preview_nwss_data,
     generate_query_code_pophive,
     generate_query_code_nwss,
+    get_covidcast_geo_coverage,
 )
 
 
@@ -716,7 +718,7 @@ def get_available_geos(request):
                 response = requests.get(
                     f"{settings.EPIDATA_URL}covidcast/geo_indicator_coverage",
                     params={"data_source": data_source, "signals": indicators_str},
-                    auth=("epidata", settings.EPIDATA_API_KEY),
+                    auth=epidata_auth(),
                     timeout=(5, 30),
                 )
                 response.raise_for_status()
@@ -824,13 +826,15 @@ def check_fluview_geo_coverage(request):
         params = {
             "regions": geo_value,
             "epiweeks": f"{start_date}-{end_date}",
-            "api_key": settings.EPIDATA_API_KEY,
         }
 
         if fluview_indicators:
             try:
                 response = requests.get(
-                    f"{settings.EPIDATA_URL}fluview", params=params, timeout=(5, 30)
+                    f"{settings.EPIDATA_URL}fluview",
+                    params=params,
+                    auth=epidata_auth(),
+                    timeout=(5, 30),
                 )
                 response.raise_for_status()
             except requests.RequestException:
@@ -850,6 +854,7 @@ def check_fluview_geo_coverage(request):
                 response = requests.get(
                     f"{settings.EPIDATA_URL}fluview_clinical",
                     params=params,
+                    auth=epidata_auth(),
                     timeout=(5, 30),
                 )
                 response.raise_for_status()
@@ -879,6 +884,34 @@ def check_fluview_geo_coverage(request):
         return JsonResponse(
             {"not_covered_indicators": not_covered_indicators}, safe=False
         )
+
+
+def check_covidcast_geo_coverage(request):
+    """Tell the selected-indicators modal which covidcast indicators have data
+    for one geo, and whether v5 or v4 will serve them.
+
+    Expects a JSON body ``{"geo": "geo_type:geo_value", "indicators": [...]}``,
+    plus an optional ``fill_method``: exports only fall back to v4 for the
+    ``source`` one, so the answer depends on it.
+    """
+    if request.method != "POST":
+        return JsonResponse({"error": "POST required"}, status=405)
+    try:
+        data = json.loads(request.body)
+    except ValueError:
+        return JsonResponse({"error": "Invalid JSON body"}, status=400)
+    geo = data.get("geo") or ""
+    indicators = data.get("indicators") or []
+    if ":" not in geo or not isinstance(indicators, list):
+        return JsonResponse({"error": "Expected geo and indicators"}, status=400)
+    fill_method = normalize_fill_method(data.get("fill_method"))
+    return JsonResponse(
+        {
+            "coverage": get_covidcast_geo_coverage(
+                geo, indicators, fill_method=fill_method
+            )
+        }
+    )
 
 
 def age_group_sort_key(value):

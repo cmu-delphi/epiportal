@@ -4,6 +4,7 @@ from django.urls.resolvers import URLPattern
 from indicatorsets.proxy_views import download_viz_export
 from indicatorsets.views import (
     IndicatorSetListView,
+    check_covidcast_geo_coverage,
     check_fluview_geo_coverage,
     create_query_code,
     epivis,
@@ -27,6 +28,11 @@ urlpatterns: list[URLPattern] = [
         "get_related_indicators/",
         get_related_indicators_json,
         name="get_related_indicators",
+    ),
+    path(
+        "check_covidcast_geo_coverage/",
+        check_covidcast_geo_coverage,
+        name="check_covidcast_geo_coverage",
     ),
     path(
         "check_fluview_geo_coverage/",

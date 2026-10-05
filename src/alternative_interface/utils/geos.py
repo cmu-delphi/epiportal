@@ -6,6 +6,7 @@ from delphi_utils import get_structured_logger
 
 from base.models import GeographyUnit
 from indicatorsets.utils import group_by_property
+from indicatorsets.utils.epidata import epidata_auth
 
 logger = get_structured_logger("alternative_interface.utils")
 
@@ -21,7 +22,7 @@ def get_available_geos(indicators):
                 response = requests.get(
                     f"{settings.EPIDATA_URL}covidcast/geo_indicator_coverage",
                     params={"data_source": data_source, "signals": indicators_str},
-                    auth=("epidata", settings.EPIDATA_API_KEY),
+                    auth=epidata_auth(),
                     timeout=(5, 30),
                 )
                 response.raise_for_status()

@@ -28,7 +28,7 @@ MIGRATED_DATASOURCES = {
 # reported series were filled. Users pick one for the whole submission rather
 # than per indicator, since a single value keeps mixed selections comparable.
 FILL_METHODS = ("source", "fill_ave", "fill_zero")
-DEFAULT_FILL_METHOD = "source"
+DEFAULT_FILL_METHOD = ""
 
 # Endpoints that are v5-native: they have no v4 equivalent to fall back to, so
 # they are not in MIGRATED_DATASOURCES yet every request for them is a v5 one.
