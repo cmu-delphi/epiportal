@@ -66,6 +66,13 @@
     transition: opacity 0.3s ease;
 }
 
+/* Keep the DataTables layout rows' margins inside their wrapper instead of
+   collapsing through it, so fitTableToContainer() sees the wrapper's full
+   height when sizing the table body to fit. */
+.table-container > .dt-container {
+    display: flow-root;
+}
+
 /* lds-roller CSS from loading.io */
 .lds-roller {
     display: inline-block;

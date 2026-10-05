@@ -6,6 +6,7 @@ from delphi_utils import get_structured_logger
 
 from alternative_interface.helper import COVIDCAST_FLUVIEW_LOCATIONS_MAPPING
 from indicatorsets.utils import get_epiweek
+from indicatorsets.utils.epidata import epidata_auth
 
 logger = get_structured_logger("alternative_interface.utils")
 
@@ -23,11 +24,13 @@ def get_covidcast_data(indicator, start_date, end_date, geo, api_key):
         "signal": indicator["name"],
         "geo_type": geo_type,
         "geo_values": geo_value.lower(),
-        "api_key": api_key if api_key else settings.EPIDATA_API_KEY,
     }
     try:
         response = requests.get(
-            f"{settings.EPIDATA_URL}covidcast", params=params, timeout=(5, 30)
+            f"{settings.EPIDATA_URL}covidcast",
+            params=params,
+            auth=epidata_auth(api_key),
+            timeout=(5, 30),
         )
         response.raise_for_status()
         response_data = response.json()
@@ -54,12 +57,12 @@ def get_fluview_data(indicator, geo, start_date, end_date, api_key):
     params = {
         "regions": region,
         "epiweeks": time_values,
-        "api_key": api_key if api_key else settings.EPIDATA_API_KEY,
     }
     try:
         response = requests.get(
             f"{settings.EPIDATA_URL}{indicator['data_source']}",
             params=params,
+            auth=epidata_auth(api_key),
             timeout=(5, 30),
         )
         response.raise_for_status()

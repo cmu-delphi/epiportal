@@ -8,8 +8,8 @@ from delphi_utils import get_structured_logger
 
 from indicatorsets.utils.caching import safe_cache_get, safe_cache_set
 from indicatorsets.utils.constants import DEFAULT_FILL_METHOD
-from indicatorsets.utils.epidata import group_v5_indicators_by_source
-from indicatorsets.utils.helpers import list_to_dict
+from indicatorsets.utils.epidata import epidata_auth, group_v5_indicators_by_source
+from indicatorsets.utils.helpers import is_filled_fill_method, list_to_dict
 
 logger = get_structured_logger("indicatorsets.utils")
 
@@ -18,12 +18,11 @@ def get_indicators_based_on_geo_epidata(geos):
     indicators = []
     for geo_type, geo_values in geos.items():
         url = f"{settings.EPIDATA_URL}covidcast/geo_coverage"
-        params = {
-            "geo": f"{geo_type}:{','.join(geo_values)}",
-            "api_key": settings.EPIDATA_API_KEY,
-        }
+        params = {"geo": f"{geo_type}:{','.join(geo_values)}"}
         try:
-            response = requests.get(url, params=params, timeout=(5, 30))
+            response = requests.get(
+                url, params=params, auth=epidata_auth(), timeout=(5, 30)
+            )
             response.raise_for_status()
             indicators.extend(response.json()["epidata"])
         except requests.RequestException:
@@ -49,7 +48,7 @@ def get_indicators_based_on_geo_epidata_v5(geos):
     return indicators
 
 
-def _fetch_rows(url, params):
+def _fetch_rows(url, params, auth=None):
     """Return the rows an Epidata endpoint has for ``params``, or ``None`` on error.
 
     Unlike ``get_epidata_rows``, a failure is ``None`` rather than ``[]``, so
@@ -59,7 +58,7 @@ def _fetch_rows(url, params):
     """
     try:
         response = requests.get(
-            url, params={**params, "format": "json"}, timeout=(5, 30)
+            url, params={**params, "format": "json"}, auth=auth, timeout=(5, 30)
         )
         response.raise_for_status()
         data = response.json()
@@ -86,26 +85,26 @@ def _signals_with_values(rows):
     return {row.get("signal") for row in rows if row.get("value") not in (None, "")}
 
 
-def _get_v5_signals_with_values(v5_source, indicators, geo_type, geo_value):
+def _get_v5_signals_with_values(
+    v5_source, indicators, geo_type, geo_value, fill_method
+):
     """Return the signals of ``indicators`` v5 has a real value for, or ``None``.
 
     v5's ``metadata/geo_signals`` cannot answer this: it lists a signal for a
     geo whenever rows exist, even when every value is null (nssp for Allegheny
-    County). So this reads ``/viz/`` the way exports do. ``fill_method`` stays
-    at the source default, since a filled series would invent values for a geo
-    that has none.
+    County). So this reads ``/viz/`` the way exports do, with the same
+    ``fill_method``, since v5 may hold rows for one fill_method and not another.
     """
-    rows = _fetch_rows(
-        f"{settings.EPIDATA_V5_URL}viz/",
-        {
-            "source": v5_source,
-            "signal": ",".join(indicator["indicator"] for indicator in indicators),
-            "geo_type": geo_type,
-            "geo_value": geo_value,
-            "fill_method": DEFAULT_FILL_METHOD,
-            "token": settings.EPIDATA_API_KEY,
-        },
-    )
+    params = {
+        "source": v5_source,
+        "signal": ",".join(indicator["indicator"] for indicator in indicators),
+        "geo_type": geo_type,
+        "geo_value": geo_value,
+        "token": settings.EPIDATA_API_KEY,
+    }
+    if fill_method:
+        params["fill_method"] = fill_method
+    rows = _fetch_rows(f"{settings.EPIDATA_V5_URL}viz/", params)
     return None if rows is None else _signals_with_values(rows)
 
 
@@ -126,20 +125,22 @@ def _get_v4_signals_with_values(data_source, time_type, indicators, geo_type, ge
             "geo_type": geo_type,
             "geo_values": geo_value,
             "time_values": "*",
-            "api_key": settings.EPIDATA_API_KEY,
         },
+        auth=epidata_auth(),
     )
     return None if rows is None else _signals_with_values(rows)
 
 
-def get_covidcast_geo_coverage(geo, indicators):
+def get_covidcast_geo_coverage(geo, indicators, fill_method=DEFAULT_FILL_METHOD):
     """Report, per covidcast indicator, whether ``geo`` has data and from where.
 
     Mirrors the routing exports use, so the modal's warning agrees with what a
     submission will actually do: a migrated signal is served from v5 when v5
     has real values for the geo, and from v4 otherwise. "Has data" means at
     least one non-null value on either API -- a signal that exists for the geo
-    with only null values is not covered.
+    with only null values is not covered. For a filled ``fill_method`` a
+    migrated signal never falls back to v4, which cannot fill, so only v5's
+    values count for it.
 
     ``geo`` is a ``"geo_type:geo_value"`` id. Returns one dict per covidcast
     indicator with its ``data_source`` and ``indicator`` plus ``covered``
@@ -159,6 +160,7 @@ def get_covidcast_geo_coverage(geo, indicators):
     def key(indicator):
         return indicator["data_source"], indicator["indicator"]
 
+    migrated = set()
     on_v5 = set()
     # Indicators whose v5 check failed: v5 may have values even if v4 has none.
     v5_unknown = set()
@@ -166,9 +168,10 @@ def get_covidcast_geo_coverage(geo, indicators):
         covidcast_indicators
     ).items():
         signals = _get_v5_signals_with_values(
-            v5_source, source_indicators, geo_type, geo_value
+            v5_source, source_indicators, geo_type, geo_value, fill_method
         )
         for indicator in source_indicators:
+            migrated.add(key(indicator))
             if signals is None:
                 v5_unknown.add(key(indicator))
             elif indicator["indicator"] in signals:
@@ -179,6 +182,8 @@ def get_covidcast_geo_coverage(geo, indicators):
     v4_groups = {}
     for indicator in covidcast_indicators:
         if key(indicator) in on_v5:
+            continue
+        if key(indicator) in migrated and is_filled_fill_method(fill_method):
             continue
         if not indicator.get("time_type"):
             v4_unknown.add(key(indicator))

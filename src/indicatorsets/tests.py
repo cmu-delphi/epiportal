@@ -685,7 +685,7 @@ class CovidcastGeoCoverageTests(TestCase):
         )
         self.assertEqual(len(calls), 1)
         self.assertEqual(calls[0][1]["source"], "nssp")
-        self.assertEqual(calls[0][1]["fill_method"], "source")
+        self.assertNotIn("fill_method", calls[0][1])
 
     @patch("indicatorsets.utils.geos.requests.get")
     def test_null_only_v5_rows_fall_back_to_v4_values(self, mock_get, _mock_meta):
@@ -857,6 +857,86 @@ class CovidcastGeoCoverageTests(TestCase):
         mock_get.assert_not_called()
 
 
+    @patch("indicatorsets.utils.geos.requests.get")
+    def test_filled_fill_method_reaches_the_v5_probe(self, mock_get, _mock_meta):
+        fake_get, calls = self._fake_get(
+            [_row("smoothed_pct_ed_visits_rsv", 0.17)], []
+        )
+        mock_get.side_effect = fake_get
+
+        coverage = get_covidcast_geo_coverage(
+            "county:42003", [NSSP_RSV], fill_method="fill_ave"
+        )
+
+        self.assertEqual(coverage[0]["route"], "v5")
+        self.assertEqual(calls[0][1]["fill_method"], "fill_ave")
+
+    @patch("indicatorsets.utils.geos.requests.get")
+    def test_filled_fill_method_does_not_count_v4_values_for_a_migrated_signal(
+        self, mock_get, _mock_meta
+    ):
+        # Exports skip v4 for a filled fill_method, since v4 cannot fill, so
+        # the modal must not call the geo covered on v4's strength either.
+        fake_get, calls = self._fake_get(
+            [], [_row("smoothed_pct_ed_visits_rsv", 0.2)]
+        )
+        mock_get.side_effect = fake_get
+
+        coverage = get_covidcast_geo_coverage(
+            "county:42003", [NSSP_RSV], fill_method="fill_ave"
+        )
+
+        self.assertEqual(coverage[0]["covered"], False)
+        self.assertIsNone(coverage[0]["route"])
+        self.assertEqual(self._v4_calls(calls), [])
+
+    @patch("indicatorsets.utils.geos.requests.get")
+    def test_filled_fill_method_with_failed_v5_lookup_reports_unknown(
+        self, mock_get, _mock_meta
+    ):
+        fake_get, calls = self._fake_get(
+            None, [_row("smoothed_pct_ed_visits_rsv", 0.2)]
+        )
+        mock_get.side_effect = fake_get
+
+        coverage = get_covidcast_geo_coverage(
+            "county:42003", [NSSP_RSV], fill_method="fill_zero"
+        )
+
+        self.assertIsNone(coverage[0]["covered"])
+        self.assertEqual(self._v4_calls(calls), [])
+
+    @patch("indicatorsets.utils.geos.requests.get")
+    def test_filled_fill_method_still_checks_v4_only_indicators_on_v4(
+        self, mock_get, _mock_meta
+    ):
+        # An unmigrated source exports from v4 whatever the fill_method.
+        fake_get, calls = self._fake_get([], [_row("smoothed_cli", 1.0)])
+        mock_get.side_effect = fake_get
+
+        coverage = get_covidcast_geo_coverage(
+            "county:42003", [V4_ONLY], fill_method="fill_ave"
+        )
+
+        self.assertEqual(coverage[0]["covered"], True)
+        self.assertEqual(coverage[0]["route"], "v4")
+
+
+    @patch("indicatorsets.utils.geos.requests.get")
+    def test_explicit_source_still_counts_v4_values(self, mock_get, _mock_meta):
+        fake_get, calls = self._fake_get(
+            [], [_row("smoothed_pct_ed_visits_rsv", 0.2)]
+        )
+        mock_get.side_effect = fake_get
+
+        coverage = get_covidcast_geo_coverage(
+            "county:42003", [NSSP_RSV], fill_method="source"
+        )
+
+        self.assertEqual(coverage[0]["route"], "v4")
+        self.assertEqual(calls[0][1]["fill_method"], "source")
+
+
 class CheckCovidcastGeoCoverageViewTests(TestCase):
     @patch("indicatorsets.views.get_covidcast_geo_coverage")
     def test_post_returns_coverage(self, mock_coverage):
@@ -872,7 +952,37 @@ class CheckCovidcastGeoCoverageViewTests(TestCase):
         self.assertEqual(
             response.json(), {"coverage": [{"indicator": "sig", "covered": True}]}
         )
-        mock_coverage.assert_called_once_with("county:42003", [NSSP_RSV])
+        mock_coverage.assert_called_once_with(
+            "county:42003", [NSSP_RSV], fill_method=""
+        )
+
+    @patch("indicatorsets.views.get_covidcast_geo_coverage", return_value=[])
+    def test_post_passes_the_chosen_fill_method(self, mock_coverage):
+        self.client.post(
+            reverse("check_covidcast_geo_coverage"),
+            data=json.dumps(
+                {"geo": "county:42003", "indicators": [NSSP_RSV], "fill_method": "fill_ave"}
+            ),
+            content_type="application/json",
+        )
+
+        mock_coverage.assert_called_once_with(
+            "county:42003", [NSSP_RSV], fill_method="fill_ave"
+        )
+
+    @patch("indicatorsets.views.get_covidcast_geo_coverage", return_value=[])
+    def test_unrecognised_fill_method_means_none(self, mock_coverage):
+        self.client.post(
+            reverse("check_covidcast_geo_coverage"),
+            data=json.dumps(
+                {"geo": "county:42003", "indicators": [NSSP_RSV], "fill_method": "bogus"}
+            ),
+            content_type="application/json",
+        )
+
+        mock_coverage.assert_called_once_with(
+            "county:42003", [NSSP_RSV], fill_method=""
+        )
 
     def test_get_is_rejected(self):
         response = self.client.get(reverse("check_covidcast_geo_coverage"))
@@ -974,7 +1084,7 @@ class PreviewCovidcastDataTests(TestCase):
 
     @patch("indicatorsets.utils.previews.requests.get")
     def test_shows_data_for_available_geo_and_message_for_unavailable_geo(self, mock_get):
-        def fake_get(url, params=None, timeout=None):
+        def fake_get(url, params=None, timeout=None, auth=None):
             response = MagicMock()
             response.status_code = 200
             response.raise_for_status = MagicMock()
@@ -1389,7 +1499,7 @@ class GenerateCovidcastIndicatorsExportUrlTests(TestCase):
 
     @patch("indicatorsets.utils.epidata.requests.get")
     def test_mixed_indicators_only_skips_the_one_without_data(self, mock_get):
-        def fake_get(url, params=None, timeout=None):
+        def fake_get(url, params=None, timeout=None, auth=None):
             response = MagicMock()
             response.status_code = 200
             response.raise_for_status = MagicMock()
@@ -1465,7 +1575,7 @@ class V5RoutingTestMixin:
         one.
         """
 
-        def fake_get(url, params=None, timeout=None):
+        def fake_get(url, params=None, timeout=None, auth=None):
             response = MagicMock()
             response.status_code = 200
             response.raise_for_status = MagicMock()
@@ -1851,12 +1961,13 @@ class CovidcastExportAuthParamTests(V5RoutingTestMixin, TestCase):
         probe_calls = self._probe_calls(mock_get)
         self.assertEqual(len(probe_calls), 1)
         self.assertIn("covidcast", probe_calls[0].args[0])
-        self.assertEqual(probe_calls[0].kwargs["params"]["api_key"], "server-key")
+        self.assertEqual(probe_calls[0].kwargs["auth"], ("epidata", "server-key"))
+        self.assertNotIn("api_key", probe_calls[0].kwargs["params"])
         self.assertIn("wget", result[0])
 
     @override_settings(EPIDATA_API_KEY="server-key")
     @patch("indicatorsets.utils.epidata.requests.get")
-    def test_v5_probe_falls_back_to_server_api_key(self, mock_get):
+    def test_v5_probe_sends_no_token_without_a_user_key(self, mock_get):
         mock_get.side_effect = self._fake_get(
             metadata_signals=["confirmed_admissions_covid_ew"]
         )
@@ -1866,7 +1977,7 @@ class CovidcastExportAuthParamTests(V5RoutingTestMixin, TestCase):
         self.assertEqual(len(probe_calls), 1)
         params = probe_calls[0].kwargs["params"]
         self.assertIn("/v5/", probe_calls[0].args[0])
-        self.assertEqual(params["token"], "server-key")
+        self.assertNotIn("token", params)
         self.assertNotIn("api_key", params)
 
     @patch("indicatorsets.utils.epidata.requests.get")
@@ -2077,7 +2188,6 @@ class GenerateQueryCodeCovidcastTests(V5RoutingTestMixin, TestCase):
             '    geo_type="state",\n'
             '    geo_values=["pa", "ny"],\n'
             '    reference_time=EpiRange("2024-01-01", "2024-03-01"),\n'
-            '    fill_method="source",\n'
             ").df()\n",
             python_code,
         )
@@ -2087,8 +2197,7 @@ class GenerateQueryCodeCovidcastTests(V5RoutingTestMixin, TestCase):
             '    signals = c("sig_a", "sig_b"),\n'
             '    geo_type = "state",\n'
             '    geo_values = c("pa", "ny"),\n'
-            '    reference_time = epirange("2024-01-01", "2024-03-01"),\n'
-            '    fill_method = "source"\n'
+            '    reference_time = epirange("2024-01-01", "2024-03-01")\n'
             ")\n",
             r_code,
         )
@@ -2173,7 +2282,6 @@ class GenerateQueryCodePophiveTests(TestCase):
             '    geo_type="state",\n'
             '    geo_values="ca",\n'
             '    reference_time=EpiRange("2024-01-01", "2024-03-01"),\n'
-            '    fill_method="source",\n'
             ").df()\n"
             'pophive_state_ca_df = pophive_state_ca_df[pophive_state_ca_df["age_group"] == "0-17"]\n'
             "pophive_county_06001_df = epidata.epidata_snapshot(\n"
@@ -2182,7 +2290,6 @@ class GenerateQueryCodePophiveTests(TestCase):
             '    geo_type="county",\n'
             '    geo_values="06001",\n'
             '    reference_time=EpiRange("2024-01-01", "2024-03-01"),\n'
-            '    fill_method="source",\n'
             ").df()\n"
             'pophive_county_06001_df = pophive_county_06001_df[pophive_county_06001_df["age_group"] == "0-17"]\n',
         )
@@ -2194,7 +2301,6 @@ class GenerateQueryCodePophiveTests(TestCase):
             '    geo_type = "state",\n'
             '    geo_values = "ca",\n'
             '    reference_time = epirange("2024-01-01", "2024-03-01"),\n'
-            '    fill_method = "source",\n'
             '    age_group = "0-17"\n'
             ")\n"
             "epidata_pophive_county_06001 <- epidata_snapshot(\n"
@@ -2203,7 +2309,6 @@ class GenerateQueryCodePophiveTests(TestCase):
             '    geo_type = "county",\n'
             '    geo_values = "06001",\n'
             '    reference_time = epirange("2024-01-01", "2024-03-01"),\n'
-            '    fill_method = "source",\n'
             '    age_group = "0-17"\n'
             ")\n",
         )
@@ -2945,10 +3050,12 @@ class EpiweekPreviewRequestTests(TestCase):
                     {
                         geo_param: "nat",
                         "epiweeks": "202001-202004",
-                        "api_key": "default-key",
                         "format": "csv",
                         "header": "true",
                     },
+                )
+                self.assertEqual(
+                    mock_get.call_args.kwargs["auth"], ("epidata", "default-key")
                 )
                 self.assertEqual(mock_get.call_args.kwargs["timeout"], (5, 30))
 
@@ -2964,7 +3071,8 @@ class EpiweekPreviewRequestTests(TestCase):
                         endpoint, self.GEOS, "2020-01-01", "2020-01-20", "mine", "json"
                     )
                 params = mock_get.call_args.kwargs["params"]
-                self.assertEqual(params["api_key"], "mine")
+                self.assertNotIn("api_key", params)
+                self.assertEqual(mock_get.call_args.kwargs["auth"], ("epidata", "mine"))
                 self.assertEqual(params["format"], "json")
                 self.assertEqual(params["header"], "false")
 
@@ -3345,7 +3453,6 @@ class EpiweekQueryCodeTests(V5RoutingTestMixin, TestCase):
             '    geo_type="nation",\n'
             '    geo_values=["us"],\n'
             '    reference_time=EpiRange("2024-01-01", "2024-02-01"),\n'
-            '    fill_method="source",\n'
             ").df()\n",
             python_code,
         )
@@ -3356,7 +3463,6 @@ class EpiweekQueryCodeTests(V5RoutingTestMixin, TestCase):
             '    geo_type="hhs",\n'
             '    geo_values=["3"],\n'
             '    reference_time=EpiRange("2024-01-01", "2024-02-01"),\n'
-            '    fill_method="source",\n'
             ").df()\n",
             python_code,
         )
@@ -3367,7 +3473,6 @@ class EpiweekQueryCodeTests(V5RoutingTestMixin, TestCase):
             '    geo_type="census_division",\n'
             '    geo_values=["2"],\n'
             '    reference_time=EpiRange("2024-01-01", "2024-02-01"),\n'
-            '    fill_method="source",\n'
             ").df()\n",
             python_code,
         )
@@ -3378,7 +3483,6 @@ class EpiweekQueryCodeTests(V5RoutingTestMixin, TestCase):
             '    geo_type="state",\n'
             '    geo_values=["pa"],\n'
             '    reference_time=EpiRange("2024-01-01", "2024-02-01"),\n'
-            '    fill_method="source",\n'
             ").df()\n",
             python_code,
         )
@@ -3388,8 +3492,7 @@ class EpiweekQueryCodeTests(V5RoutingTestMixin, TestCase):
             '    signals = c("wili"),\n'
             '    geo_type = "nation",\n'
             '    geo_values = c("us"),\n'
-            '    reference_time = epirange("2024-01-01", "2024-02-01"),\n'
-            '    fill_method = "source"\n'
+            '    reference_time = epirange("2024-01-01", "2024-02-01")\n'
             ")\n",
             r_code,
         )
@@ -3942,7 +4045,6 @@ class FlusurvV5RoutingTests(V5RoutingTestMixin, TestCase):
             '    geo_type="flusurv_site",\n'
             '    geo_values=["network_all", "ny_albany"],\n'
             '    reference_time=EpiRange("2020-01-01", "2020-01-20"),\n'
-            '    fill_method="source",\n'
             ').df()\n',
             python_blocks,
         )
@@ -3952,8 +4054,7 @@ class FlusurvV5RoutingTests(V5RoutingTestMixin, TestCase):
             '    signals = c("rate_overall", "rate_age_0"),\n'
             '    geo_type = "state",\n'
             '    geo_values = c("ca"),\n'
-            '    reference_time = epirange("2020-01-01", "2020-01-20"),\n'
-            '    fill_method = "source"\n'
+            '    reference_time = epirange("2020-01-01", "2020-01-20")\n'
             ')\n',
             r_blocks,
         )
@@ -4099,14 +4200,14 @@ class FillMethodNormalizationTests(TestCase):
         for value in ("source", "fill_ave", "fill_zero"):
             self.assertEqual(normalize_fill_method(value), value)
 
-    def test_falls_back_to_source_for_unknown_value(self):
-        self.assertEqual(normalize_fill_method("fill_everything"), "source")
+    def test_unknown_value_means_no_fill_method(self):
+        self.assertEqual(normalize_fill_method("fill_everything"), "")
 
-    def test_falls_back_to_source_for_missing_value(self):
-        self.assertEqual(normalize_fill_method(None), "source")
+    def test_missing_value_means_no_fill_method(self):
+        self.assertEqual(normalize_fill_method(None), "")
 
     def test_rejects_value_that_would_inject_into_an_export_url(self):
-        self.assertEqual(normalize_fill_method("source&token=stolen"), "source")
+        self.assertEqual(normalize_fill_method("source&token=stolen"), "")
 
 
 class CovidcastFillMethodTests(V5RoutingTestMixin, TestCase):
@@ -4332,7 +4433,7 @@ class FillMethodViewTests(TestCase):
         )
         self.assertEqual(params["fill_method"], "fill_ave")
 
-    def test_epivis_defaults_to_source_when_fill_method_absent(self):
+    def test_epivis_omits_fill_method_when_absent(self):
         params = self._nwss_epivis_params(
             {
                 "indicators": [self.NWSS_INDICATOR],
@@ -4341,7 +4442,7 @@ class FillMethodViewTests(TestCase):
                 "nwssSource": [{"id": "CDC_Biobot"}],
             }
         )
-        self.assertEqual(params["fill_method"], "source")
+        self.assertNotIn("fill_method", params)
 
     def test_epivis_rejects_unknown_fill_method(self):
         params = self._nwss_epivis_params(
@@ -4353,7 +4454,7 @@ class FillMethodViewTests(TestCase):
                 "fillMethod": "fill_everything",
             }
         )
-        self.assertEqual(params["fill_method"], "source")
+        self.assertNotIn("fill_method", params)
 
     @patch("indicatorsets.views.generate_query_code_nwss")
     def test_query_code_view_forwards_shared_fill_method(self, mock_nwss):
@@ -4775,6 +4876,71 @@ class DiffV5IndicatorsV4OnlyReportTests(TestCase):
         self.assertIn("v4-only:           2", output)
 
 
+class EpidataBaseUrlSettingsTests(TestCase):
+    """Base URLs get a trailing slash, since callers append paths to them."""
+
+    def _base_urls_for(self, **env):
+        """Return ``(EPIDATA_URL, EPIDATA_V5_URL)`` as settings computes them for ``env``.
+
+        Reloading mutates the one module object, so the values are read before
+        the ``finally`` reload puts the real environment's back.
+        """
+        import importlib
+
+        import epiportal.settings as settings_module
+
+        try:
+            with patch.dict(os.environ, env):
+                importlib.reload(settings_module)
+                return settings_module.EPIDATA_URL, settings_module.EPIDATA_V5_URL
+        finally:
+            importlib.reload(settings_module)
+
+    def test_adds_a_missing_trailing_slash(self):
+        self.assertEqual(
+            self._base_urls_for(
+                EPIDATA_URL="https://example.org/epidata",
+                EPIDATA_V5_URL="https://example.org/epidata/v5",
+            ),
+            ("https://example.org/epidata/", "https://example.org/epidata/v5/"),
+        )
+
+    def test_keeps_an_existing_trailing_slash_single(self):
+        self.assertEqual(
+            self._base_urls_for(
+                EPIDATA_URL="https://example.org/epidata/",
+                EPIDATA_V5_URL="https://example.org/epidata/v5//",
+            ),
+            ("https://example.org/epidata/", "https://example.org/epidata/v5/"),
+        )
+
+
+class GetPreviewDataGeoFilterTests(TestCase):
+    def test_filters_a_v4_envelope_to_the_given_geos(self):
+        response = MagicMock()
+        response.json.return_value = {
+            "epidata": [{"geo_value": "42003"}, {"geo_value": "17031"}],
+            "result": 1,
+            "message": "success",
+        }
+        result = get_preview_data(response, "json", geo_values=["17031"])
+        self.assertEqual(result["epidata"], {"geo_value": "17031"})
+
+    def test_no_rows_left_after_filtering_is_no_data(self):
+        response = MagicMock()
+        response.json.return_value = [{"geo_value": "42003", "value": None}]
+        result = get_preview_data(
+            response, "json", no_data_message="none", geo_values=["17031"]
+        )
+        self.assertEqual(result, {"message": "none"})
+
+    def test_csv_without_a_geo_value_column_is_left_unfiltered(self):
+        response = MagicMock()
+        response.text = "signal,value\nsig,1\n"
+        result = get_preview_data(response, "csv", geo_values=["17031"])
+        self.assertEqual(result, [["signal", "value"], ["sig", "1"]])
+
+
 class SplitGeosByV5ValuesTests(TestCase):
     def test_geo_with_a_real_value_stays_on_v5(self):
         rows = [{"geo_value": "17031", "value": 1.5}]
@@ -4833,8 +4999,20 @@ class CovidcastV5NullFallbackTests(V5RoutingTestMixin, TestCase):
         ]
     }
 
-    def _fake(self, v5_values, v4_has_data=True):
-        """``v5_values`` maps geo -> value; geos left out get no v5 rows at all."""
+    def _fake(
+        self,
+        v5_values,
+        v4_has_data=True,
+        v5_error=None,
+        v5_status=200,
+        v5_fill_methods=("source",),
+    ):
+        """``v5_values`` maps geo -> value; geos left out get no v5 rows at all.
+
+        ``v5_error`` is raised by the v5 data request, ``v5_status`` is its
+        status code, and v5 returns rows only for ``v5_fill_methods`` -- live
+        v5 nssp has none for the filled ones.
+        """
 
         def rows_as_csv(rows, columns):
             lines = [",".join(columns)]
@@ -4844,19 +5022,24 @@ class CovidcastV5NullFallbackTests(V5RoutingTestMixin, TestCase):
                 )
             return "\n".join(lines) + "\n"
 
-        def fake_get(url, params=None, timeout=None):
+        def fake_get(url, params=None, timeout=None, auth=None):
             response = MagicMock()
             response.status_code = 200
             response.raise_for_status = MagicMock()
             if "metadata/" in url:
                 response.json.return_value = {"nssp": {"signals": [self.SIGNAL]}}
             elif "/v5/" in url:
+                if v5_error is not None:
+                    raise v5_error
+                response.status_code = v5_status
+                # v5 applies "source" when no fill_method is sent
+                served = (params.get("fill_method") or "source") in v5_fill_methods
                 # null rows first, so a naive "first row" preview would show one
                 rows = sorted(
                     (
                         {"geo_value": geo, "value": v5_values[geo]}
                         for geo in params["geo_value"].split(",")
-                        if geo in v5_values
+                        if served and geo in v5_values
                     ),
                     key=lambda row: row["value"] is not None,
                 )
@@ -5036,3 +5219,356 @@ class CovidcastV5NullFallbackTests(V5RoutingTestMixin, TestCase):
         self.assertEqual(
             mock_logger.warning.call_args.kwargs["extra"]["geo_values"], ["42003"]
         )
+
+    @patch("indicatorsets.utils.epidata.requests.get")
+    def test_export_falls_back_to_v4_when_the_v5_request_fails(self, mock_get):
+        mock_get.side_effect = self._fake(
+            {}, v5_error=requests.ConnectionError("v5 down")
+        )
+
+        result = self._export()
+
+        self.assertEqual(len(result), 1)
+        self.assertIn("covidcast/csv?", result[0])
+        self.assertIn("geo_values=42003,17031&", result[0])
+
+    @patch("indicatorsets.utils.previews.requests.get")
+    def test_preview_falls_back_to_v4_when_the_v5_request_fails(self, mock_get):
+        mock_get.side_effect = self._fake(
+            {}, v5_error=requests.ConnectionError("v5 down")
+        )
+
+        result = self._preview()
+
+        self.assertEqual(len(result), 1)
+        self.assertEqual(result[0]["epidata"]["geo_value"], "42003")
+        self.assertEqual(
+            self._v4_calls(mock_get)[0].kwargs["params"]["geo_values"], "42003,17031"
+        )
+
+    @patch("indicatorsets.utils.epidata.requests.get")
+    def test_export_rejected_api_key_raises_instead_of_falling_back(self, mock_get):
+        mock_get.side_effect = self._fake({"17031": 0.4}, v5_status=401)
+
+        with self.assertRaises(InvalidApiKeyError):
+            self._export()
+        self.assertEqual(self._v4_calls(mock_get), [])
+
+    @patch("indicatorsets.utils.previews.requests.get")
+    def test_preview_rejected_api_key_raises_instead_of_falling_back(self, mock_get):
+        mock_get.side_effect = self._fake({"17031": 0.4}, v5_status=401)
+
+        with self.assertRaises(InvalidApiKeyError):
+            self._preview()
+        self.assertEqual(self._v4_calls(mock_get), [])
+
+    @patch("indicatorsets.utils.previews.requests.get")
+    def test_preview_names_the_geos_neither_api_has_values_for(self, mock_get):
+        mock_get.side_effect = self._fake(
+            {"42003": None, "17031": 0.4}, v4_has_data=False
+        )
+
+        result = self._preview()
+
+        self.assertEqual(len(result), 2)
+        self.assertEqual(result[0], {"geo_value": "17031", "value": 0.4})
+        self.assertEqual(
+            result[1], {"message": "No data found for RSV ED Visits (county: 42003)."}
+        )
+
+    def _export_filled(self, geos=None):
+        return generate_covidcast_indicators_export_url(
+            [self.INDICATOR], "2024-01-01", "2024-03-01",
+            geos or self.ALLEGHENY_AND_COOK, None, "csv", fill_method="fill_ave",
+        )
+
+    @patch("indicatorsets.utils.epidata.requests.get")
+    def test_filled_fill_method_v5_lacks_reports_no_data_without_v4(self, mock_get):
+        """v4 has no fill_method, so it cannot serve a filled series.
+
+        Live v5 nssp has no fill_ave rows at all; exporting v4's unfilled
+        series instead would silently hand over something the user did not ask
+        for.
+        """
+        mock_get.side_effect = self._fake({"42003": 0.1, "17031": 0.4})
+
+        result = self._export_filled()
+
+        self.assertEqual(
+            result,
+            [
+                '<span class="text-muted">No data found for RSV ED Visits '
+                "(county). Export skipped.</span>"
+            ],
+        )
+        self.assertEqual(self._v4_calls(mock_get), [])
+
+    @patch("indicatorsets.utils.epidata.requests.get")
+    def test_filled_fill_method_exports_v5_geos_and_names_the_rest(self, mock_get):
+        mock_get.side_effect = self._fake(
+            {"42003": None, "17031": 0.4}, v5_fill_methods=("fill_ave",)
+        )
+
+        result = self._export_filled()
+
+        self.assertEqual(len(result), 2)
+        self.assertIn("geo_value=17031&", result[0])
+        self.assertIn("fill_method=fill_ave", result[0])
+        self.assertIn("No data found for RSV ED Visits (county: 42003)", result[1])
+        self.assertEqual(self._v4_calls(mock_get), [])
+
+    @patch("indicatorsets.utils.exports.logger")
+    @patch("indicatorsets.utils.epidata.requests.get")
+    def test_filled_fill_method_does_not_log_a_v4_fallback(self, mock_get, mock_logger):
+        mock_get.side_effect = self._fake({"42003": None, "17031": 0.4})
+
+        self._export_filled()
+
+        mock_logger.warning.assert_not_called()
+
+    @patch("indicatorsets.utils.previews.requests.get")
+    def test_filled_fill_method_preview_reports_no_data_without_v4(self, mock_get):
+        mock_get.side_effect = self._fake(
+            {"42003": None, "17031": 0.4}, v5_fill_methods=("fill_ave",)
+        )
+
+        result = preview_covidcast_data(
+            [self.INDICATOR], "2024-01-01", "2024-03-01", self.ALLEGHENY_AND_COOK,
+            None, "json", fill_method="fill_ave",
+        )
+
+        self.assertEqual(
+            result,
+            [
+                {"geo_value": "17031", "value": 0.4},
+                {"message": "No data found for RSV ED Visits (county: 42003)."},
+            ],
+        )
+        self.assertEqual(self._v4_calls(mock_get), [])
+
+    @patch("indicatorsets.utils.epidata.requests.get")
+    def test_export_still_falls_back_to_v4_for_an_explicit_source(self, mock_get):
+        mock_get.side_effect = self._fake({"42003": None, "17031": 0.4})
+
+        result = generate_covidcast_indicators_export_url(
+            [self.INDICATOR], "2024-01-01", "2024-03-01", self.ALLEGHENY_AND_COOK,
+            None, "csv", fill_method="source",
+        )
+
+        self.assertEqual(len(result), 2)
+        self.assertIn("fill_method=source", result[0])
+        self.assertIn("geo_values=42003&", result[1])
+
+    @patch("indicatorsets.utils.previews.requests.get")
+    def test_preview_still_falls_back_to_v4_for_an_explicit_source(self, mock_get):
+        mock_get.side_effect = self._fake({"42003": None, "17031": 0.4})
+
+        result = preview_covidcast_data(
+            [self.INDICATOR], "2024-01-01", "2024-03-01", self.ALLEGHENY_AND_COOK,
+            None, "json", fill_method="source",
+        )
+
+        self.assertEqual(len(result), 2)
+        self.assertEqual(result[1]["epidata"]["geo_value"], "42003")
+
+
+class V5RequestAuthAndFillMethodTests(V5RoutingTestMixin, TestCase):
+    """Every v5 request carries ``token``/``fill_method`` only when the user set them.
+
+    No user key means no token at all -- the server's own key is not borrowed
+    -- and no fill_method means none is sent, so v5 applies its default
+    (``source``); v5 rejects an empty ``fill_method=`` outright.
+    """
+
+    METADATA = {
+        "nhsn": {"signals": ["confirmed_admissions_covid_ew"]},
+        "fluview_ilinet": {"signals": ["wili"]},
+    }
+    COVIDCAST = [
+        {
+            "_endpoint": "covidcast",
+            "data_source": "nhsn",
+            "indicator": "confirmed_admissions_covid_ew",
+            "time_type": "week",
+        }
+    ]
+    COVIDCAST_GEOS = {"state": [{"id": "state:pa", "geoType": "state"}]}
+    FLUVIEW = [{"_endpoint": "fluview", "data_source": "fluview", "indicator": "wili"}]
+    POPHIVE = [{"_endpoint": "pophive", "indicator": "sig"}]
+    POPHIVE_GEOS = [{"id": "ca", "geo_type": "state", "text": "CA"}]
+    NWSS = [{"_endpoint": "nwss", "indicator": "sig"}]
+
+    def _builders(self):
+        start, end = "2024-01-01", "2024-03-01"
+        return {
+            "covidcast preview": lambda key, fill: preview_covidcast_data(
+                self.COVIDCAST, start, end, self.COVIDCAST_GEOS, key, "json", fill
+            ),
+            "covidcast export": lambda key, fill: generate_covidcast_indicators_export_url(
+                self.COVIDCAST, start, end, self.COVIDCAST_GEOS, key, "csv", fill
+            ),
+            "epiweek preview": lambda key, fill: preview_epiweek_data(
+                EPIWEEK_SOURCES["fluview"], [{"id": "nat"}], start, end, key,
+                "json", self.FLUVIEW, fill,
+            ),
+            "epiweek export": lambda key, fill: generate_epiweek_export_url(
+                EPIWEEK_SOURCES["fluview"], [{"id": "nat"}], start, end, key,
+                "csv", self.FLUVIEW, fill,
+            ),
+            "pophive preview": lambda key, fill: preview_pophive_data(
+                self.POPHIVE, start, end, self.POPHIVE_GEOS, [{"id": "all"}], key,
+                "json", fill,
+            ),
+            "pophive export": lambda key, fill: generate_pophive_export_url(
+                self.POPHIVE, start, end, self.POPHIVE_GEOS, [{"id": "all"}], key,
+                "csv", fill,
+            ),
+            "nwss preview": lambda key, fill: preview_nwss_data(
+                self.NWSS, start, end, ["sewershed_1"], [{"id": "CDC_Biobot"}],
+                fill, key, "json",
+            ),
+            "nwss export": lambda key, fill: generate_nwss_export_url(
+                self.NWSS, start, end, ["sewershed_1"], [{"id": "CDC_Biobot"}],
+                fill, key, "csv",
+            ),
+        }
+
+    def _run(self, build, api_key, fill_method):
+        """Return ``(v5 request params, generated output)`` for one builder."""
+        cache.clear()
+        with patch("indicatorsets.utils.epidata.requests.get") as mock_get:
+            mock_get.side_effect = self._fake_get(metadata=self.METADATA)
+            output = build(api_key, fill_method)
+        v5_params = [
+            call.kwargs["params"]
+            for call in self._probe_calls(mock_get)
+            if "/v5/" in call.args[0]
+        ]
+        return v5_params, output
+
+    @override_settings(EPIDATA_API_KEY="server-key")
+    def test_sends_neither_without_a_user_key_or_fill_method(self):
+        for name, build in self._builders().items():
+            with self.subTest(name):
+                v5_params, output = self._run(build, None, "")
+                self.assertTrue(v5_params, "expected a v5 request")
+                for params in v5_params:
+                    self.assertNotIn("token", params)
+                    self.assertNotIn("fill_method", params)
+                if name.endswith("export"):
+                    text = "".join(output)
+                    self.assertIn("/v5/viz/", text)
+                    self.assertNotIn("fill_method", text)
+                    self.assertNotIn("token", text)
+
+    def test_sends_both_when_the_user_set_them(self):
+        for name, build in self._builders().items():
+            with self.subTest(name):
+                v5_params, output = self._run(build, "user-key", "fill_ave")
+                self.assertTrue(v5_params, "expected a v5 request")
+                for params in v5_params:
+                    self.assertEqual(params["token"], "user-key")
+                    self.assertEqual(params["fill_method"], "fill_ave")
+                if name.endswith("export"):
+                    text = "".join(output)
+                    self.assertIn("fill_method=fill_ave", text)
+                    self.assertIn("token=user-key", text)
+
+
+@override_settings(EPIDATA_API_KEY="server-key")
+class V4KeySentAsHeaderTests(TestCase):
+    """v4 requests send the key as basic auth, never as an ``api_key`` param.
+
+    A key in the query string ends up in the URL, and so in any ``HTTPError``
+    message, log line or Sentry event about the request.
+    """
+
+    def setUp(self):
+        cache.clear()
+
+    def tearDown(self):
+        cache.clear()
+
+    def _calls(self, target, run):
+        with patch(target) as mock_get:
+            response = MagicMock()
+            response.status_code = 200
+            response.json.return_value = {"result": 1, "epidata": [], "message": "ok"}
+            response.text = "a\n"
+            mock_get.return_value = response
+            run()
+        return [c for c in mock_get.call_args_list if "/v5/" not in c.args[0]]
+
+    def _cases(self, api_key):
+        v4_indicator = {
+            "_endpoint": "covidcast",
+            "data_source": "src",
+            "indicator": "sig",
+            "time_type": "week",
+        }
+        geos = {"state": [{"id": "state:pa", "geoType": "state"}]}
+        start, end = "2024-01-01", "2024-03-01"
+        return {
+            "covidcast preview": (
+                "indicatorsets.utils.previews.requests.get",
+                lambda: preview_covidcast_data(
+                    [v4_indicator], start, end, geos, api_key, "json"
+                ),
+            ),
+            "covidcast export": (
+                "indicatorsets.utils.epidata.requests.get",
+                lambda: generate_covidcast_indicators_export_url(
+                    [v4_indicator], start, end, geos, api_key, "csv"
+                ),
+            ),
+            "epiweek preview": (
+                "indicatorsets.utils.previews.requests.get",
+                lambda: preview_epiweek_data(
+                    EPIWEEK_SOURCES["nidss_flu"], [{"id": "nationwide"}], start,
+                    end, api_key, "json", [],
+                ),
+            ),
+        }
+
+    def test_user_key_goes_in_the_auth_header(self):
+        for name, (target, run) in self._cases("user-key").items():
+            with self.subTest(name):
+                calls = self._calls(target, run)
+                self.assertTrue(calls)
+                for call in calls:
+                    self.assertNotIn("api_key", call.kwargs["params"])
+                    self.assertEqual(call.kwargs["auth"], ("epidata", "user-key"))
+
+    def test_server_key_goes_in_the_auth_header_without_a_user_key(self):
+        cases = self._cases(None)
+        cases.update(
+            {
+                "geo coverage lookup": (
+                    "indicatorsets.utils.geos.requests.get",
+                    lambda: get_indicators_based_on_geo_epidata({"state": ["pa"]}),
+                ),
+                "covidcast coverage check": (
+                    "indicatorsets.utils.geos.requests.get",
+                    lambda: get_covidcast_geo_coverage("state:pa", [V4_ONLY]),
+                ),
+                "fluview coverage view": (
+                    "indicatorsets.views.requests.get",
+                    lambda: self.client.get(
+                        reverse("check_fluview_geo_coverage"),
+                        {
+                            "geo": "nat",
+                            "indicators": json.dumps(
+                                [{"data_source": "fluview", "indicator": "wili"}]
+                            ),
+                        },
+                    ),
+                ),
+            }
+        )
+        for name, (target, run) in cases.items():
+            with self.subTest(name):
+                calls = self._calls(target, run)
+                self.assertTrue(calls)
+                for call in calls:
+                    self.assertNotIn("api_key", call.kwargs["params"])
+                    self.assertEqual(call.kwargs["auth"], ("epidata", "server-key"))

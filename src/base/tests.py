@@ -92,6 +92,7 @@ class EpidataProxyViewTests(TestCase):
         self.assertEqual(response.status_code, 403)
         self.assertIsInstance(response, HttpResponseForbidden)
 
+    @override_settings(EPIDATA_API_KEY="server-key")
     @patch("base.views.requests.get")
     def test_allowed_endpoint_forwards_to_epidata(self, mock_get):
         mock_response = MagicMock()
@@ -107,7 +108,21 @@ class EpidataProxyViewTests(TestCase):
         mock_get.assert_called_once()
         call_kwargs = mock_get.call_args.kwargs
         self.assertEqual(call_kwargs["timeout"], 10)
-        self.assertIn("api_key", mock_get.call_args.kwargs["params"])
+        self.assertNotIn("api_key", call_kwargs["params"])
+        self.assertEqual(call_kwargs["auth"], ("epidata", "server-key"))
+
+    @override_settings(EPIDATA_API_KEY="server-key")
+    @patch("base.views.requests.get")
+    def test_caller_supplied_api_key_is_not_forwarded(self, mock_get):
+        mock_get.return_value = MagicMock(status_code=200, json=lambda: {"result": 1})
+
+        request = self.factory.get(
+            "/epidata/covidcast/meta/", {"api_key": "theirs", "a": "1"}
+        )
+        epidata(request, endpoint="covidcast/meta")
+
+        self.assertEqual(mock_get.call_args.kwargs["params"], {"a": "1"})
+        self.assertEqual(mock_get.call_args.kwargs["auth"], ("epidata", "server-key"))
 
     @patch("base.views.requests.get", side_effect=requests.Timeout)
     def test_upstream_failure_returns_502(self, _mock_get):
@@ -300,3 +315,102 @@ class EpidataNon200ResponseTests(TestCase):
         response = epidata(request, endpoint="covidcast/meta")
         self.assertEqual(response.status_code, 404)
         self.assertEqual(json.loads(response.content)["result"], -1)
+
+
+class BannerTests(TestCase):
+    """Site-wide banners, managed in admin, shown on every page layout."""
+
+    def _banner(self, **fields):
+        from base.models import Banner
+
+        defaults = {"message": "Epidata v5 is here.", "is_active": True}
+        return Banner.objects.create(**{**defaults, **fields})
+
+    def _current(self):
+        from base.models import Banner
+
+        return list(Banner.objects.current())
+
+    def test_current_includes_an_active_open_ended_banner(self):
+        banner = self._banner()
+        self.assertEqual(self._current(), [banner])
+
+    def test_current_excludes_an_inactive_banner(self):
+        self._banner(is_active=False)
+        self.assertEqual(self._current(), [])
+
+    def test_current_respects_the_date_window(self):
+        from datetime import timedelta
+
+        from django.utils import timezone
+
+        now = timezone.now()
+        running = self._banner(
+            message="running",
+            starts_at=now - timedelta(days=1),
+            ends_at=now + timedelta(days=1),
+        )
+        self._banner(message="not yet", starts_at=now + timedelta(hours=1))
+        self._banner(message="over", ends_at=now - timedelta(hours=1))
+        self.assertEqual(self._current(), [running])
+
+    def test_current_lists_the_newest_first(self):
+        older = self._banner(message="older")
+        newer = self._banner(message="newer")
+        self.assertEqual(self._current(), [newer, older])
+
+    def test_dismiss_key_changes_when_the_banner_is_edited(self):
+        banner = self._banner()
+        key = banner.dismiss_key
+        self.assertIn(str(banner.pk), key)
+
+        banner.message = "Epidata v5 is here, and v4 retires soon."
+        banner.save()
+
+        self.assertNotEqual(banner.dismiss_key, key)
+
+    def test_indicator_sets_page_shows_the_banner(self):
+        from django.urls import reverse
+
+        banner = self._banner(message='Read the <a href="https://example.org/v5">v5 guide</a>.')
+        response = self.client.get(reverse("indicatorsets"))
+        # staff-written HTML is rendered as written, so links work
+        self.assertContains(response, '<a href="https://example.org/v5">v5 guide</a>', html=False)
+        self.assertContains(response, f'data-banner-key="{banner.dismiss_key}"')
+
+    def test_express_view_shows_the_banner(self):
+        from django.urls import reverse
+
+        self._banner(message="Express view notice")
+        response = self.client.get(reverse("alternative_interface"))
+        self.assertContains(response, "Express view notice")
+
+    def test_no_banner_markup_without_a_current_banner(self):
+        from django.urls import reverse
+
+        self._banner(is_active=False, message="switched off")
+        response = self.client.get(reverse("indicatorsets"))
+        self.assertNotContains(response, "switched off")
+        self.assertNotContains(response, "site-banner")
+
+    def test_banner_style_sets_its_alert_colour(self):
+        from django.urls import reverse
+
+        self._banner(style="warning")
+        response = self.client.get(reverse("indicatorsets"))
+        self.assertContains(response, "alert-warning")
+
+    def test_admin_lists_and_adds_banners(self):
+        from django.contrib.auth.models import User
+        from django.urls import reverse
+
+        self._banner(message="Listed in admin")
+        self.client.force_login(
+            User.objects.create_superuser("admin", "admin@example.org", "pw")
+        )
+
+        changelist = self.client.get(reverse("admin:base_banner_changelist"))
+        add_form = self.client.get(reverse("admin:base_banner_add"))
+
+        self.assertContains(changelist, "Listed in admin")
+        self.assertEqual(add_form.status_code, 200)

@@ -11,6 +11,7 @@ from django.test import RequestFactory, TestCase, override_settings
 from epiportal.block_middleware import BlockIPRangeMiddleware
 from epiportal.logging_formatters import JsonFormatter
 from epiportal.middleware import RequestLoggingMiddleware, _sanitize_headers
+from epiportal.redaction import redact_secrets, redact_sentry_event
 from epiportal.utils import get_client_ip
 
 
@@ -128,3 +129,131 @@ class JsonFormatterTests(TestCase):
         self.assertEqual(payload["message"], "hello")
         self.assertEqual(payload["request_id"], "abc-123")
         self.assertIn("@timestamp", payload)
+
+
+class RedactSecretsTests(TestCase):
+    def test_redacts_query_string_keys(self):
+        self.assertEqual(
+            redact_secrets(
+                "500 Server Error for url: https://x/covidcast?a=1&api_key=SECRET&b=2"
+            ),
+            "500 Server Error for url: https://x/covidcast?a=1&api_key=[REDACTED]&b=2",
+        )
+        self.assertEqual(
+            redact_secrets("https://x/v5/viz/?token=SECRET"),
+            "https://x/v5/viz/?token=[REDACTED]",
+        )
+
+    def test_redacts_json_rendered_keys(self):
+        # how the request middleware's query_params come out of structlog
+        self.assertEqual(
+            redact_secrets('{"query_params": {"token": ["SECRET"], "a": ["1"]}}'),
+            '{"query_params": {"token": ["[REDACTED]"], "a": ["1"]}}',
+        )
+        self.assertEqual(
+            redact_secrets('{"api_key": "SECRET"}'), '{"api_key": "[REDACTED]"}'
+        )
+
+    def test_is_case_insensitive(self):
+        self.assertEqual(redact_secrets("?API_KEY=SECRET"), "?API_KEY=[REDACTED]")
+
+    def test_leaves_other_text_alone(self):
+        text = "geo_value=42003&signal=smoothed_pct_ed_visits_rsv"
+        self.assertEqual(redact_secrets(text), text)
+
+
+class LogRecordRedactionTests(TestCase):
+    """Every log record is redacted at creation, whatever handler formats it."""
+
+    def setUp(self):
+        # settings disables logging under ``manage.py test``
+        logging.disable(logging.NOTSET)
+        self.stream = StringIO()
+        self.handler = logging.StreamHandler(self.stream)
+        self.logger = logging.getLogger("epiportal.tests.redaction")
+        self.logger.addHandler(self.handler)
+        self.logger.propagate = False
+
+    def tearDown(self):
+        self.logger.removeHandler(self.handler)
+        logging.disable(logging.CRITICAL)
+
+    def test_message_and_args_are_redacted(self):
+        self.logger.error("fetching %s", "https://x/covidcast?api_key=SECRET")
+        self.logger.error('{"url": "https://x/viz/?token=SECRET"}')
+
+        output = self.stream.getvalue()
+        self.assertNotIn("SECRET", output)
+        self.assertIn("api_key=[REDACTED]", output)
+        self.assertIn("token=[REDACTED]", output)
+
+    def test_formatted_traceback_is_redacted(self):
+        import requests
+
+        try:
+            raise requests.HTTPError(
+                "500 Server Error for url: https://x/covidcast?api_key=SECRET"
+            )
+        except requests.HTTPError:
+            self.logger.exception("Error getting covidcast data")
+
+        output = self.stream.getvalue()
+        self.assertIn("HTTPError", output)
+        self.assertNotIn("SECRET", output)
+
+
+class RedactSentryEventTests(TestCase):
+    def test_scrubs_strings_and_secret_keys_everywhere_in_the_event(self):
+        event = {
+            "exception": {
+                "values": [
+                    {"value": "500 Server Error for url: https://x/?api_key=SECRET"}
+                ]
+            },
+            "breadcrumbs": {
+                "values": [{"data": {"url": "https://x/viz/?token=SECRET&a=1"}}]
+            },
+            "request": {"query_string": "token=SECRET", "data": {"api_key": "SECRET"}},
+            "spans": [{"data": {"http.query": "a=1&api_key=SECRET"}}],
+            "extra": {"count": 3},
+        }
+
+        scrubbed = redact_sentry_event(event, {})
+
+        self.assertNotIn("SECRET", json.dumps(scrubbed))
+        self.assertEqual(scrubbed["request"]["data"]["api_key"], "[REDACTED]")
+        self.assertEqual(scrubbed["extra"]["count"], 3)
+        self.assertEqual(
+            scrubbed["breadcrumbs"]["values"][0]["data"]["url"],
+            "https://x/viz/?token=[REDACTED]&a=1",
+        )
+
+
+class SettingsSecurityDefaultsTests(TestCase):
+    def _reloaded_settings(self, env, attribute, unset=()):
+        """Return ``attribute`` of settings reloaded under ``env`` minus ``unset``."""
+        import importlib
+        import os
+
+        import epiportal.settings as settings_module
+
+        try:
+            with patch.dict(os.environ, env):
+                for name in unset:
+                    os.environ.pop(name, None)
+                importlib.reload(settings_module)
+                return getattr(settings_module, attribute)
+        finally:
+            importlib.reload(settings_module)
+
+    def test_debug_is_off_unless_switched_on(self):
+        self.assertFalse(self._reloaded_settings({}, "DEBUG", unset=["DEBUG"]))
+        self.assertTrue(self._reloaded_settings({"DEBUG": "True"}, "DEBUG"))
+
+    def test_sentry_gets_the_redaction_hooks(self):
+        with patch("sentry_sdk.init") as mock_init:
+            self._reloaded_settings({"SENTRY_DSN": "https://k@sentry.example/1"}, "DEBUG")
+
+        kwargs = mock_init.call_args.kwargs
+        self.assertIs(kwargs["before_send"], redact_sentry_event)
+        self.assertIs(kwargs["before_send_transaction"], redact_sentry_event)

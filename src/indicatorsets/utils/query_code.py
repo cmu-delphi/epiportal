@@ -10,6 +10,32 @@ from indicatorsets.utils.epidata import (
 from indicatorsets.utils.helpers import get_epiweek
 
 
+def _python_snapshot_call(variable, args):
+    """Render ``variable = epidata.epidata_snapshot(...).df()``.
+
+    ``args`` are ``(name, literal)`` pairs; a ``None`` literal is left out, so
+    an unset fill_method drops its argument and Epidata applies its default.
+    """
+    lines = [f"{variable} = epidata.epidata_snapshot("]
+    lines += [f"    {name}={value}," for name, value in args if value is not None]
+    lines.append(").df()")
+    return "\n".join(lines) + "\n"
+
+
+def _r_snapshot_call(variable, args):
+    """Render ``variable <- epidata_snapshot(...)``; see ``_python_snapshot_call``.
+
+    R rejects a trailing comma, so only the arguments actually present are
+    comma-separated.
+    """
+    present = [f"    {name} = {value}" for name, value in args if value is not None]
+    return f"{variable} <- epidata_snapshot(\n" + ",\n".join(present) + "\n)\n"
+
+
+def _fill_method_literal(fill_method):
+    return f'"{fill_method}"' if fill_method else None
+
+
 def generate_v5_covidcast_snippets(
     v5_indicators,
     v5_source,
@@ -36,32 +62,31 @@ def generate_v5_covidcast_snippets(
         )
         geo_values_list = ", ".join(f'"{geo_value}"' for geo_value in geo_values)
         data_source_safe = data_source.replace("-", "_")
+        fill = _fill_method_literal(fill_method)
         python_code_blocks.append(
-            dedent(
-                f"""\
-                {data_source_safe}_{geo_type}_v5_df = epidata.epidata_snapshot(
-                    source="{v5_source}",
-                    signals=[{signals_list}],
-                    geo_type="{geo_type}",
-                    geo_values=[{geo_values_list}],
-                    reference_time=EpiRange("{start_date}", "{end_date}"),
-                    fill_method="{fill_method}",
-                ).df()
-            """
+            _python_snapshot_call(
+                f"{data_source_safe}_{geo_type}_v5_df",
+                [
+                    ("source", f'"{v5_source}"'),
+                    ("signals", f"[{signals_list}]"),
+                    ("geo_type", f'"{geo_type}"'),
+                    ("geo_values", f"[{geo_values_list}]"),
+                    ("reference_time", f'EpiRange("{start_date}", "{end_date}")'),
+                    ("fill_method", fill),
+                ],
             )
         )
         r_code_blocks.append(
-            dedent(
-                f"""\
-                epidata_{data_source_safe}_{geo_type}_v5 <- epidata_snapshot(
-                    source = "{v5_source}",
-                    signals = c({signals_list}),
-                    geo_type = "{geo_type}",
-                    geo_values = c({geo_values_list}),
-                    reference_time = epirange("{start_date}", "{end_date}"),
-                    fill_method = "{fill_method}"
-                )
-            """
+            _r_snapshot_call(
+                f"epidata_{data_source_safe}_{geo_type}_v5",
+                [
+                    ("source", f'"{v5_source}"'),
+                    ("signals", f"c({signals_list})"),
+                    ("geo_type", f'"{geo_type}"'),
+                    ("geo_values", f"c({geo_values_list})"),
+                    ("reference_time", f'epirange("{start_date}", "{end_date}")'),
+                    ("fill_method", fill),
+                ],
             )
         )
     return python_code_blocks, r_code_blocks
@@ -207,32 +232,31 @@ def generate_v5_epiweek_snippets(
         )
         for geo_type, geo_values in grouped_geos.items():
             geo_values_str = ", ".join(f'"{geo_value}"' for geo_value in geo_values)
+            fill = _fill_method_literal(fill_method)
             python_code_blocks.append(
-                dedent(
-                    f"""\
-                    {v5_source}_{geo_type}_v5_df = epidata.epidata_snapshot(
-                        source="{v5_source}",
-                        signals=[{signals_list}],
-                        geo_type="{geo_type}",
-                        geo_values=[{geo_values_str}],
-                        reference_time=EpiRange("{start_date}", "{end_date}"),
-                        fill_method="{fill_method}",
-                    ).df()
-                """
+                _python_snapshot_call(
+                    f"{v5_source}_{geo_type}_v5_df",
+                    [
+                        ("source", f'"{v5_source}"'),
+                        ("signals", f"[{signals_list}]"),
+                        ("geo_type", f'"{geo_type}"'),
+                        ("geo_values", f"[{geo_values_str}]"),
+                        ("reference_time", f'EpiRange("{start_date}", "{end_date}")'),
+                        ("fill_method", fill),
+                    ],
                 )
             )
             r_code_blocks.append(
-                dedent(
-                    f"""\
-                    epidata_{v5_source}_{geo_type}_v5 <- epidata_snapshot(
-                        source = "{v5_source}",
-                        signals = c({signals_list}),
-                        geo_type = "{geo_type}",
-                        geo_values = c({geo_values_str}),
-                        reference_time = epirange("{start_date}", "{end_date}"),
-                        fill_method = "{fill_method}"
-                    )
-                """
+                _r_snapshot_call(
+                    f"epidata_{v5_source}_{geo_type}_v5",
+                    [
+                        ("source", f'"{v5_source}"'),
+                        ("signals", f"c({signals_list})"),
+                        ("geo_type", f'"{geo_type}"'),
+                        ("geo_values", f"c({geo_values_str})"),
+                        ("reference_time", f'epirange("{start_date}", "{end_date}")'),
+                        ("fill_method", fill),
+                    ],
                 )
             )
     return python_code_blocks, r_code_blocks
@@ -345,36 +369,35 @@ def generate_query_code_pophive(
         return python_code_blocks, r_code_blocks
     signals_list = ", ".join(f'"{i["indicator"]}"' for i in pophive_indicators)
     age_group = pophive_age_group[0]["id"]
+    fill = _fill_method_literal(fill_method)
     for geo in pophive_geos:
         name = f"pophive_{geo['geo_type']}_{geo['id']}"
         python_code_blocks.append(
-            dedent(
-                f"""\
-                {name}_df = epidata.epidata_snapshot(
-                    source="pophive",
-                    signals=[{signals_list}],
-                    geo_type="{geo['geo_type']}",
-                    geo_values="{geo['id']}",
-                    reference_time=EpiRange("{start_date}", "{end_date}"),
-                    fill_method="{fill_method}",
-                ).df()
-                {name}_df = {name}_df[{name}_df["age_group"] == "{age_group}"]
-            """
+            _python_snapshot_call(
+                f"{name}_df",
+                [
+                    ("source", '"pophive"'),
+                    ("signals", f"[{signals_list}]"),
+                    ("geo_type", f'"{geo["geo_type"]}"'),
+                    ("geo_values", f'"{geo["id"]}"'),
+                    ("reference_time", f'EpiRange("{start_date}", "{end_date}")'),
+                    ("fill_method", fill),
+                ],
             )
+            + f'{name}_df = {name}_df[{name}_df["age_group"] == "{age_group}"]\n'
         )
         r_code_blocks.append(
-            dedent(
-                f"""\
-                epidata_{name} <- epidata_snapshot(
-                    source = "pophive",
-                    signals = c({signals_list}),
-                    geo_type = "{geo['geo_type']}",
-                    geo_values = "{geo['id']}",
-                    reference_time = epirange("{start_date}", "{end_date}"),
-                    fill_method = "{fill_method}",
-                    age_group = "{age_group}"
-                )
-            """
+            _r_snapshot_call(
+                f"epidata_{name}",
+                [
+                    ("source", '"pophive"'),
+                    ("signals", f"c({signals_list})"),
+                    ("geo_type", f'"{geo["geo_type"]}"'),
+                    ("geo_values", f'"{geo["id"]}"'),
+                    ("reference_time", f'epirange("{start_date}", "{end_date}")'),
+                    ("fill_method", fill),
+                    ("age_group", f'"{age_group}"'),
+                ],
             )
         )
     return python_code_blocks, r_code_blocks
@@ -404,36 +427,35 @@ def generate_query_code_nwss(
         return python_code_blocks, r_code_blocks
     signals_list = ", ".join(f'"{i["indicator"]}"' for i in nwss_indicators)
     geo_values_list = ", ".join(f'"{geo}"' for geo in nwss_geographic_value)
+    fill = _fill_method_literal(fill_method)
     for source in nwss_source:
         name = f"nwss_source_{source['id']}"
         python_code_blocks.append(
-            dedent(
-                f"""\
-                {name}_df = epidata.epidata_snapshot(
-                    source="nwss",
-                    signals=[{signals_list}],
-                    geo_type="sewershed",
-                    geo_values=[{geo_values_list}],
-                    reference_time=EpiRange("{start_date}", "{end_date}"),
-                    fill_method="{fill_method}",
-                ).df()
-                {name}_df = {name}_df[{name}_df["nwss_source"] == "{source['id']}"]
-            """
+            _python_snapshot_call(
+                f"{name}_df",
+                [
+                    ("source", '"nwss"'),
+                    ("signals", f"[{signals_list}]"),
+                    ("geo_type", '"sewershed"'),
+                    ("geo_values", f"[{geo_values_list}]"),
+                    ("reference_time", f'EpiRange("{start_date}", "{end_date}")'),
+                    ("fill_method", fill),
+                ],
             )
+            + f'{name}_df = {name}_df[{name}_df["nwss_source"] == "{source["id"]}"]\n'
         )
         r_code_blocks.append(
-            dedent(
-                f"""\
-                epidata_{name} <- epidata_snapshot(
-                    source = "nwss",
-                    signals = c({signals_list}),
-                    geo_type = "sewershed",
-                    geo_values = c({geo_values_list}),
-                    reference_time = epirange("{start_date}", "{end_date}"),
-                    fill_method = "{fill_method}",
-                    nwss_source = "{source['id']}"
-                )
-            """
+            _r_snapshot_call(
+                f"epidata_{name}",
+                [
+                    ("source", '"nwss"'),
+                    ("signals", f"c({signals_list})"),
+                    ("geo_type", '"sewershed"'),
+                    ("geo_values", f"c({geo_values_list})"),
+                    ("reference_time", f'epirange("{start_date}", "{end_date}")'),
+                    ("fill_method", fill),
+                    ("nwss_source", f'"{source["id"]}"'),
+                ],
             )
         )
     return python_code_blocks, r_code_blocks

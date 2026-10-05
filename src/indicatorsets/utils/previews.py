@@ -14,13 +14,14 @@ from indicatorsets.utils.constants import (
     NO_DATA_MESSAGE,
 )
 from indicatorsets.utils.epidata import (
+    epidata_auth,
     get_time_values,
     get_v5_source,
     split_geos_by_v5_values,
     split_v4_v5_indicators,
 )
 from indicatorsets.utils.exceptions import InvalidApiKeyError
-from indicatorsets.utils.helpers import get_epiweek
+from indicatorsets.utils.helpers import get_epiweek, is_filled_fill_method
 
 logger = get_structured_logger("indicatorsets.utils")
 
@@ -104,13 +105,15 @@ def _preview_covidcast_v4(
         "time_type": indicator["time_type"],
         "data_source": indicator["data_source"],
         "geo_values": geo_values,
-        "api_key": api_key if api_key else settings.EPIDATA_API_KEY,
         "format": data_format,
         "header": "true" if data_format == "csv" else "false",
     }
     try:
         response = requests.get(
-            f"{settings.EPIDATA_URL}covidcast", params=params, timeout=(5, 30)
+            f"{settings.EPIDATA_URL}covidcast",
+            params=params,
+            auth=epidata_auth(api_key),
+            timeout=(5, 30),
         )
         if response.status_code == 401:
             raise InvalidApiKeyError(INVALID_API_KEY_MESSAGE)
@@ -138,7 +141,8 @@ def preview_covidcast_data(
     """Fetch preview rows per (indicator, geo_type), split across v4 and v5.
 
     Mirrors ``generate_covidcast_indicators_export_url``: geos v5 has no real
-    values for are previewed from v4 instead. The v5 response is already
+    values for are previewed from v4 instead, for the ``source`` fill_method
+    only. The v5 response is already
     fetched in full for the preview, so the check costs no extra request.
     """
     preview_data = []
@@ -173,12 +177,14 @@ def preview_covidcast_data(
                 "signal": indicator["indicator"],
                 "geo_type": geo_type,
                 "geo_value": ",".join(geo_value_list),
-                "fill_method": fill_method,
                 "reference_times": time_values,
-                "token": api_key if api_key else settings.EPIDATA_API_KEY,
                 "format": data_format,
                 "header": "true" if data_format == "csv" else "false",
             }
+            if api_key:
+                params["token"] = api_key
+            if fill_method:
+                params["fill_method"] = fill_method
             try:
                 response = requests.get(
                     f"{settings.EPIDATA_V5_URL}viz/", params=params, timeout=(5, 30)
@@ -203,25 +209,31 @@ def preview_covidcast_data(
                         geo_values=v5_geos,
                     )
                 )
-            if v4_geos:
-                logger.warning(
-                    "Epidata v5 has no values for these geos, falling back to v4",
-                    extra={
-                        "source": v5_source,
-                        "signal": indicator["indicator"],
-                        "geo_type": geo_type,
-                        "geo_values": v4_geos,
-                    },
-                )
-                fallback_label = (
-                    f"{name} ({geo_type}: {', '.join(v4_geos)})" if v5_geos else label
-                )
-                v4_preview = _preview_covidcast_v4(
-                    indicator, start_date, end_date, geo_type,
-                    ",".join(v4_geos), api_key, data_format, fallback_label,
-                )
-                if v4_preview is not None:
-                    preview_data.append(v4_preview)
+            if not v4_geos:
+                continue
+            fallback_label = (
+                f"{name} ({geo_type}: {', '.join(v4_geos)})" if v5_geos else label
+            )
+            if is_filled_fill_method(fill_method):
+                # v4 has no fill_method, so it can only serve the unfilled
+                # series -- not what the user picked.
+                preview_data.append({"message": f"No data found for {fallback_label}."})
+                continue
+            logger.warning(
+                "Epidata v5 has no values for these geos, falling back to v4",
+                extra={
+                    "source": v5_source,
+                    "signal": indicator["indicator"],
+                    "geo_type": geo_type,
+                    "geo_values": v4_geos,
+                },
+            )
+            v4_preview = _preview_covidcast_v4(
+                indicator, start_date, end_date, geo_type,
+                ",".join(v4_geos), api_key, data_format, fallback_label,
+            )
+            if v4_preview is not None:
+                preview_data.append(v4_preview)
     return preview_data
 
 
@@ -258,12 +270,14 @@ def preview_v5_epiweek_data(
                 "signal": indicator["indicator"],
                 "geo_type": geo_type,
                 "geo_value": ",".join(geo_values),
-                "fill_method": fill_method,
                 "reference_times": f"{start_date}:{end_date}",
                 "format": data_format,
                 "header": "true" if data_format == "csv" else "false",
-                "token": api_key if api_key else settings.EPIDATA_API_KEY,
             }
+            if api_key:
+                params["token"] = api_key
+            if fill_method:
+                params["fill_method"] = fill_method
             try:
                 response = requests.get(
                     f"{settings.EPIDATA_V5_URL}viz/", params=params, timeout=(5, 30)
@@ -301,13 +315,15 @@ def preview_v4_epiweek_data(
     params = {
         source.geo_param: geo_values,
         "epiweeks": f"{date_from}-{date_to}",
-        "api_key": api_key if api_key else settings.EPIDATA_API_KEY,
         "format": data_format,
         "header": "true" if data_format == "csv" else "false",
     }
     try:
         response = requests.get(
-            f"{settings.EPIDATA_URL}{data_source}", params=params, timeout=(5, 30)
+            f"{settings.EPIDATA_URL}{data_source}",
+            params=params,
+            auth=epidata_auth(api_key),
+            timeout=(5, 30),
         )
         if response.status_code == 401:
             raise InvalidApiKeyError(INVALID_API_KEY_MESSAGE)
@@ -402,13 +418,15 @@ def preview_pophive_data(
                     "signal": indicator["indicator"],
                     "geo_type": geo["geo_type"],
                     "geo_value": geo["id"],
-                    "fill_method": fill_method,
                     "reference_times": f"{start_date}:{end_date}",
                     "extra_keys": f"age_group:{pophive_age_group[0]['id']}",
                     "format": data_format,
                     "header": "true" if data_format == "csv" else "false",
-                    "token": api_key if api_key else settings.EPIDATA_API_KEY,
                 }
+                if api_key:
+                    params["token"] = api_key
+                if fill_method:
+                    params["fill_method"] = fill_method
                 try:
                     response = requests.get(
                         f"{settings.EPIDATA_V5_URL}viz/", params=params, timeout=(5, 30)
@@ -457,13 +475,15 @@ def preview_nwss_data(
                     "signal": indicator["indicator"],
                     "geo_type": "sewershed",
                     "geo_value": geo_value,
-                    "fill_method": fill_method,
                     "reference_times": f"{start_date}:{end_date}",
                     "extra_keys": f"nwss_source:{source['id']}",
                     "format": data_format,
                     "header": "true" if data_format == "csv" else "false",
-                    "token": api_key if api_key else settings.EPIDATA_API_KEY,
                 }
+                if api_key:
+                    params["token"] = api_key
+                if fill_method:
+                    params["fill_method"] = fill_method
                 try:
                     response = requests.get(
                         f"{settings.EPIDATA_V5_URL}viz/", params=params, timeout=(5, 30)

@@ -25,6 +25,12 @@ import sentry_sdk
 from sentry_sdk.integrations.django import DjangoIntegration
 from sentry_sdk.integrations.redis import RedisIntegration
 
+from epiportal.redaction import install_log_redaction, redact_sentry_event
+
+# Epidata keys can sit in a logged URL (v5's token param, users' keys sent to
+# the download proxy); scrub them from every log record.
+install_log_redaction()
+
 APP_VERSION = "1.2.2"
 ALTERNATIVE_INTERFACE_VERSION = "1.0.11"
 
@@ -63,7 +69,11 @@ if SENTRY_DSN:
         profiles_sample_rate=float(os.environ.get('SENTRY_PROFILES_SAMPLE_RATE', 1.0)),
         environment=(os.environ.get('SENTRY_ENVIRONMENT', 'development')),
         attach_stacktrace=os.environ.get('SENTRY_ATTACH_STACKTRACE', 'False').lower() in ('true', '1', 't'),
-        debug=os.environ.get('SENTRY_DEBUG', 'False').lower() in ('true', '1', 't')
+        debug=os.environ.get('SENTRY_DEBUG', 'False').lower() in ('true', '1', 't'),
+        # Exception messages, breadcrumbs and span data can all carry a URL
+        # with an Epidata key in it.
+        before_send=redact_sentry_event,
+        before_send_transaction=redact_sentry_event,
     )
 
 
@@ -77,7 +87,9 @@ BASE_DIR = Path(__file__).resolve().parent.parent
 
 # SECURITY WARNING: don't run with debug turned on in production!
 # SECURITY WARNING: don't run with debug turned on in production!
-DEBUG = bool(strtobool(os.getenv('DEBUG', 'True')))
+# Off unless switched on: a debug error page shows each frame's local
+# variables, Epidata keys included, so a missing env var must not enable it.
+DEBUG = bool(strtobool(os.getenv('DEBUG', 'False')))
 
 SECRET_KEY = os.environ.get('SECRET_KEY')
 if not SECRET_KEY:
@@ -171,6 +183,7 @@ TEMPLATES: list[dict[str, Any]] = [
                 'django.template.context_processors.request',
                 'django.contrib.auth.context_processors.auth',
                 'django.contrib.messages.context_processors.messages',
+                'base.context_processors.banners',
                 # 'base.context_processors.filters_descriptions'
             ],
             'libraries': {

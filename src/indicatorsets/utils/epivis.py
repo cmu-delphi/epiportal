@@ -134,22 +134,24 @@ def generate_nwss_dataset_epivis(
     geo_values = ",".join(geographic_value).replace(" ", "").split(",")
     for geo_value in geo_values:
         for s in source:
+            params = {
+                "_endpoint": indicator["_endpoint"],
+                "source": "nwss",
+                "signal": indicator["indicator"],
+                "geo_type": geographic_type,
+                "geo_value": geo_value,
+                "custom_title": generate_epivis_custom_title(
+                    indicator, geo_value, s["id"]
+                ),
+                "extra_keys": f"nwss_source:{s['id']}",
+            }
+            if fill_method:
+                params["fill_method"] = fill_method
             datasets.append(
                 {
                     "color": generate_random_color(),
                     "title": "value",
-                    "params": {
-                        "_endpoint": indicator["_endpoint"],
-                        "source": "nwss",
-                        "signal": indicator["indicator"],
-                        "geo_type": geographic_type,
-                        "geo_value": geo_value,
-                        "fill_method": fill_method,
-                        "custom_title": generate_epivis_custom_title(
-                            indicator, geo_value, s["id"]
-                        ),
-                        "extra_keys": f"nwss_source:{s['id']}",
-                    },
+                    "params": params,
                 }
             )
     return datasets

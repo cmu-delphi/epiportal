@@ -3,6 +3,8 @@ from django.conf import settings
 from django.http import JsonResponse, HttpResponseForbidden
 from django.views.generic import TemplateView
 
+from indicatorsets.utils.epidata import epidata_auth
+
 
 class BadRequestErrorView(TemplateView):
     """
@@ -44,10 +46,12 @@ def epidata(request, endpoint=""):
     if endpoint not in ALLOWED_ENDPOINTS:
         return HttpResponseForbidden("Endpoint not allowed")
     params = {k: v for k, v in request.GET.items() if k != "api_key"}
-    params["api_key"] = settings.EPIDATA_API_KEY
     try:
         response = requests.get(
-            f"{settings.EPIDATA_URL}{endpoint}", params=params, timeout=10
+            f"{settings.EPIDATA_URL}{endpoint}",
+            params=params,
+            auth=epidata_auth(),
+            timeout=10,
         )
         response.raise_for_status()
     except requests.RequestException:
