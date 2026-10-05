@@ -138,7 +138,8 @@ def preview_covidcast_data(
     """Fetch preview rows per (indicator, geo_type), split across v4 and v5.
 
     Mirrors ``generate_covidcast_indicators_export_url``: geos v5 has no real
-    values for are previewed from v4 instead. The v5 response is already
+    values for are previewed from v4 instead, for the ``source`` fill_method
+    only. The v5 response is already
     fetched in full for the preview, so the check costs no extra request.
     """
     preview_data = []
@@ -203,25 +204,31 @@ def preview_covidcast_data(
                         geo_values=v5_geos,
                     )
                 )
-            if v4_geos:
-                logger.warning(
-                    "Epidata v5 has no values for these geos, falling back to v4",
-                    extra={
-                        "source": v5_source,
-                        "signal": indicator["indicator"],
-                        "geo_type": geo_type,
-                        "geo_values": v4_geos,
-                    },
-                )
-                fallback_label = (
-                    f"{name} ({geo_type}: {', '.join(v4_geos)})" if v5_geos else label
-                )
-                v4_preview = _preview_covidcast_v4(
-                    indicator, start_date, end_date, geo_type,
-                    ",".join(v4_geos), api_key, data_format, fallback_label,
-                )
-                if v4_preview is not None:
-                    preview_data.append(v4_preview)
+            if not v4_geos:
+                continue
+            fallback_label = (
+                f"{name} ({geo_type}: {', '.join(v4_geos)})" if v5_geos else label
+            )
+            if fill_method != DEFAULT_FILL_METHOD:
+                # v4 has no fill_method, so it can only serve the unfilled
+                # series -- not what the user picked.
+                preview_data.append({"message": f"No data found for {fallback_label}."})
+                continue
+            logger.warning(
+                "Epidata v5 has no values for these geos, falling back to v4",
+                extra={
+                    "source": v5_source,
+                    "signal": indicator["indicator"],
+                    "geo_type": geo_type,
+                    "geo_values": v4_geos,
+                },
+            )
+            v4_preview = _preview_covidcast_v4(
+                indicator, start_date, end_date, geo_type,
+                ",".join(v4_geos), api_key, data_format, fallback_label,
+            )
+            if v4_preview is not None:
+                preview_data.append(v4_preview)
     return preview_data
 
 

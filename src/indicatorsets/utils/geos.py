@@ -86,14 +86,15 @@ def _signals_with_values(rows):
     return {row.get("signal") for row in rows if row.get("value") not in (None, "")}
 
 
-def _get_v5_signals_with_values(v5_source, indicators, geo_type, geo_value):
+def _get_v5_signals_with_values(
+    v5_source, indicators, geo_type, geo_value, fill_method
+):
     """Return the signals of ``indicators`` v5 has a real value for, or ``None``.
 
     v5's ``metadata/geo_signals`` cannot answer this: it lists a signal for a
     geo whenever rows exist, even when every value is null (nssp for Allegheny
-    County). So this reads ``/viz/`` the way exports do. ``fill_method`` stays
-    at the source default, since a filled series would invent values for a geo
-    that has none.
+    County). So this reads ``/viz/`` the way exports do, with the same
+    ``fill_method``, since v5 may hold rows for one fill_method and not another.
     """
     rows = _fetch_rows(
         f"{settings.EPIDATA_V5_URL}viz/",
@@ -102,7 +103,7 @@ def _get_v5_signals_with_values(v5_source, indicators, geo_type, geo_value):
             "signal": ",".join(indicator["indicator"] for indicator in indicators),
             "geo_type": geo_type,
             "geo_value": geo_value,
-            "fill_method": DEFAULT_FILL_METHOD,
+            "fill_method": fill_method,
             "token": settings.EPIDATA_API_KEY,
         },
     )
@@ -132,14 +133,16 @@ def _get_v4_signals_with_values(data_source, time_type, indicators, geo_type, ge
     return None if rows is None else _signals_with_values(rows)
 
 
-def get_covidcast_geo_coverage(geo, indicators):
+def get_covidcast_geo_coverage(geo, indicators, fill_method=DEFAULT_FILL_METHOD):
     """Report, per covidcast indicator, whether ``geo`` has data and from where.
 
     Mirrors the routing exports use, so the modal's warning agrees with what a
     submission will actually do: a migrated signal is served from v5 when v5
     has real values for the geo, and from v4 otherwise. "Has data" means at
     least one non-null value on either API -- a signal that exists for the geo
-    with only null values is not covered.
+    with only null values is not covered. For a filled ``fill_method`` a
+    migrated signal never falls back to v4, which cannot fill, so only v5's
+    values count for it.
 
     ``geo`` is a ``"geo_type:geo_value"`` id. Returns one dict per covidcast
     indicator with its ``data_source`` and ``indicator`` plus ``covered``
@@ -159,6 +162,7 @@ def get_covidcast_geo_coverage(geo, indicators):
     def key(indicator):
         return indicator["data_source"], indicator["indicator"]
 
+    migrated = set()
     on_v5 = set()
     # Indicators whose v5 check failed: v5 may have values even if v4 has none.
     v5_unknown = set()
@@ -166,9 +170,10 @@ def get_covidcast_geo_coverage(geo, indicators):
         covidcast_indicators
     ).items():
         signals = _get_v5_signals_with_values(
-            v5_source, source_indicators, geo_type, geo_value
+            v5_source, source_indicators, geo_type, geo_value, fill_method
         )
         for indicator in source_indicators:
+            migrated.add(key(indicator))
             if signals is None:
                 v5_unknown.add(key(indicator))
             elif indicator["indicator"] in signals:
@@ -179,6 +184,8 @@ def get_covidcast_geo_coverage(geo, indicators):
     v4_groups = {}
     for indicator in covidcast_indicators:
         if key(indicator) in on_v5:
+            continue
+        if key(indicator) in migrated and fill_method != DEFAULT_FILL_METHOD:
             continue
         if not indicator.get("time_type"):
             v4_unknown.add(key(indicator))

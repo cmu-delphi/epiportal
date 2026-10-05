@@ -100,7 +100,9 @@ def generate_covidcast_indicators_export_url(
 
     A migrated signal is probed on v5 first. Geos v5 has no real values for --
     only null rows, or no rows at all -- are exported from v4 instead, so one
-    geo_type can yield both a v5 and a v4 command.
+    geo_type can yield both a v5 and a v4 command. That fallback only applies
+    to the ``source`` fill_method: v4 cannot fill, so for a filled one those
+    geos get a "No data found" note instead.
     """
     data_export_commands = []
     for indicator in indicators:
@@ -146,27 +148,35 @@ def generate_covidcast_indicators_export_url(
                         time_values, data_format, api_key, fill_method,
                     )
                 )
-            if v4_geos:
-                logger.warning(
-                    "Epidata v5 has no values for these geos, falling back to v4",
-                    extra={
-                        "source": v5_source,
-                        "signal": indicator["indicator"],
-                        "geo_type": geo_type,
-                        "geo_values": v4_geos,
-                    },
+            if not v4_geos:
+                continue
+            # Only name the geos when some of the selection did export,
+            # otherwise the label alone already covers every geo.
+            fallback_label = (
+                f"{name} ({geo_type}: {', '.join(v4_geos)})" if v5_geos else label
+            )
+            if fill_method != DEFAULT_FILL_METHOD:
+                # v4 has no fill_method, so it can only serve the unfilled
+                # series -- not what the user picked.
+                data_export_commands.append(
+                    f'<span class="text-muted">No data found for {fallback_label}. Export skipped.</span>'
                 )
-                # Only name the geos when some of the selection did export,
-                # otherwise the label alone already covers every geo.
-                fallback_label = (
-                    f"{name} ({geo_type}: {', '.join(v4_geos)})" if v5_geos else label
+                continue
+            logger.warning(
+                "Epidata v5 has no values for these geos, falling back to v4",
+                extra={
+                    "source": v5_source,
+                    "signal": indicator["indicator"],
+                    "geo_type": geo_type,
+                    "geo_values": v4_geos,
+                },
+            )
+            data_export_commands.extend(
+                _covidcast_v4_export_commands(
+                    indicator, start_date, end_date, geo_type,
+                    ",".join(v4_geos), fallback_label, data_format, api_key,
                 )
-                data_export_commands.extend(
-                    _covidcast_v4_export_commands(
-                        indicator, start_date, end_date, geo_type,
-                        ",".join(v4_geos), fallback_label, data_format, api_key,
-                    )
-                )
+            )
     return data_export_commands
 
 

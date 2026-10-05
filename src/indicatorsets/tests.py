@@ -857,6 +857,71 @@ class CovidcastGeoCoverageTests(TestCase):
         mock_get.assert_not_called()
 
 
+    @patch("indicatorsets.utils.geos.requests.get")
+    def test_filled_fill_method_reaches_the_v5_probe(self, mock_get, _mock_meta):
+        fake_get, calls = self._fake_get(
+            [_row("smoothed_pct_ed_visits_rsv", 0.17)], []
+        )
+        mock_get.side_effect = fake_get
+
+        coverage = get_covidcast_geo_coverage(
+            "county:42003", [NSSP_RSV], fill_method="fill_ave"
+        )
+
+        self.assertEqual(coverage[0]["route"], "v5")
+        self.assertEqual(calls[0][1]["fill_method"], "fill_ave")
+
+    @patch("indicatorsets.utils.geos.requests.get")
+    def test_filled_fill_method_does_not_count_v4_values_for_a_migrated_signal(
+        self, mock_get, _mock_meta
+    ):
+        # Exports skip v4 for a filled fill_method, since v4 cannot fill, so
+        # the modal must not call the geo covered on v4's strength either.
+        fake_get, calls = self._fake_get(
+            [], [_row("smoothed_pct_ed_visits_rsv", 0.2)]
+        )
+        mock_get.side_effect = fake_get
+
+        coverage = get_covidcast_geo_coverage(
+            "county:42003", [NSSP_RSV], fill_method="fill_ave"
+        )
+
+        self.assertEqual(coverage[0]["covered"], False)
+        self.assertIsNone(coverage[0]["route"])
+        self.assertEqual(self._v4_calls(calls), [])
+
+    @patch("indicatorsets.utils.geos.requests.get")
+    def test_filled_fill_method_with_failed_v5_lookup_reports_unknown(
+        self, mock_get, _mock_meta
+    ):
+        fake_get, calls = self._fake_get(
+            None, [_row("smoothed_pct_ed_visits_rsv", 0.2)]
+        )
+        mock_get.side_effect = fake_get
+
+        coverage = get_covidcast_geo_coverage(
+            "county:42003", [NSSP_RSV], fill_method="fill_zero"
+        )
+
+        self.assertIsNone(coverage[0]["covered"])
+        self.assertEqual(self._v4_calls(calls), [])
+
+    @patch("indicatorsets.utils.geos.requests.get")
+    def test_filled_fill_method_still_checks_v4_only_indicators_on_v4(
+        self, mock_get, _mock_meta
+    ):
+        # An unmigrated source exports from v4 whatever the fill_method.
+        fake_get, calls = self._fake_get([], [_row("smoothed_cli", 1.0)])
+        mock_get.side_effect = fake_get
+
+        coverage = get_covidcast_geo_coverage(
+            "county:42003", [V4_ONLY], fill_method="fill_ave"
+        )
+
+        self.assertEqual(coverage[0]["covered"], True)
+        self.assertEqual(coverage[0]["route"], "v4")
+
+
 class CheckCovidcastGeoCoverageViewTests(TestCase):
     @patch("indicatorsets.views.get_covidcast_geo_coverage")
     def test_post_returns_coverage(self, mock_coverage):
@@ -872,7 +937,37 @@ class CheckCovidcastGeoCoverageViewTests(TestCase):
         self.assertEqual(
             response.json(), {"coverage": [{"indicator": "sig", "covered": True}]}
         )
-        mock_coverage.assert_called_once_with("county:42003", [NSSP_RSV])
+        mock_coverage.assert_called_once_with(
+            "county:42003", [NSSP_RSV], fill_method="source"
+        )
+
+    @patch("indicatorsets.views.get_covidcast_geo_coverage", return_value=[])
+    def test_post_passes_the_chosen_fill_method(self, mock_coverage):
+        self.client.post(
+            reverse("check_covidcast_geo_coverage"),
+            data=json.dumps(
+                {"geo": "county:42003", "indicators": [NSSP_RSV], "fill_method": "fill_ave"}
+            ),
+            content_type="application/json",
+        )
+
+        mock_coverage.assert_called_once_with(
+            "county:42003", [NSSP_RSV], fill_method="fill_ave"
+        )
+
+    @patch("indicatorsets.views.get_covidcast_geo_coverage", return_value=[])
+    def test_unrecognised_fill_method_falls_back_to_source(self, mock_coverage):
+        self.client.post(
+            reverse("check_covidcast_geo_coverage"),
+            data=json.dumps(
+                {"geo": "county:42003", "indicators": [NSSP_RSV], "fill_method": "bogus"}
+            ),
+            content_type="application/json",
+        )
+
+        mock_coverage.assert_called_once_with(
+            "county:42003", [NSSP_RSV], fill_method="source"
+        )
 
     def test_get_is_rejected(self):
         response = self.client.get(reverse("check_covidcast_geo_coverage"))
@@ -4775,6 +4870,71 @@ class DiffV5IndicatorsV4OnlyReportTests(TestCase):
         self.assertIn("v4-only:           2", output)
 
 
+class EpidataBaseUrlSettingsTests(TestCase):
+    """Base URLs get a trailing slash, since callers append paths to them."""
+
+    def _base_urls_for(self, **env):
+        """Return ``(EPIDATA_URL, EPIDATA_V5_URL)`` as settings computes them for ``env``.
+
+        Reloading mutates the one module object, so the values are read before
+        the ``finally`` reload puts the real environment's back.
+        """
+        import importlib
+
+        import epiportal.settings as settings_module
+
+        try:
+            with patch.dict(os.environ, env):
+                importlib.reload(settings_module)
+                return settings_module.EPIDATA_URL, settings_module.EPIDATA_V5_URL
+        finally:
+            importlib.reload(settings_module)
+
+    def test_adds_a_missing_trailing_slash(self):
+        self.assertEqual(
+            self._base_urls_for(
+                EPIDATA_URL="https://example.org/epidata",
+                EPIDATA_V5_URL="https://example.org/epidata/v5",
+            ),
+            ("https://example.org/epidata/", "https://example.org/epidata/v5/"),
+        )
+
+    def test_keeps_an_existing_trailing_slash_single(self):
+        self.assertEqual(
+            self._base_urls_for(
+                EPIDATA_URL="https://example.org/epidata/",
+                EPIDATA_V5_URL="https://example.org/epidata/v5//",
+            ),
+            ("https://example.org/epidata/", "https://example.org/epidata/v5/"),
+        )
+
+
+class GetPreviewDataGeoFilterTests(TestCase):
+    def test_filters_a_v4_envelope_to_the_given_geos(self):
+        response = MagicMock()
+        response.json.return_value = {
+            "epidata": [{"geo_value": "42003"}, {"geo_value": "17031"}],
+            "result": 1,
+            "message": "success",
+        }
+        result = get_preview_data(response, "json", geo_values=["17031"])
+        self.assertEqual(result["epidata"], {"geo_value": "17031"})
+
+    def test_no_rows_left_after_filtering_is_no_data(self):
+        response = MagicMock()
+        response.json.return_value = [{"geo_value": "42003", "value": None}]
+        result = get_preview_data(
+            response, "json", no_data_message="none", geo_values=["17031"]
+        )
+        self.assertEqual(result, {"message": "none"})
+
+    def test_csv_without_a_geo_value_column_is_left_unfiltered(self):
+        response = MagicMock()
+        response.text = "signal,value\nsig,1\n"
+        result = get_preview_data(response, "csv", geo_values=["17031"])
+        self.assertEqual(result, [["signal", "value"], ["sig", "1"]])
+
+
 class SplitGeosByV5ValuesTests(TestCase):
     def test_geo_with_a_real_value_stays_on_v5(self):
         rows = [{"geo_value": "17031", "value": 1.5}]
@@ -4833,8 +4993,20 @@ class CovidcastV5NullFallbackTests(V5RoutingTestMixin, TestCase):
         ]
     }
 
-    def _fake(self, v5_values, v4_has_data=True):
-        """``v5_values`` maps geo -> value; geos left out get no v5 rows at all."""
+    def _fake(
+        self,
+        v5_values,
+        v4_has_data=True,
+        v5_error=None,
+        v5_status=200,
+        v5_fill_methods=("source",),
+    ):
+        """``v5_values`` maps geo -> value; geos left out get no v5 rows at all.
+
+        ``v5_error`` is raised by the v5 data request, ``v5_status`` is its
+        status code, and v5 returns rows only for ``v5_fill_methods`` -- live
+        v5 nssp has none for the filled ones.
+        """
 
         def rows_as_csv(rows, columns):
             lines = [",".join(columns)]
@@ -4851,12 +5023,16 @@ class CovidcastV5NullFallbackTests(V5RoutingTestMixin, TestCase):
             if "metadata/" in url:
                 response.json.return_value = {"nssp": {"signals": [self.SIGNAL]}}
             elif "/v5/" in url:
+                if v5_error is not None:
+                    raise v5_error
+                response.status_code = v5_status
+                served = params.get("fill_method") in v5_fill_methods
                 # null rows first, so a naive "first row" preview would show one
                 rows = sorted(
                     (
                         {"geo_value": geo, "value": v5_values[geo]}
                         for geo in params["geo_value"].split(",")
-                        if geo in v5_values
+                        if served and geo in v5_values
                     ),
                     key=lambda row: row["value"] is not None,
                 )
@@ -5036,3 +5212,129 @@ class CovidcastV5NullFallbackTests(V5RoutingTestMixin, TestCase):
         self.assertEqual(
             mock_logger.warning.call_args.kwargs["extra"]["geo_values"], ["42003"]
         )
+
+    @patch("indicatorsets.utils.epidata.requests.get")
+    def test_export_falls_back_to_v4_when_the_v5_request_fails(self, mock_get):
+        mock_get.side_effect = self._fake(
+            {}, v5_error=requests.ConnectionError("v5 down")
+        )
+
+        result = self._export()
+
+        self.assertEqual(len(result), 1)
+        self.assertIn("covidcast/csv?", result[0])
+        self.assertIn("geo_values=42003,17031&", result[0])
+
+    @patch("indicatorsets.utils.previews.requests.get")
+    def test_preview_falls_back_to_v4_when_the_v5_request_fails(self, mock_get):
+        mock_get.side_effect = self._fake(
+            {}, v5_error=requests.ConnectionError("v5 down")
+        )
+
+        result = self._preview()
+
+        self.assertEqual(len(result), 1)
+        self.assertEqual(result[0]["epidata"]["geo_value"], "42003")
+        self.assertEqual(
+            self._v4_calls(mock_get)[0].kwargs["params"]["geo_values"], "42003,17031"
+        )
+
+    @patch("indicatorsets.utils.epidata.requests.get")
+    def test_export_rejected_api_key_raises_instead_of_falling_back(self, mock_get):
+        mock_get.side_effect = self._fake({"17031": 0.4}, v5_status=401)
+
+        with self.assertRaises(InvalidApiKeyError):
+            self._export()
+        self.assertEqual(self._v4_calls(mock_get), [])
+
+    @patch("indicatorsets.utils.previews.requests.get")
+    def test_preview_rejected_api_key_raises_instead_of_falling_back(self, mock_get):
+        mock_get.side_effect = self._fake({"17031": 0.4}, v5_status=401)
+
+        with self.assertRaises(InvalidApiKeyError):
+            self._preview()
+        self.assertEqual(self._v4_calls(mock_get), [])
+
+    @patch("indicatorsets.utils.previews.requests.get")
+    def test_preview_names_the_geos_neither_api_has_values_for(self, mock_get):
+        mock_get.side_effect = self._fake(
+            {"42003": None, "17031": 0.4}, v4_has_data=False
+        )
+
+        result = self._preview()
+
+        self.assertEqual(len(result), 2)
+        self.assertEqual(result[0], {"geo_value": "17031", "value": 0.4})
+        self.assertEqual(
+            result[1], {"message": "No data found for RSV ED Visits (county: 42003)."}
+        )
+
+    def _export_filled(self, geos=None):
+        return generate_covidcast_indicators_export_url(
+            [self.INDICATOR], "2024-01-01", "2024-03-01",
+            geos or self.ALLEGHENY_AND_COOK, None, "csv", fill_method="fill_ave",
+        )
+
+    @patch("indicatorsets.utils.epidata.requests.get")
+    def test_filled_fill_method_v5_lacks_reports_no_data_without_v4(self, mock_get):
+        """v4 has no fill_method, so it cannot serve a filled series.
+
+        Live v5 nssp has no fill_ave rows at all; exporting v4's unfilled
+        series instead would silently hand over something the user did not ask
+        for.
+        """
+        mock_get.side_effect = self._fake({"42003": 0.1, "17031": 0.4})
+
+        result = self._export_filled()
+
+        self.assertEqual(
+            result,
+            [
+                '<span class="text-muted">No data found for RSV ED Visits '
+                "(county). Export skipped.</span>"
+            ],
+        )
+        self.assertEqual(self._v4_calls(mock_get), [])
+
+    @patch("indicatorsets.utils.epidata.requests.get")
+    def test_filled_fill_method_exports_v5_geos_and_names_the_rest(self, mock_get):
+        mock_get.side_effect = self._fake(
+            {"42003": None, "17031": 0.4}, v5_fill_methods=("fill_ave",)
+        )
+
+        result = self._export_filled()
+
+        self.assertEqual(len(result), 2)
+        self.assertIn("geo_value=17031&", result[0])
+        self.assertIn("fill_method=fill_ave", result[0])
+        self.assertIn("No data found for RSV ED Visits (county: 42003)", result[1])
+        self.assertEqual(self._v4_calls(mock_get), [])
+
+    @patch("indicatorsets.utils.exports.logger")
+    @patch("indicatorsets.utils.epidata.requests.get")
+    def test_filled_fill_method_does_not_log_a_v4_fallback(self, mock_get, mock_logger):
+        mock_get.side_effect = self._fake({"42003": None, "17031": 0.4})
+
+        self._export_filled()
+
+        mock_logger.warning.assert_not_called()
+
+    @patch("indicatorsets.utils.previews.requests.get")
+    def test_filled_fill_method_preview_reports_no_data_without_v4(self, mock_get):
+        mock_get.side_effect = self._fake(
+            {"42003": None, "17031": 0.4}, v5_fill_methods=("fill_ave",)
+        )
+
+        result = preview_covidcast_data(
+            [self.INDICATOR], "2024-01-01", "2024-03-01", self.ALLEGHENY_AND_COOK,
+            None, "json", fill_method="fill_ave",
+        )
+
+        self.assertEqual(
+            result,
+            [
+                {"geo_value": "17031", "value": 0.4},
+                {"message": "No data found for RSV ED Visits (county: 42003)."},
+            ],
+        )
+        self.assertEqual(self._v4_calls(mock_get), [])

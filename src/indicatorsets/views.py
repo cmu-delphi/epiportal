@@ -886,7 +886,9 @@ def check_covidcast_geo_coverage(request):
     """Tell the selected-indicators modal which covidcast indicators have data
     for one geo, and whether v5 or v4 will serve them.
 
-    Expects a JSON body ``{"geo": "geo_type:geo_value", "indicators": [...]}``.
+    Expects a JSON body ``{"geo": "geo_type:geo_value", "indicators": [...]}``,
+    plus an optional ``fill_method``: exports only fall back to v4 for the
+    ``source`` one, so the answer depends on it.
     """
     if request.method != "POST":
         return JsonResponse({"error": "POST required"}, status=405)
@@ -898,7 +900,14 @@ def check_covidcast_geo_coverage(request):
     indicators = data.get("indicators") or []
     if ":" not in geo or not isinstance(indicators, list):
         return JsonResponse({"error": "Expected geo and indicators"}, status=400)
-    return JsonResponse({"coverage": get_covidcast_geo_coverage(geo, indicators)})
+    fill_method = normalize_fill_method(data.get("fill_method"))
+    return JsonResponse(
+        {
+            "coverage": get_covidcast_geo_coverage(
+                geo, indicators, fill_method=fill_method
+            )
+        }
+    )
 
 
 def age_group_sort_key(value):

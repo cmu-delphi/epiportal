@@ -97,6 +97,7 @@ const appendAlert = (message, type) => {
     wrapper
         .getElementsByClassName("btn-close")[0]
         .addEventListener("click", () => hideAlert(alertId));
+    return wrapper;
 };
 
 var currentMode = "epivis";
@@ -127,8 +128,11 @@ function getFillMethod() {
  * See https://github.com/cmu-delphi/www-epivis for the missing param. */
 function hideFillMethod() {
     // Reset as well as hide: the control keeps its value across mode changes,
-    // so a hidden one would otherwise still be read into the payload.
-    $("#fillMethod").val("source");
+    // so a hidden one would otherwise still be read into the payload. Trigger
+    // change so covidcast coverage is rechecked for the reset value.
+    if ($("#fillMethod").val() !== "source") {
+        $("#fillMethod").val("source").trigger("change");
+    }
     $("#fillMethodDiv").hide();
 }
 
@@ -201,14 +205,21 @@ function showNotCoveredGeoWarningMessage(notCoveredIndicators, geoValue) {
             warningMessage += `Indicator "${indicator.display_name}" is not available for Location "${geoValue.text}" for the time period from "${startDate}" to "${endDate}" <br>`;
         }
     });
-    appendAlert(warningMessage, "warning");
+    return appendAlert(warningMessage, "warning");
 }
+
+/* Bumped whenever the fill method changes, so a coverage check still in
+ * flight for the old one is ignored rather than raising a stale warning. */
+let coverageCheckGeneration = 0;
 
 /* Asks the server, which routes each covidcast indicator to v5 or v4 the
  * same way Export does, whether geoValue has data for it. Only real values
  * count: an indicator with nothing but nulls on both APIs is not covered.
- * covered === null means the check itself failed, so no warning is shown. */
+ * The answer depends on the fill method, since Export only falls back to v4
+ * for "source". covered === null means the check itself failed, so no warning
+ * is shown. Resolves to null when the fill method changed mid-check. */
 async function checkGeoCoverage(geoValue) {
+    const generation = coverageCheckGeneration;
     const notCoveredIndicators = [];
     const covidcastIndicators = checkedIndicatorMembers.filter(
         (indicator) => indicator["_endpoint"] === "covidcast"
@@ -226,6 +237,7 @@ async function checkGeoCoverage(geoValue) {
             headers: { "X-CSRFToken": Cookies.get("csrftoken") },
             data: JSON.stringify({
                 geo: geoValue,
+                fill_method: getFillMethod(),
                 indicators: covidcastIndicators.map((indicator) => ({
                     _endpoint: indicator["_endpoint"],
                     data_source: indicator.data_source,
@@ -235,21 +247,32 @@ async function checkGeoCoverage(geoValue) {
             }),
         });
 
+        if (generation !== coverageCheckGeneration) {
+            return null;
+        }
+
         covidcastIndicators.forEach((indicator) => {
             const entry = result["coverage"].find(
                 (e) =>
                     e.data_source === indicator.data_source &&
                     e.indicator === indicator.indicator
             );
-            if (entry && entry.covered === false) {
-                if (!indicator["notCoveredGeos"]) {
-                    indicator["notCoveredGeos"] = [];
+            if (!entry || entry.covered !== false) {
+                // Covered now, perhaps not under the previous fill method.
+                if (indicator["notCoveredGeos"]) {
+                    indicator["notCoveredGeos"] = indicator["notCoveredGeos"].filter(
+                        (geo) => geo !== geoValue
+                    );
                 }
-                if (!indicator["notCoveredGeos"].includes(geoValue)) {
-                    indicator["notCoveredGeos"].push(geoValue);
-                }
-                notCoveredIndicators.push(indicator);
+                return;
             }
+            if (!indicator["notCoveredGeos"]) {
+                indicator["notCoveredGeos"] = [];
+            }
+            if (!indicator["notCoveredGeos"].includes(geoValue)) {
+                indicator["notCoveredGeos"].push(geoValue);
+            }
+            notCoveredIndicators.push(indicator);
         });
 
         return notCoveredIndicators;
@@ -301,13 +324,29 @@ async function getAvailableGeos(indicators) {
     }
 }
 
-$("#geographic_value").on("select2:select", function (e) {
-    var geo = e.params.data;
+/* Covidcast coverage warnings are tagged so a fill method change can swap
+ * them out without touching the other alerts in the modal. */
+function warnIfCovidcastGeoNotCovered(geo) {
     checkGeoCoverage(geo.id).then((notCoveredIndicators) => {
-        if (notCoveredIndicators.length > 0) {
-            showNotCoveredGeoWarningMessage(notCoveredIndicators, geo);
+        if (notCoveredIndicators && notCoveredIndicators.length > 0) {
+            showNotCoveredGeoWarningMessage(notCoveredIndicators, geo).classList.add(
+                "covidcast-coverage-alert"
+            );
         }
     });
+}
+
+$("#geographic_value").on("select2:select", function (e) {
+    warnIfCovidcastGeoNotCovered(e.params.data);
+});
+
+$("#fillMethod").on("change", function () {
+    coverageCheckGeneration += 1;
+    $("#warning-alert .covidcast-coverage-alert").remove();
+    if (!$("#geographic_value").hasClass("select2-hidden-accessible")) {
+        return;
+    }
+    $("#geographic_value").select2("data").forEach(warnIfCovidcastGeoNotCovered);
 });
 
 $("#otherEndpointLocations").on("select2:select", "#fluviewLocations", function (e) {
@@ -472,13 +511,7 @@ $("#showSelectedIndicatorsButton").click(async function () {
     } else {
         $("#geographic_value").prop("disabled", false);
     }
-    $('#geographic_value').select2("data").forEach(geo => {
-        checkGeoCoverage(geo.id).then((notCoveredIndicators) => {
-            if (notCoveredIndicators.length > 0) {
-                showNotCoveredGeoWarningMessage(notCoveredIndicators, geo);
-            }
-        })
-    });
+    $('#geographic_value').select2("data").forEach(warnIfCovidcastGeoNotCovered);
 });
 
 
