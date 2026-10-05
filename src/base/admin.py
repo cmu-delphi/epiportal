@@ -1,6 +1,7 @@
 from django.contrib import admin
 
 from base.models import (
+    Banner,
     Pathogen,
     GeographicScope,
     Geography,
@@ -80,3 +81,16 @@ class GeographyUnitAdmin(admin.ModelAdmin):
     list_per_page = 20
     list_display_links = ["name"]
     list_editable = ["display_name"]
+
+
+@admin.register(Banner)
+class BannerAdmin(admin.ModelAdmin):
+    """
+    Admin interface for site-wide banners.
+    """
+
+    list_display = ["__str__", "style", "is_active", "starts_at", "ends_at", "updated_at"]
+    list_filter = ["is_active", "style"]
+    list_editable = ["is_active"]
+    search_fields = ["message"]
+    fields = ["message", "style", "is_active", "starts_at", "ends_at"]
