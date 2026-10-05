@@ -65,3 +65,12 @@ def normalize_fill_method(value):
     rather than passed through.
     """
     return value if value in FILL_METHODS else DEFAULT_FILL_METHOD
+
+
+def is_filled_fill_method(fill_method):
+    """Whether ``fill_method`` asks for a filled series rather than the reported one.
+
+    No fill_method and ``source`` both mean the series as reported, which v4
+    can serve too; only the filled ones have no v4 equivalent.
+    """
+    return fill_method in ("fill_ave", "fill_zero")

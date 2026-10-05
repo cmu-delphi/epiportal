@@ -20,7 +20,7 @@ from indicatorsets.utils.epidata import (
     split_v4_v5_indicators,
 )
 from indicatorsets.utils.exceptions import InvalidApiKeyError
-from indicatorsets.utils.helpers import get_epiweek
+from indicatorsets.utils.helpers import get_epiweek, is_filled_fill_method
 
 logger = get_structured_logger("indicatorsets.utils")
 
@@ -174,12 +174,14 @@ def preview_covidcast_data(
                 "signal": indicator["indicator"],
                 "geo_type": geo_type,
                 "geo_value": ",".join(geo_value_list),
-                "fill_method": fill_method,
                 "reference_times": time_values,
-                "token": api_key if api_key else settings.EPIDATA_API_KEY,
                 "format": data_format,
                 "header": "true" if data_format == "csv" else "false",
             }
+            if api_key:
+                params["token"] = api_key
+            if fill_method:
+                params["fill_method"] = fill_method
             try:
                 response = requests.get(
                     f"{settings.EPIDATA_V5_URL}viz/", params=params, timeout=(5, 30)
@@ -209,7 +211,7 @@ def preview_covidcast_data(
             fallback_label = (
                 f"{name} ({geo_type}: {', '.join(v4_geos)})" if v5_geos else label
             )
-            if fill_method != DEFAULT_FILL_METHOD:
+            if is_filled_fill_method(fill_method):
                 # v4 has no fill_method, so it can only serve the unfilled
                 # series -- not what the user picked.
                 preview_data.append({"message": f"No data found for {fallback_label}."})
@@ -265,12 +267,14 @@ def preview_v5_epiweek_data(
                 "signal": indicator["indicator"],
                 "geo_type": geo_type,
                 "geo_value": ",".join(geo_values),
-                "fill_method": fill_method,
                 "reference_times": f"{start_date}:{end_date}",
                 "format": data_format,
                 "header": "true" if data_format == "csv" else "false",
-                "token": api_key if api_key else settings.EPIDATA_API_KEY,
             }
+            if api_key:
+                params["token"] = api_key
+            if fill_method:
+                params["fill_method"] = fill_method
             try:
                 response = requests.get(
                     f"{settings.EPIDATA_V5_URL}viz/", params=params, timeout=(5, 30)
@@ -409,13 +413,15 @@ def preview_pophive_data(
                     "signal": indicator["indicator"],
                     "geo_type": geo["geo_type"],
                     "geo_value": geo["id"],
-                    "fill_method": fill_method,
                     "reference_times": f"{start_date}:{end_date}",
                     "extra_keys": f"age_group:{pophive_age_group[0]['id']}",
                     "format": data_format,
                     "header": "true" if data_format == "csv" else "false",
-                    "token": api_key if api_key else settings.EPIDATA_API_KEY,
                 }
+                if api_key:
+                    params["token"] = api_key
+                if fill_method:
+                    params["fill_method"] = fill_method
                 try:
                     response = requests.get(
                         f"{settings.EPIDATA_V5_URL}viz/", params=params, timeout=(5, 30)
@@ -464,13 +470,15 @@ def preview_nwss_data(
                     "signal": indicator["indicator"],
                     "geo_type": "sewershed",
                     "geo_value": geo_value,
-                    "fill_method": fill_method,
                     "reference_times": f"{start_date}:{end_date}",
                     "extra_keys": f"nwss_source:{source['id']}",
                     "format": data_format,
                     "header": "true" if data_format == "csv" else "false",
-                    "token": api_key if api_key else settings.EPIDATA_API_KEY,
                 }
+                if api_key:
+                    params["token"] = api_key
+                if fill_method:
+                    params["fill_method"] = fill_method
                 try:
                     response = requests.get(
                         f"{settings.EPIDATA_V5_URL}viz/", params=params, timeout=(5, 30)

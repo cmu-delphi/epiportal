@@ -9,7 +9,7 @@ from delphi_utils import get_structured_logger
 from indicatorsets.utils.caching import safe_cache_get, safe_cache_set
 from indicatorsets.utils.constants import DEFAULT_FILL_METHOD
 from indicatorsets.utils.epidata import group_v5_indicators_by_source
-from indicatorsets.utils.helpers import list_to_dict
+from indicatorsets.utils.helpers import is_filled_fill_method, list_to_dict
 
 logger = get_structured_logger("indicatorsets.utils")
 
@@ -96,17 +96,16 @@ def _get_v5_signals_with_values(
     County). So this reads ``/viz/`` the way exports do, with the same
     ``fill_method``, since v5 may hold rows for one fill_method and not another.
     """
-    rows = _fetch_rows(
-        f"{settings.EPIDATA_V5_URL}viz/",
-        {
-            "source": v5_source,
-            "signal": ",".join(indicator["indicator"] for indicator in indicators),
-            "geo_type": geo_type,
-            "geo_value": geo_value,
-            "fill_method": fill_method,
-            "token": settings.EPIDATA_API_KEY,
-        },
-    )
+    params = {
+        "source": v5_source,
+        "signal": ",".join(indicator["indicator"] for indicator in indicators),
+        "geo_type": geo_type,
+        "geo_value": geo_value,
+        "token": settings.EPIDATA_API_KEY,
+    }
+    if fill_method:
+        params["fill_method"] = fill_method
+    rows = _fetch_rows(f"{settings.EPIDATA_V5_URL}viz/", params)
     return None if rows is None else _signals_with_values(rows)
 
 
@@ -185,7 +184,7 @@ def get_covidcast_geo_coverage(geo, indicators, fill_method=DEFAULT_FILL_METHOD)
     for indicator in covidcast_indicators:
         if key(indicator) in on_v5:
             continue
-        if key(indicator) in migrated and fill_method != DEFAULT_FILL_METHOD:
+        if key(indicator) in migrated and is_filled_fill_method(fill_method):
             continue
         if not indicator.get("time_type"):
             v4_unknown.add(key(indicator))

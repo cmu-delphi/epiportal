@@ -116,7 +116,7 @@ function isV5Indicator(indicator) {
 }
 
 function getFillMethod() {
-    return $("#fillMethod").val() || "source";
+    return $("#fillMethod").val() || "";
 }
 
 /* Plotting never offers the control. EpiVis picks v4 vs v5 itself and its
@@ -130,8 +130,8 @@ function hideFillMethod() {
     // Reset as well as hide: the control keeps its value across mode changes,
     // so a hidden one would otherwise still be read into the payload. Trigger
     // change so covidcast coverage is rechecked for the reset value.
-    if ($("#fillMethod").val() !== "source") {
-        $("#fillMethod").val("source").trigger("change");
+    if ($("#fillMethod").val() !== "") {
+        $("#fillMethod").val("").trigger("change");
     }
     $("#fillMethodDiv").hide();
 }
