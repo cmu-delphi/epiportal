@@ -1,3 +1,5 @@
+// Starting height for the scroll body; fitTableToContainer() replaces it as
+// soon as the table is drawn.
 function calculate_table_height() {
     var h = Math.max(
         document.documentElement.clientHeight,
@@ -8,6 +10,41 @@ function calculate_table_height() {
         percent = 70;
     }
     return (percent * h) / 100;
+}
+
+// Below this the table body would be too short to use; let the container
+// scroll instead.
+var MIN_TABLE_BODY_HEIGHT = 200;
+
+/* Size the table's scroll body to whatever its container has left, so the
+ * body is the only thing that scrolls. A fixed share of the window cannot do
+ * that: the stats line, the selection toolbar and the header above the body
+ * change height as they load and wrap, and any overflow scrolls the container
+ * as well, giving two vertical scrollbars. */
+function fitTableToContainer() {
+    var wrapper = document.getElementById("indicatorSetsTable_wrapper");
+    var container = wrapper?.closest(".table-container");
+    var scrollBody = wrapper?.querySelector(".dt-scroll-body");
+    if (!container || !scrollBody) {
+        return;
+    }
+    var containerRect = container.getBoundingClientRect();
+    var bodyRect = scrollBody.getBoundingClientRect();
+    var containerStyle = getComputedStyle(container);
+    // Everything stacked above and below the body inside the container,
+    // measured as if the container were not scrolled.
+    var above = bodyRect.top - containerRect.top + container.scrollTop
+        - parseFloat(containerStyle.borderTopWidth);
+    var below = wrapper.getBoundingClientRect().bottom - bodyRect.bottom
+        + parseFloat(getComputedStyle(wrapper).marginBottom)
+        + parseFloat(containerStyle.paddingBottom);
+    var height = Math.max(
+        Math.floor(container.clientHeight - above - below),
+        MIN_TABLE_BODY_HEIGHT
+    );
+    if (scrollBody.style.maxHeight !== `${height}px`) {
+        scrollBody.style.maxHeight = `${height}px`;
+    }
 }
 
 var table = new DataTable("#indicatorSetsTable", {  
@@ -101,7 +138,7 @@ var table = new DataTable("#indicatorSetsTable", {
     paging: false,
     scrollCollapse: true,
     scrollX: true,
-    scrollY: calculate_table_height() + 75,
+    scrollY: calculate_table_height(),
     fixedColumns: {
         left: 3,
     },
@@ -157,6 +194,24 @@ var table = new DataTable("#indicatorSetsTable", {
             $(row).addClass('odd-row');
         }
     },
+});
+
+table.on("init", function () {
+    fitTableToContainer();
+    // Refit whenever the space changes: the window or filter panel resizes the
+    // container, and the rows around the body grow as the stats line loads and
+    // the selection toolbar wraps. The body's own row is left out, since the
+    // fit itself resizes it.
+    if (typeof ResizeObserver === "function") {
+        var observer = new ResizeObserver(fitTableToContainer);
+        var wrapper = document.getElementById("indicatorSetsTable_wrapper");
+        observer.observe(wrapper.closest(".table-container"));
+        wrapper.querySelectorAll(".dt-layout-row:not(.dt-layout-table)").forEach(function (row) {
+            observer.observe(row);
+        });
+    } else {
+        window.addEventListener("resize", fitTableToContainer);
+    }
 });
 
 function escapeAttr(str) {
