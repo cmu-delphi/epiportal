@@ -1,7 +1,7 @@
 from datetime import datetime
 from unittest.mock import MagicMock, patch
 
-from django.test import Client, TestCase
+from django.test import Client, TestCase, override_settings
 from django.urls import reverse
 
 from alternative_interface.models import ExpressViewIndicator
@@ -477,3 +477,38 @@ class GetAvailableGeosTests(TestCase):
         geos = get_available_geos([])
         child_count = sum(len(group["children"]) for group in geos)
         self.assertEqual(child_count, GeographyUnit.objects.count())
+
+
+@override_settings(EPIDATA_API_KEY="server-key")
+class EpidataKeySentAsHeaderTests(TestCase):
+    """The express view's v4 requests send the key as basic auth, not in the URL."""
+
+    def _call(self, fetch, *args):
+        with patch("alternative_interface.utils.epidata.requests.get") as mock_get:
+            mock_get.return_value = MagicMock(
+                status_code=200, json=lambda: {"epidata": []}
+            )
+            fetch(*args)
+        return mock_get.call_args.kwargs
+
+    def test_covidcast_and_fluview_requests(self):
+        from alternative_interface.utils.epidata import (
+            get_covidcast_data,
+            get_fluview_data,
+        )
+
+        indicator = {"name": "wili", "data_source": "fluview", "time_type": "week"}
+        cases = {
+            "covidcast": (
+                get_covidcast_data,
+                {**indicator, "data_source": "src"},
+                "2024-01-01", "2024-03-01", "state:pa",
+            ),
+            "fluview": (get_fluview_data, indicator, "nation:us", "2024-01-01", "2024-03-01"),
+        }
+        for name, (fetch, *args) in cases.items():
+            for api_key, expected in ((None, "server-key"), ("user-key", "user-key")):
+                with self.subTest(name, api_key=api_key):
+                    kwargs = self._call(fetch, *args, api_key)
+                    self.assertNotIn("api_key", kwargs["params"])
+                    self.assertEqual(kwargs["auth"], ("epidata", expected))

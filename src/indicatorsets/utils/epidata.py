@@ -15,7 +15,18 @@ from indicatorsets.utils.helpers import get_epiweek
 logger = get_structured_logger("indicatorsets.utils")
 
 
-def get_epidata_rows(url, params):
+def epidata_auth(api_key=None):
+    """Basic-auth credentials for a v4 request: the user's key, else the server's.
+
+    v4 reads the key from an auth header as readily as from ``api_key``, and a
+    header keeps it out of the URL -- and so out of any ``HTTPError`` message,
+    log line or Sentry event about the request.
+    """
+    key = api_key or settings.EPIDATA_API_KEY
+    return ("epidata", key) if key else None
+
+
+def get_epidata_rows(url, params, auth=None):
     """Return the rows an Epidata endpoint has for ``params``, or ``[]`` on error.
 
     Handles both response shapes: v4's ``{"epidata": [...]}`` envelope and
@@ -23,7 +34,7 @@ def get_epidata_rows(url, params):
     """
     check_params = {**params, "format": "json"}
     try:
-        response = requests.get(url, params=check_params, timeout=(5, 30))
+        response = requests.get(url, params=check_params, auth=auth, timeout=(5, 30))
         if response.status_code == 401:
             raise InvalidApiKeyError(INVALID_API_KEY_MESSAGE)
         response.raise_for_status()
@@ -38,9 +49,9 @@ def get_epidata_rows(url, params):
     return []
 
 
-def has_epidata_results(url, params):
+def has_epidata_results(url, params, auth=None):
     """Check whether an Epidata endpoint has any results for the given params."""
-    return bool(get_epidata_rows(url, params))
+    return bool(get_epidata_rows(url, params, auth=auth))
 
 
 V5_METADATA_CACHE_KEY = "epidata_v5_metadata"

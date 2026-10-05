@@ -21,6 +21,7 @@ from indicatorsets.forms import IndicatorSetFilterForm
 from indicatorsets.models import ColumnDescription, FilterDescription, IndicatorSet
 from indicatorsets.utils.caching import safe_cache_get, safe_cache_set
 from indicatorsets.utils.constants import MIGRATED_DATASOURCES, V5_NATIVE_ENDPOINTS
+from indicatorsets.utils.epidata import epidata_auth
 from indicatorsets.utils.sources import EPIWEEK_SOURCES
 from indicatorsets.utils import (
     InvalidApiKeyError,
@@ -717,7 +718,7 @@ def get_available_geos(request):
                 response = requests.get(
                     f"{settings.EPIDATA_URL}covidcast/geo_indicator_coverage",
                     params={"data_source": data_source, "signals": indicators_str},
-                    auth=("epidata", settings.EPIDATA_API_KEY),
+                    auth=epidata_auth(),
                     timeout=(5, 30),
                 )
                 response.raise_for_status()
@@ -825,13 +826,15 @@ def check_fluview_geo_coverage(request):
         params = {
             "regions": geo_value,
             "epiweeks": f"{start_date}-{end_date}",
-            "api_key": settings.EPIDATA_API_KEY,
         }
 
         if fluview_indicators:
             try:
                 response = requests.get(
-                    f"{settings.EPIDATA_URL}fluview", params=params, timeout=(5, 30)
+                    f"{settings.EPIDATA_URL}fluview",
+                    params=params,
+                    auth=epidata_auth(),
+                    timeout=(5, 30),
                 )
                 response.raise_for_status()
             except requests.RequestException:
@@ -851,6 +854,7 @@ def check_fluview_geo_coverage(request):
                 response = requests.get(
                     f"{settings.EPIDATA_URL}fluview_clinical",
                     params=params,
+                    auth=epidata_auth(),
                     timeout=(5, 30),
                 )
                 response.raise_for_status()

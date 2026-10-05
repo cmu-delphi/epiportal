@@ -1084,7 +1084,7 @@ class PreviewCovidcastDataTests(TestCase):
 
     @patch("indicatorsets.utils.previews.requests.get")
     def test_shows_data_for_available_geo_and_message_for_unavailable_geo(self, mock_get):
-        def fake_get(url, params=None, timeout=None):
+        def fake_get(url, params=None, timeout=None, auth=None):
             response = MagicMock()
             response.status_code = 200
             response.raise_for_status = MagicMock()
@@ -1499,7 +1499,7 @@ class GenerateCovidcastIndicatorsExportUrlTests(TestCase):
 
     @patch("indicatorsets.utils.epidata.requests.get")
     def test_mixed_indicators_only_skips_the_one_without_data(self, mock_get):
-        def fake_get(url, params=None, timeout=None):
+        def fake_get(url, params=None, timeout=None, auth=None):
             response = MagicMock()
             response.status_code = 200
             response.raise_for_status = MagicMock()
@@ -1575,7 +1575,7 @@ class V5RoutingTestMixin:
         one.
         """
 
-        def fake_get(url, params=None, timeout=None):
+        def fake_get(url, params=None, timeout=None, auth=None):
             response = MagicMock()
             response.status_code = 200
             response.raise_for_status = MagicMock()
@@ -1961,7 +1961,8 @@ class CovidcastExportAuthParamTests(V5RoutingTestMixin, TestCase):
         probe_calls = self._probe_calls(mock_get)
         self.assertEqual(len(probe_calls), 1)
         self.assertIn("covidcast", probe_calls[0].args[0])
-        self.assertEqual(probe_calls[0].kwargs["params"]["api_key"], "server-key")
+        self.assertEqual(probe_calls[0].kwargs["auth"], ("epidata", "server-key"))
+        self.assertNotIn("api_key", probe_calls[0].kwargs["params"])
         self.assertIn("wget", result[0])
 
     @override_settings(EPIDATA_API_KEY="server-key")
@@ -3049,10 +3050,12 @@ class EpiweekPreviewRequestTests(TestCase):
                     {
                         geo_param: "nat",
                         "epiweeks": "202001-202004",
-                        "api_key": "default-key",
                         "format": "csv",
                         "header": "true",
                     },
+                )
+                self.assertEqual(
+                    mock_get.call_args.kwargs["auth"], ("epidata", "default-key")
                 )
                 self.assertEqual(mock_get.call_args.kwargs["timeout"], (5, 30))
 
@@ -3068,7 +3071,8 @@ class EpiweekPreviewRequestTests(TestCase):
                         endpoint, self.GEOS, "2020-01-01", "2020-01-20", "mine", "json"
                     )
                 params = mock_get.call_args.kwargs["params"]
-                self.assertEqual(params["api_key"], "mine")
+                self.assertNotIn("api_key", params)
+                self.assertEqual(mock_get.call_args.kwargs["auth"], ("epidata", "mine"))
                 self.assertEqual(params["format"], "json")
                 self.assertEqual(params["header"], "false")
 
@@ -5018,7 +5022,7 @@ class CovidcastV5NullFallbackTests(V5RoutingTestMixin, TestCase):
                 )
             return "\n".join(lines) + "\n"
 
-        def fake_get(url, params=None, timeout=None):
+        def fake_get(url, params=None, timeout=None, auth=None):
             response = MagicMock()
             response.status_code = 200
             response.raise_for_status = MagicMock()
@@ -5470,3 +5474,101 @@ class V5RequestAuthAndFillMethodTests(V5RoutingTestMixin, TestCase):
                     self.assertIn("fill_method=fill_ave", text)
                     self.assertIn("token=user-key", text)
 
+
+@override_settings(EPIDATA_API_KEY="server-key")
+class V4KeySentAsHeaderTests(TestCase):
+    """v4 requests send the key as basic auth, never as an ``api_key`` param.
+
+    A key in the query string ends up in the URL, and so in any ``HTTPError``
+    message, log line or Sentry event about the request.
+    """
+
+    def setUp(self):
+        cache.clear()
+
+    def tearDown(self):
+        cache.clear()
+
+    def _calls(self, target, run):
+        with patch(target) as mock_get:
+            response = MagicMock()
+            response.status_code = 200
+            response.json.return_value = {"result": 1, "epidata": [], "message": "ok"}
+            response.text = "a\n"
+            mock_get.return_value = response
+            run()
+        return [c for c in mock_get.call_args_list if "/v5/" not in c.args[0]]
+
+    def _cases(self, api_key):
+        v4_indicator = {
+            "_endpoint": "covidcast",
+            "data_source": "src",
+            "indicator": "sig",
+            "time_type": "week",
+        }
+        geos = {"state": [{"id": "state:pa", "geoType": "state"}]}
+        start, end = "2024-01-01", "2024-03-01"
+        return {
+            "covidcast preview": (
+                "indicatorsets.utils.previews.requests.get",
+                lambda: preview_covidcast_data(
+                    [v4_indicator], start, end, geos, api_key, "json"
+                ),
+            ),
+            "covidcast export": (
+                "indicatorsets.utils.epidata.requests.get",
+                lambda: generate_covidcast_indicators_export_url(
+                    [v4_indicator], start, end, geos, api_key, "csv"
+                ),
+            ),
+            "epiweek preview": (
+                "indicatorsets.utils.previews.requests.get",
+                lambda: preview_epiweek_data(
+                    EPIWEEK_SOURCES["nidss_flu"], [{"id": "nationwide"}], start,
+                    end, api_key, "json", [],
+                ),
+            ),
+        }
+
+    def test_user_key_goes_in_the_auth_header(self):
+        for name, (target, run) in self._cases("user-key").items():
+            with self.subTest(name):
+                calls = self._calls(target, run)
+                self.assertTrue(calls)
+                for call in calls:
+                    self.assertNotIn("api_key", call.kwargs["params"])
+                    self.assertEqual(call.kwargs["auth"], ("epidata", "user-key"))
+
+    def test_server_key_goes_in_the_auth_header_without_a_user_key(self):
+        cases = self._cases(None)
+        cases.update(
+            {
+                "geo coverage lookup": (
+                    "indicatorsets.utils.geos.requests.get",
+                    lambda: get_indicators_based_on_geo_epidata({"state": ["pa"]}),
+                ),
+                "covidcast coverage check": (
+                    "indicatorsets.utils.geos.requests.get",
+                    lambda: get_covidcast_geo_coverage("state:pa", [V4_ONLY]),
+                ),
+                "fluview coverage view": (
+                    "indicatorsets.views.requests.get",
+                    lambda: self.client.get(
+                        reverse("check_fluview_geo_coverage"),
+                        {
+                            "geo": "nat",
+                            "indicators": json.dumps(
+                                [{"data_source": "fluview", "indicator": "wili"}]
+                            ),
+                        },
+                    ),
+                ),
+            }
+        )
+        for name, (target, run) in cases.items():
+            with self.subTest(name):
+                calls = self._calls(target, run)
+                self.assertTrue(calls)
+                for call in calls:
+                    self.assertNotIn("api_key", call.kwargs["params"])
+                    self.assertEqual(call.kwargs["auth"], ("epidata", "server-key"))

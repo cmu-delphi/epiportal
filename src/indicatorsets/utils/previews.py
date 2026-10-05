@@ -14,6 +14,7 @@ from indicatorsets.utils.constants import (
     NO_DATA_MESSAGE,
 )
 from indicatorsets.utils.epidata import (
+    epidata_auth,
     get_time_values,
     get_v5_source,
     split_geos_by_v5_values,
@@ -104,13 +105,15 @@ def _preview_covidcast_v4(
         "time_type": indicator["time_type"],
         "data_source": indicator["data_source"],
         "geo_values": geo_values,
-        "api_key": api_key if api_key else settings.EPIDATA_API_KEY,
         "format": data_format,
         "header": "true" if data_format == "csv" else "false",
     }
     try:
         response = requests.get(
-            f"{settings.EPIDATA_URL}covidcast", params=params, timeout=(5, 30)
+            f"{settings.EPIDATA_URL}covidcast",
+            params=params,
+            auth=epidata_auth(api_key),
+            timeout=(5, 30),
         )
         if response.status_code == 401:
             raise InvalidApiKeyError(INVALID_API_KEY_MESSAGE)
@@ -312,13 +315,15 @@ def preview_v4_epiweek_data(
     params = {
         source.geo_param: geo_values,
         "epiweeks": f"{date_from}-{date_to}",
-        "api_key": api_key if api_key else settings.EPIDATA_API_KEY,
         "format": data_format,
         "header": "true" if data_format == "csv" else "false",
     }
     try:
         response = requests.get(
-            f"{settings.EPIDATA_URL}{data_source}", params=params, timeout=(5, 30)
+            f"{settings.EPIDATA_URL}{data_source}",
+            params=params,
+            auth=epidata_auth(api_key),
+            timeout=(5, 30),
         )
         if response.status_code == 401:
             raise InvalidApiKeyError(INVALID_API_KEY_MESSAGE)

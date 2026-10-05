@@ -8,7 +8,7 @@ from delphi_utils import get_structured_logger
 
 from indicatorsets.utils.caching import safe_cache_get, safe_cache_set
 from indicatorsets.utils.constants import DEFAULT_FILL_METHOD
-from indicatorsets.utils.epidata import group_v5_indicators_by_source
+from indicatorsets.utils.epidata import epidata_auth, group_v5_indicators_by_source
 from indicatorsets.utils.helpers import is_filled_fill_method, list_to_dict
 
 logger = get_structured_logger("indicatorsets.utils")
@@ -18,12 +18,11 @@ def get_indicators_based_on_geo_epidata(geos):
     indicators = []
     for geo_type, geo_values in geos.items():
         url = f"{settings.EPIDATA_URL}covidcast/geo_coverage"
-        params = {
-            "geo": f"{geo_type}:{','.join(geo_values)}",
-            "api_key": settings.EPIDATA_API_KEY,
-        }
+        params = {"geo": f"{geo_type}:{','.join(geo_values)}"}
         try:
-            response = requests.get(url, params=params, timeout=(5, 30))
+            response = requests.get(
+                url, params=params, auth=epidata_auth(), timeout=(5, 30)
+            )
             response.raise_for_status()
             indicators.extend(response.json()["epidata"])
         except requests.RequestException:
@@ -49,7 +48,7 @@ def get_indicators_based_on_geo_epidata_v5(geos):
     return indicators
 
 
-def _fetch_rows(url, params):
+def _fetch_rows(url, params, auth=None):
     """Return the rows an Epidata endpoint has for ``params``, or ``None`` on error.
 
     Unlike ``get_epidata_rows``, a failure is ``None`` rather than ``[]``, so
@@ -59,7 +58,7 @@ def _fetch_rows(url, params):
     """
     try:
         response = requests.get(
-            url, params={**params, "format": "json"}, timeout=(5, 30)
+            url, params={**params, "format": "json"}, auth=auth, timeout=(5, 30)
         )
         response.raise_for_status()
         data = response.json()
@@ -126,8 +125,8 @@ def _get_v4_signals_with_values(data_source, time_type, indicators, geo_type, ge
             "geo_type": geo_type,
             "geo_values": geo_value,
             "time_values": "*",
-            "api_key": settings.EPIDATA_API_KEY,
         },
+        auth=epidata_auth(),
     )
     return None if rows is None else _signals_with_values(rows)
 

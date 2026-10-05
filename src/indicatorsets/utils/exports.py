@@ -8,6 +8,7 @@ from django.urls import reverse
 
 from indicatorsets.utils.constants import DEFAULT_FILL_METHOD
 from indicatorsets.utils.epidata import (
+    epidata_auth,
     get_epidata_rows,
     get_time_values,
     get_v5_source,
@@ -77,9 +78,10 @@ def _covidcast_v4_export_commands(
         "time_type": indicator["time_type"],
         "data_source": indicator["data_source"],
         "geo_values": geo_values,
-        "api_key": api_key if api_key else settings.EPIDATA_API_KEY,
     }
-    if not has_epidata_results(f"{settings.EPIDATA_URL}covidcast", check_params):
+    if not has_epidata_results(
+        f"{settings.EPIDATA_URL}covidcast", check_params, auth=epidata_auth(api_key)
+    ):
         return [
             f'<span class="text-muted">No data found for {label}. Export skipped.</span>'
         ]

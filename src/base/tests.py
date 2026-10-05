@@ -92,6 +92,7 @@ class EpidataProxyViewTests(TestCase):
         self.assertEqual(response.status_code, 403)
         self.assertIsInstance(response, HttpResponseForbidden)
 
+    @override_settings(EPIDATA_API_KEY="server-key")
     @patch("base.views.requests.get")
     def test_allowed_endpoint_forwards_to_epidata(self, mock_get):
         mock_response = MagicMock()
@@ -107,7 +108,21 @@ class EpidataProxyViewTests(TestCase):
         mock_get.assert_called_once()
         call_kwargs = mock_get.call_args.kwargs
         self.assertEqual(call_kwargs["timeout"], 10)
-        self.assertIn("api_key", mock_get.call_args.kwargs["params"])
+        self.assertNotIn("api_key", call_kwargs["params"])
+        self.assertEqual(call_kwargs["auth"], ("epidata", "server-key"))
+
+    @override_settings(EPIDATA_API_KEY="server-key")
+    @patch("base.views.requests.get")
+    def test_caller_supplied_api_key_is_not_forwarded(self, mock_get):
+        mock_get.return_value = MagicMock(status_code=200, json=lambda: {"result": 1})
+
+        request = self.factory.get(
+            "/epidata/covidcast/meta/", {"api_key": "theirs", "a": "1"}
+        )
+        epidata(request, endpoint="covidcast/meta")
+
+        self.assertEqual(mock_get.call_args.kwargs["params"], {"a": "1"})
+        self.assertEqual(mock_get.call_args.kwargs["auth"], ("epidata", "server-key"))
 
     @patch("base.views.requests.get", side_effect=requests.Timeout)
     def test_upstream_failure_returns_502(self, _mock_get):
