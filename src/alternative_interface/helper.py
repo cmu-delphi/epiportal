@@ -1,3 +1,5 @@
+# Location id (as the location menus spell it) -> v4 fluview region id. Values
+# are sent to fluview as ``regions``, so they must be region ids, not names.
 COVIDCAST_FLUVIEW_LOCATIONS_MAPPING = {
     "nation:US": "nat",
     "hhs:1": "hhs1",
@@ -62,14 +64,14 @@ COVIDCAST_FLUVIEW_LOCATIONS_MAPPING = {
     "state:WV": "WV",
     "state:WY": "WY",
     # fluview (ILINET) specific locations
-    "ny_minus_jfk:ny_minus_jfk": "NY (minus NYC)",
-    "us-territory:as": "American Samoa",
-    "us-territory:mp": "Mariana Islands",
-    "us-territory:gu": "Guam",
-    "us-territory:pr": "Puerto Rico",
-    "us-territory:vi": "Virgin Islands",
-    "us-city:ord": "Chicago",
-    "us-city:lax": "Los Angeles",
-    "us-city:jfk": "New York City",
+    "ny_minus_jfk:ny_minus_jfk": "ny_minus_jfk",
+    "us-territory:as": "as",
+    "us-territory:mp": "mp",
+    "us-territory:gu": "gu",
+    "us-territory:pr": "pr",
+    "us-territory:vi": "vi",
+    "us-city:ord": "ord",
+    "us-city:lax": "lax",
+    "us-city:jfk": "jfk",
 }
 

@@ -512,3 +512,50 @@ class EpidataKeySentAsHeaderTests(TestCase):
                     kwargs = self._call(fetch, *args, api_key)
                     self.assertNotIn("api_key", kwargs["params"])
                     self.assertEqual(kwargs["auth"], ("epidata", expected))
+
+
+# Every region id the v4 fluview endpoint accepts, as offered in the portal's
+# own fluview location menu (indicatorHandler.js).
+FLUVIEW_REGION_IDS = {
+    "nat", *(f"hhs{n}" for n in range(1, 11)), *(f"cen{n}" for n in range(1, 10)),
+    "ak", "al", "ar", "az", "ca", "co", "ct", "dc", "de", "fl", "ga", "hi", "ia",
+    "id", "il", "in", "ks", "ky", "la", "ma", "md", "me", "mi", "mn", "mo", "ms",
+    "mt", "nc", "nd", "ne", "nh", "nj", "nm", "nv", "ny", "oh", "ok", "or", "pa",
+    "ri", "sc", "sd", "tn", "tx", "ut", "va", "vt", "wa", "wi", "wv", "wy",
+    "ny_minus_jfk", "as", "mp", "gu", "pr", "vi", "ord", "lax", "jfk",
+}
+
+
+class CovidcastFluviewLocationsMappingTests(TestCase):
+    """The express view asks fluview for region ids, never display names."""
+
+    def test_every_mapped_value_is_a_fluview_region_id(self):
+        from alternative_interface.helper import COVIDCAST_FLUVIEW_LOCATIONS_MAPPING
+
+        not_ids = {
+            geo: region
+            for geo, region in COVIDCAST_FLUVIEW_LOCATIONS_MAPPING.items()
+            if region.lower() not in FLUVIEW_REGION_IDS
+        }
+        self.assertEqual(not_ids, {})
+
+    def test_fluview_request_uses_the_region_id(self):
+        from alternative_interface.utils.epidata import get_fluview_data
+
+        indicator = {"name": "wili", "data_source": "fluview", "time_type": "week"}
+        cases = {
+            "us-city:ord": "ord",
+            "us-city:jfk": "jfk",
+            "us-territory:pr": "pr",
+            "ny_minus_jfk:ny_minus_jfk": "ny_minus_jfk",
+            "nation:US": "nat",
+            "hhs:3": "hhs3",
+        }
+        for geo, region in cases.items():
+            with self.subTest(geo):
+                with patch("alternative_interface.utils.epidata.requests.get") as mock_get:
+                    mock_get.return_value = MagicMock(
+                        status_code=200, json=lambda: {"epidata": []}
+                    )
+                    get_fluview_data(indicator, geo, "2024-01-01", "2024-03-01", None)
+                self.assertEqual(mock_get.call_args.kwargs["params"]["regions"], region)
