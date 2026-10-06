@@ -30,6 +30,31 @@ function getGACookie() {
 
 const clientId = getGACookie();
 
+var DEFAULT_POPHIVE_AGE_GROUP = "all";
+
+/* Select "all" ages, or the first age group if pophive stops offering "all".
+ * Defaulting to the first one meant infants only for anyone who left the
+ * menu alone. */
+function selectDefaultPophiveAgeGroup() {
+    var select = $("#pophiveAgeGroup");
+    var hasDefault = select.find("option").filter(function () {
+        return this.value === DEFAULT_POPHIVE_AGE_GROUP;
+    }).length > 0;
+    if (hasDefault) {
+        select.val(DEFAULT_POPHIVE_AGE_GROUP);
+    } else {
+        select.prop("selectedIndex", 0);
+    }
+    select.trigger("change");
+}
+
+/* The chosen pophive age group in the shape the server reads: a one-item
+ * list of {id, text}, or an empty list when the menu has no selection. */
+function getSelectedPophiveAgeGroup() {
+    var ageGroup = $("#pophiveAgeGroup").val();
+    return ageGroup ? [{ id: ageGroup, text: ageGroup }] : [];
+}
+
 class IndicatorHandler {
     constructor() {
         this.indicators = {};
@@ -426,8 +451,8 @@ class IndicatorHandler {
                     ));
             payload.pophiveGeoValues = pophiveGeoValues;
         }
-        var pophiveAgeGroupData = $("#pophiveAgeGroup").select2("data");
-        if (pophiveAgeGroupData && pophiveAgeGroupData.length > 0) {
+        var pophiveAgeGroupData = getSelectedPophiveAgeGroup();
+        if (pophiveAgeGroupData.length > 0) {
             payload.pophiveAgeGroup = pophiveAgeGroupData[0].id;
         }
         var nwssGeographicValue = $("#nwssGeographicValue").val();
@@ -552,17 +577,14 @@ class IndicatorHandler {
                 allowClear: true,
                 width: "100%",
             });
+            // A handful of options, one choice: a plain select, no select2
+            // search box.
             $.get("get_pophive_age_groups/", function (response) {
-                var ageGroups = response.age_groups.map(function (ag) {
-                    return { id: ag, text: ag };
+                var select = $("#pophiveAgeGroup").empty();
+                response.age_groups.forEach(function (ageGroup) {
+                    select.append(new Option(ageGroup, ageGroup));
                 });
-                $("#pophiveAgeGroup").select2({
-                    placeholder: "Select Age Group",
-                    data: ageGroups,
-                    allowClear: true,
-                    width: "100%",
-                    dropdownParent: $("#selectedIndicatorsModal"),
-                });
+                selectDefaultPophiveAgeGroup();
             });
         }
     }
@@ -645,7 +667,7 @@ class IndicatorHandler {
         const nidssDengueLocations = $("#nidssDengueLocations").select2("data");
         const flusurvLocations = $("#flusurvLocations").select2("data");
         const pophiveLocations = $("#pophiveLocations").select2("data");
-        const pophiveAgeGroup = $("#pophiveAgeGroup").select2("data");
+        const pophiveAgeGroup = getSelectedPophiveAgeGroup();
         const nwssSource = $("#nwssSource").select2("data");
         const nwssGeographicValue = $("#nwssGeographicValue").val();
         const submitData = {
@@ -720,7 +742,7 @@ class IndicatorHandler {
         const nidssDengueLocations = $("#nidssDengueLocations").select2("data");
         const flusurvLocations = $("#flusurvLocations").select2("data");
         const pophiveLocations = $("#pophiveLocations").select2("data");
-        const pophiveAgeGroup = $("#pophiveAgeGroup").select2("data");
+        const pophiveAgeGroup = getSelectedPophiveAgeGroup();
         const nwssGeographicValue = $("#nwssGeographicValue").val();
         const nwssSource = $("#nwssSource").select2("data");
         let dataFormat = 'csv';
@@ -816,7 +838,7 @@ class IndicatorHandler {
         const nidssDengueLocations = $("#nidssDengueLocations").select2("data");
         const flusurvLocations = $("#flusurvLocations").select2("data");
         const pophiveLocations = $("#pophiveLocations").select2("data");
-        const pophiveAgeGroup = $("#pophiveAgeGroup").select2("data");
+        const pophiveAgeGroup = getSelectedPophiveAgeGroup();
         const nwssSource = $("#nwssSource").select2("data");
         const nwssGeographicValue = $("#nwssGeographicValue").val();
         const covidCastGeographicValues = Object.groupBy(
@@ -876,7 +898,7 @@ class IndicatorHandler {
         const nidssDengueLocations = $("#nidssDengueLocations").select2("data");
         const flusurvLocations = $("#flusurvLocations").select2("data");
         const pophiveLocations = $("#pophiveLocations").select2("data");
-        const pophiveAgeGroup = $("#pophiveAgeGroup").select2("data");
+        const pophiveAgeGroup = getSelectedPophiveAgeGroup();
         const nwssSource = $("#nwssSource").select2("data");
         const nwssGeographicValue = $("#nwssGeographicValue").val();
         const covidCastGeographicValues = Object.groupBy(
