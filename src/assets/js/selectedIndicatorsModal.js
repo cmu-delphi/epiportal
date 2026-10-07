@@ -112,6 +112,9 @@ const V5_ENDPOINTS = typeof v5Endpoints !== "undefined" ? v5Endpoints : [];
 // than a dropdown of their own.
 const MAIN_LOCATION_ENDPOINTS = ["covidcast", "fluview"];
 
+// Preselected in the main Location(s) dropdown when nothing else is.
+const DEFAULT_LOCATION_ID = "nation:US";
+
 function isV5Indicator(indicator) {
     return (
         V5_ENDPOINTS.includes(indicator._endpoint) ||
@@ -503,7 +506,12 @@ $("#showSelectedIndicatorsButton").click(async function () {
     const availableGeoIds = availableGeos.flatMap(group => group.children.map(child => child.id));
     const preservedIds = prevSelectedIds.filter(id => availableGeoIds.includes(id));
 
-    const selectedGeos = [...locationIds, ...preservedIds];
+    let selectedGeos = [...locationIds, ...preservedIds];
+    // Default to the nation when nothing was picked in the filter panel or on
+    // an earlier open, and the selected indicators offer it.
+    if (selectedGeos.length === 0 && availableGeoIds.includes(DEFAULT_LOCATION_ID)) {
+        selectedGeos = [DEFAULT_LOCATION_ID];
+    }
     $('#geographic_value').val(selectedGeos).trigger('change');
     if (!indicatorHandler.usesMainLocations()) {
         $('#geographic_value').val(null).trigger('change');
