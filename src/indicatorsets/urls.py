@@ -6,6 +6,7 @@ from indicatorsets.views import (
     IndicatorSetListView,
     check_covidcast_geo_coverage,
     check_fluview_geo_coverage,
+    check_pophive_geo_coverage,
     create_query_code,
     epivis,
     generate_export_data_url,
@@ -33,6 +34,11 @@ urlpatterns: list[URLPattern] = [
         "check_covidcast_geo_coverage/",
         check_covidcast_geo_coverage,
         name="check_covidcast_geo_coverage",
+    ),
+    path(
+        "check_pophive_geo_coverage/",
+        check_pophive_geo_coverage,
+        name="check_pophive_geo_coverage",
     ),
     path(
         "check_fluview_geo_coverage/",

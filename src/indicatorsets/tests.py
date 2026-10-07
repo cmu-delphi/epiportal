@@ -5599,8 +5599,10 @@ class V4KeySentAsHeaderTests(TestCase):
 
 from indicatorsets.utils.locations import (  # noqa: E402
     FLUVIEW_ONLY_LEVELS,
+    pophive_locations,
     split_locations,
     to_fluview_region,
+    to_pophive_location,
     use_main_locations,
 )
 
@@ -5935,3 +5937,186 @@ class FluviewCheckFiltersUntranslatableAnswerTests(TestCase):
             [i["indicator"] for i in response.json()["not_covered_indicators"]],
             ["wili", "percent_positive"],
         )
+
+
+
+POPHIVE_INDICATOR = {"_endpoint": "pophive", "data_source": "pophive", "indicator": "covid_pct_ed"}
+
+
+class ToPophiveLocationTests(TestCase):
+    def test_nation_hhs_and_states(self):
+        cases = {
+            "nation:US": {"geo_type": "nation", "id": "us"},
+            "hhs:3": {"geo_type": "hhs", "id": "3"},
+            "state:PA": {"geo_type": "state", "id": "pa"},
+            "state:pa": {"geo_type": "state", "id": "pa"},
+            "state:DC": {"geo_type": "state", "id": "dc"},
+        }
+        for location_id, location in cases.items():
+            with self.subTest(location_id):
+                self.assertEqual(to_pophive_location(location_id), location)
+
+    def test_places_pophive_has_no_data_for(self):
+        for location_id in (
+            "state:PR", "state:AS", "state:GU", "state:MP", "state:VI",
+            "us-territory:pr", "county:42003", "census-region:cen1", "us-city:jfk",
+            "", "pa", None,
+        ):
+            with self.subTest(location_id):
+                self.assertIsNone(to_pophive_location(location_id))
+
+
+class PophiveLocationsTests(TestCase):
+    def test_translates_and_dedupes_case_variants(self):
+        geos = {
+            "state": [_geo("state:PA", "Pennsylvania"), _geo("state:pa", "pa")],
+            "nation": [_geo("nation:US", "United States")],
+            "county": [_geo("county:42003", "Allegheny")],
+        }
+        self.assertEqual(
+            pophive_locations(geos),
+            [
+                {"id": "pa", "geo_type": "state", "text": "Pennsylvania", "location_id": "state:PA"},
+                {"id": "us", "geo_type": "nation", "text": "United States", "location_id": "nation:US"},
+            ],
+        )
+
+    def test_nothing_selected_in_any_spelling(self):
+        for empty in ({}, [], None):
+            with self.subTest(empty=empty):
+                self.assertEqual(pophive_locations(empty), [])
+
+
+class UseMainLocationsForPophiveTests(TestCase):
+    GEOS = {"state": [_geo("state:PA", "Pennsylvania")]}
+
+    def test_pophive_gets_the_main_locations_and_a_stale_key_is_replaced(self):
+        rewritten = use_main_locations(
+            {
+                "indicators": [POPHIVE_INDICATOR],
+                "covidCastGeographicValues": self.GEOS,
+                "pophiveLocations": [{"id": "ca", "geo_type": "state", "text": "CA"}],
+            }
+        )
+        self.assertEqual(
+            rewritten["pophiveLocations"],
+            [{"id": "pa", "geo_type": "state", "text": "Pennsylvania", "location_id": "state:PA"}],
+        )
+
+    def test_no_pophive_indicator_means_no_pophive_locations(self):
+        rewritten = use_main_locations(
+            {
+                "indicators": [{"_endpoint": "covidcast", "data_source": "src", "indicator": "sig"}],
+                "covidCastGeographicValues": self.GEOS,
+            }
+        )
+        self.assertEqual(rewritten["pophiveLocations"], [])
+
+
+class FormViewsGivePophiveMainLocationsTests(TestCase):
+    PAYLOAD = {
+        "indicators": [POPHIVE_INDICATOR],
+        "covidCastGeographicValues": {
+            "state": [{"id": "state:PA", "text": "Pennsylvania", "geoType": "state"}],
+            "county": [{"id": "county:42003", "text": "Allegheny", "geoType": "county"}],
+        },
+        "pophiveLocations": [{"id": "ca", "geo_type": "state", "text": "CA"}],  # stale page
+        "pophiveAgeGroup": [{"id": "all", "text": "all"}],
+        "start_date": "2024-01-01",
+        "end_date": "2024-03-01",
+    }
+
+    def _post(self, name, target, returns=None):
+        with patch(target, return_value=[] if returns is None else returns) as mock_fn:
+            self.client.post(
+                reverse(name), data=json.dumps(self.PAYLOAD), content_type="application/json"
+            )
+        return mock_fn
+
+    def test_every_view_gets_the_translated_locations(self):
+        cases = {
+            "export": ("indicatorsets.views.generate_pophive_export_url", 3, None),
+            "preview_data": ("indicatorsets.views.preview_pophive_data", 3, None),
+            "create_query_code": ("indicatorsets.views.generate_query_code_pophive", 3, ([], [])),
+            "epivis": ("indicatorsets.views.generate_pophive_dataset_epivis", 1, None),
+        }
+        for name, (target, position, returns) in cases.items():
+            with self.subTest(name):
+                mock_fn = self._post(name, target, returns)
+                geos = mock_fn.call_args.args[position]
+                self.assertEqual([(g["geo_type"], g["id"]) for g in geos], [("state", "pa")])
+
+
+class AvailableGeosOfferPophivePlacesTests(TestCase):
+    def setUp(self):
+        from base.models import Geography, GeographyUnit
+
+        levels = {
+            name: Geography.objects.create(name=name, display_name=f"{name} level")
+            for name in ("nation", "state", "us-city", "county")
+        }
+        for level, geo_id in (
+            ("nation", "US"), ("state", "PA"), ("state", "PR"),
+            ("us-city", "jfk"), ("county", "42003"),
+        ):
+            GeographyUnit.objects.create(
+                geo_id=geo_id, name=geo_id, display_name=geo_id, level=1, geo_level=levels[level]
+            )
+
+    def test_pophive_indicators_add_nation_hhs_and_states_without_territories(self):
+        with patch("indicatorsets.views.requests.get") as mock_get:
+            mock_get.return_value = MagicMock(status_code=200, json=lambda: {"epidata": []})
+            response = self.client.post(
+                reverse("get_available_geos"),
+                data=json.dumps({"indicators": [POPHIVE_INDICATOR]}),
+                content_type="application/json",
+            )
+        ids = sorted(
+            child["id"]
+            for group in response.json()["geographic_granularities"]
+            for child in group["children"]
+        )
+        self.assertEqual(ids, ["nation:US", "state:PA"])
+
+
+class CheckPophiveGeoCoverageTests(TestCase):
+    def _check(self, geo, indicators):
+        return self.client.post(
+            reverse("check_pophive_geo_coverage"),
+            data=json.dumps({"geo": geo, "indicators": indicators}),
+            content_type="application/json",
+        )
+
+    @patch("indicatorsets.views.requests.get")
+    def test_county_and_territory_are_not_covered_without_epidata(self, mock_get):
+        for geo in ("county:42003", "state:PR", "us-city:jfk"):
+            with self.subTest(geo):
+                response = self._check(geo, [POPHIVE_INDICATOR])
+                self.assertEqual(
+                    [i["indicator"] for i in response.json()["not_covered_indicators"]],
+                    ["covid_pct_ed"],
+                )
+        mock_get.assert_not_called()
+
+    def test_nation_hhs_and_state_are_covered(self):
+        for geo in ("nation:US", "hhs:3", "state:PA"):
+            with self.subTest(geo):
+                response = self._check(geo, [POPHIVE_INDICATOR])
+                self.assertEqual(response.json()["not_covered_indicators"], [])
+
+    def test_only_pophive_indicators_are_answered(self):
+        response = self._check(
+            "county:42003",
+            [POPHIVE_INDICATOR, {"_endpoint": "covidcast", "data_source": "src", "indicator": "sig"}],
+        )
+        self.assertEqual(
+            [i["indicator"] for i in response.json()["not_covered_indicators"]],
+            ["covid_pct_ed"],
+        )
+
+    def test_rejects_get_and_bad_bodies(self):
+        self.assertEqual(self.client.get(reverse("check_pophive_geo_coverage")).status_code, 405)
+        response = self.client.post(
+            reverse("check_pophive_geo_coverage"), data="not json", content_type="application/json"
+        )
+        self.assertEqual(response.status_code, 400)
