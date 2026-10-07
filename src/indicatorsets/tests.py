@@ -1361,10 +1361,20 @@ class PreviewNwssDataTests(TestCase):
         )
 
 
+# A fluview indicator for view tests; they stub v5 routing so it stays on v4.
+FLUVIEW_V4_INDICATOR = {
+    "_endpoint": "fluview",
+    "data_source": "fluview",
+    "indicator": "wili",
+    "time_type": "week",
+}
+
+
 class PreviewDataViewTests(TestCase):
     def setUp(self):
         self.client = Client()
 
+    @patch("indicatorsets.utils.epidata.get_v5_source", new=lambda indicator: None)
     @patch("indicatorsets.utils.previews.requests.get")
     def test_csv_format_returns_json_response_with_parsed_rows(self, mock_get):
         mock_response = MagicMock()
@@ -1376,9 +1386,11 @@ class PreviewDataViewTests(TestCase):
         payload = {
             "start_date": "2020-01-01",
             "end_date": "2020-01-20",
-            "indicators": [],
-            "covidCastGeographicValues": {},
-            "fluviewLocations": [{"id": "nat", "text": "U.S. National"}],
+            "indicators": [FLUVIEW_V4_INDICATOR],
+            # fluview takes its locations from the main Location(s) dropdown
+            "covidCastGeographicValues": {
+                "nation": [{"id": "nation:US", "text": "U.S. National", "geoType": "nation"}]
+            },
             "dataFormat": "csv",
         }
         response = self.client.post(
@@ -1393,6 +1405,7 @@ class PreviewDataViewTests(TestCase):
             data, [[["release_date", "region", "value"], ["2020-01-01", "nat", "1.5"]]]
         )
 
+    @patch("indicatorsets.utils.epidata.get_v5_source", new=lambda indicator: None)
     @patch("indicatorsets.utils.previews.requests.get")
     def test_csv_format_returns_no_data_message_when_no_rows(self, mock_get):
         mock_response = MagicMock()
@@ -1404,9 +1417,11 @@ class PreviewDataViewTests(TestCase):
         payload = {
             "start_date": "2020-01-01",
             "end_date": "2020-01-20",
-            "indicators": [],
-            "covidCastGeographicValues": {},
-            "fluviewLocations": [{"id": "nat", "text": "U.S. National"}],
+            "indicators": [FLUVIEW_V4_INDICATOR],
+            # fluview takes its locations from the main Location(s) dropdown
+            "covidCastGeographicValues": {
+                "nation": [{"id": "nation:US", "text": "U.S. National", "geoType": "nation"}]
+            },
             "dataFormat": "csv",
         }
         response = self.client.post(
@@ -2878,8 +2893,10 @@ class EpivisViewEndpointRoutingTests(TestCase):
                         "indicator_set_short_name": "FluView",
                     }
                 ],
-                "covidCastGeographicValues": {},
-                "fluviewLocations": [{"id": "nat", "text": "U.S. National"}],
+                # fluview takes its locations from the main Location(s) dropdown
+                "covidCastGeographicValues": {
+                    "nation": [{"id": "nation:US", "text": "U.S. National", "geoType": "nation"}]
+                },
             }
         )
         self.assertEqual(len(datasets), 1)
@@ -3284,14 +3301,17 @@ class QueryCodeViewEpiweekOrderingTests(TestCase):
             content_type="application/json",
         )
 
+    @patch("indicatorsets.utils.epidata.get_v5_source", new=lambda indicator: None)
     def test_snippets_appear_in_source_order(self):
         response = self._post(
             {
                 "start_date": "2024-01-01",
                 "end_date": "2024-02-01",
-                "indicators": [],
-                "covidCastGeographicValues": {},
-                "fluviewLocations": [{"id": "nat"}],
+                "indicators": [FLUVIEW_V4_INDICATOR],
+                # fluview takes its locations from the main Location(s) dropdown
+                "covidCastGeographicValues": {
+                    "nation": [{"id": "nation:US", "text": "U.S. National", "geoType": "nation"}]
+                },
                 "nidssFluLocations": [{"id": "taipei"}],
                 "nidssDengueLocations": [{"id": "taipei"}],
                 "flusurvLocations": [{"id": "network_all"}],
@@ -4116,14 +4136,17 @@ class ExportViewEpiweekOrderingTests(TestCase):
         )
         return f'wget --content-disposition <a href="{url}">{url}</a>'
 
+    @patch("indicatorsets.utils.epidata.get_v5_source", new=lambda indicator: None)
     def test_all_four_sources_emit_commands_in_order(self):
         response = self._post(
             {
                 "start_date": "2024-01-01",
                 "end_date": "2024-02-01",
-                "indicators": [],
-                "covidCastGeographicValues": {},
-                "fluviewLocations": [{"id": "nat"}],
+                "indicators": [FLUVIEW_V4_INDICATOR],
+                # fluview takes its locations from the main Location(s) dropdown
+                "covidCastGeographicValues": {
+                    "nation": [{"id": "nation:US", "text": "U.S. National", "geoType": "nation"}]
+                },
                 "nidssFluLocations": [{"id": "taipei"}],
                 "nidssDengueLocations": [{"id": "taipei"}],
                 "flusurvLocations": [{"id": "network_all"}],
@@ -5556,7 +5579,7 @@ class V4KeySentAsHeaderTests(TestCase):
                     lambda: self.client.get(
                         reverse("check_fluview_geo_coverage"),
                         {
-                            "geo": "nat",
+                            "geo": "nation:US",  # main-dropdown id
                             "indicators": json.dumps(
                                 [{"data_source": "fluview", "indicator": "wili"}]
                             ),
@@ -5572,3 +5595,343 @@ class V4KeySentAsHeaderTests(TestCase):
                 for call in calls:
                     self.assertNotIn("api_key", call.kwargs["params"])
                     self.assertEqual(call.kwargs["auth"], ("epidata", "server-key"))
+
+
+from indicatorsets.utils.locations import (  # noqa: E402
+    FLUVIEW_ONLY_LEVELS,
+    split_locations,
+    to_fluview_region,
+    use_main_locations,
+)
+
+
+def _geo(location_id, text=None):
+    geo_type = location_id.split(":", 1)[0]
+    return {"id": location_id, "text": text or location_id, "geoType": geo_type}
+
+
+class ToFluviewRegionTests(TestCase):
+    def test_every_fluview_level(self):
+        cases = {
+            "nation:US": "nat",
+            "nation:us": "nat",
+            "hhs:3": "hhs3",
+            "state:PA": "PA",
+            "state:pa": "pa",
+            "census-region:cen1": "cen1",
+            "us-city:jfk": "jfk",
+            "us-territory:pr": "pr",
+            "ny_minus_jfk:ny_minus_jfk": "ny_minus_jfk",
+        }
+        for location_id, region in cases.items():
+            with self.subTest(location_id):
+                self.assertEqual(to_fluview_region(location_id), region)
+
+    def test_levels_fluview_does_not_have(self):
+        for location_id in ("county:42003", "msa:38300", "hrr:357", "", "pa", None):
+            with self.subTest(location_id):
+                self.assertIsNone(to_fluview_region(location_id))
+
+
+class SplitLocationsTests(TestCase):
+    def test_covidcast_only_payload(self):
+        geos = {"county": [_geo("county:42003")], "state": [_geo("state:PA")]}
+        covidcast, fluview = split_locations(geos)
+        self.assertEqual(covidcast, geos)
+        self.assertEqual(
+            fluview, [{"id": "PA", "text": "state:PA", "location_id": "state:PA"}]
+        )
+
+    def test_fluview_only_levels_leave_the_covidcast_share(self):
+        geos = {
+            "census-region": [_geo("census-region:cen1", "Census Region 1")],
+            "us-city": [_geo("us-city:jfk", "New York City")],
+            "nation": [_geo("nation:US", "United States")],
+        }
+        covidcast, fluview = split_locations(geos)
+        self.assertEqual(covidcast, {"nation": [_geo("nation:US", "United States")]})
+        self.assertEqual([geo["id"] for geo in fluview], ["cen1", "jfk", "nat"])
+        self.assertFalse(FLUVIEW_ONLY_LEVELS & set(covidcast))
+
+    def test_one_place_at_two_levels_is_one_fluview_region(self):
+        geos = {
+            "state": [_geo("state:PR", "Puerto Rico")],
+            "us-territory": [_geo("us-territory:pr", "Puerto Rico")],
+        }
+        _, fluview = split_locations(geos)
+        self.assertEqual(
+            fluview, [{"id": "PR", "text": "Puerto Rico", "location_id": "state:PR"}]
+        )
+
+    def test_nothing_selected_in_any_spelling(self):
+        for empty in ({}, [], None):
+            with self.subTest(empty=empty):
+                self.assertEqual(split_locations(empty), ({}, []))
+
+
+class UseMainLocationsTests(TestCase):
+    def test_rewrites_both_location_keys_and_ignores_a_stale_fluview_key(self):
+        data = {
+            "covidCastGeographicValues": {"us-city": [_geo("us-city:jfk")]},
+            "fluviewLocations": [{"id": "hhs9", "text": "HHS Region 9"}],
+            "indicators": [FLUVIEW_V4_INDICATOR],
+        }
+        rewritten = use_main_locations(data)
+        self.assertEqual(rewritten["covidCastGeographicValues"], {})
+        self.assertEqual(
+            rewritten["fluviewLocations"],
+            [{"id": "jfk", "text": "us-city:jfk", "location_id": "us-city:jfk"}],
+        )
+        self.assertIn("us-city", data["covidCastGeographicValues"])  # input untouched
+
+
+class FormViewsUseMainLocationsTests(TestCase):
+    """Fluview locations come from the main dropdown in every form view."""
+
+    FLUVIEW = {"_endpoint": "fluview", "data_source": "fluview", "indicator": "wili", "time_type": "week"}
+    PAYLOAD = {
+        "indicators": [FLUVIEW],
+        "covidCastGeographicValues": {
+            "us-city": [{"id": "us-city:jfk", "text": "New York City", "geoType": "us-city"}],
+            "county": [{"id": "county:42003", "text": "Allegheny", "geoType": "county"}],
+        },
+        "fluviewLocations": [{"id": "hhs9", "text": "HHS Region 9"}],  # stale page
+        "start_date": "2024-01-01",
+        "end_date": "2024-03-01",
+    }
+
+    def _post(self, name, patched, payload=None):
+        with patch(patched, return_value=[]) as mock_fn:
+            self.client.post(
+                reverse(name),
+                data=json.dumps(payload or self.PAYLOAD),
+                content_type="application/json",
+            )
+        return mock_fn
+
+    def test_export_and_preview_and_query_code_get_fluview_regions(self):
+        cases = {
+            "export": "indicatorsets.views.generate_epiweek_export_url",
+            "preview_data": "indicatorsets.views.preview_epiweek_data",
+        }
+        for name, target in cases.items():
+            with self.subTest(name):
+                mock_fn = self._post(name, target)
+                geos = mock_fn.call_args.args[1]
+                self.assertEqual([g["id"] for g in geos], ["jfk"])
+        with patch(
+            "indicatorsets.views.generate_query_code_epiweek", return_value=([], [])
+        ) as mock_code:
+            self.client.post(
+                reverse("create_query_code"),
+                data=json.dumps(self.PAYLOAD),
+                content_type="application/json",
+            )
+        self.assertEqual([g["id"] for g in mock_code.call_args.args[1]], ["jfk"])
+
+    def test_plot_gets_fluview_regions(self):
+        with patch(
+            "indicatorsets.views.generate_fluview_dataset_epivis", return_value=[]
+        ) as mock_plot:
+            self.client.post(
+                reverse("epivis"),
+                data=json.dumps(self.PAYLOAD),
+                content_type="application/json",
+            )
+        self.assertEqual([g["id"] for g in mock_plot.call_args.args[1]], ["jfk"])
+
+    def test_covidcast_never_gets_fluview_only_levels(self):
+        mock_fn = self._post(
+            "export",
+            "indicatorsets.views.generate_covidcast_indicators_export_url",
+        )
+        self.assertEqual(list(mock_fn.call_args.args[3]), ["county"])
+
+    def test_no_location_means_no_fluview_output(self):
+        payload = {**self.PAYLOAD, "covidCastGeographicValues": {}}
+        mock_fn = self._post(
+            "export",
+            "indicatorsets.views.generate_epiweek_export_url",
+            payload,
+        )
+        mock_fn.assert_not_called()
+
+    @patch("indicatorsets.views.log_form_stats")
+    def test_logging_sees_the_translated_locations(self, mock_stats):
+        self._post("preview_data", "indicatorsets.views.preview_epiweek_data")
+        logged = mock_stats.call_args.args[1]
+        self.assertEqual([g["id"] for g in logged["fluviewLocations"]], ["jfk"])
+
+
+class FluviewEpivisSkipsByMainIdTests(TestCase):
+    def test_skips_a_location_the_modal_marked_uncovered(self):
+        from indicatorsets.utils.epivis import generate_fluview_dataset_epivis
+
+        indicator = {
+            "_endpoint": "fluview", "data_source": "fluview", "indicator": "wili",
+            "indicator_set_short_name": "ILINet",
+            "notCoveredGeos": ["us-city:ord"],
+        }
+        geos = [
+            {"id": "ord", "text": "Chicago", "location_id": "us-city:ord"},
+            {"id": "jfk", "text": "New York City", "location_id": "us-city:jfk"},
+        ]
+        datasets = generate_fluview_dataset_epivis(indicator, geos)
+        self.assertEqual([d["params"]["regions"] for d in datasets], ["jfk"])
+
+
+class CoverageChecksTakeMainIdsTests(TestCase):
+    FLUVIEW = {"_endpoint": "fluview", "data_source": "fluview", "indicator": "wili"}
+
+    @patch("indicatorsets.utils.geos.requests.get")
+    def test_covidcast_check_answers_fluview_only_levels_without_epidata(self, mock_get):
+        coverage = get_covidcast_geo_coverage("us-territory:pr", [NSSP_RSV])
+        self.assertEqual(coverage[0]["covered"], False)
+        self.assertIsNone(coverage[0]["route"])
+        mock_get.assert_not_called()
+
+    @patch("indicatorsets.views.requests.get")
+    def test_fluview_check_translates_the_main_id(self, mock_get):
+        mock_get.return_value = MagicMock(
+            status_code=200, json=lambda: {"epidata": [{"wili": 1.5}]}
+        )
+        response = self.client.get(
+            reverse("check_fluview_geo_coverage"),
+            {"geo": "us-city:jfk", "indicators": json.dumps([self.FLUVIEW])},
+        )
+        self.assertEqual(mock_get.call_args.kwargs["params"]["regions"], "jfk")
+        self.assertEqual(response.json()["not_covered_indicators"], [])
+
+    @patch("indicatorsets.views.requests.get")
+    def test_fluview_check_answers_untranslatable_ids_without_epidata(self, mock_get):
+        response = self.client.get(
+            reverse("check_fluview_geo_coverage"),
+            {"geo": "county:42003", "indicators": json.dumps([self.FLUVIEW])},
+        )
+        mock_get.assert_not_called()
+        self.assertEqual(
+            [i["indicator"] for i in response.json()["not_covered_indicators"]], ["wili"]
+        )
+
+
+class AvailableGeosOfferFluviewPlacesTests(TestCase):
+    def setUp(self):
+        from base.models import Geography, GeographyUnit
+
+        levels = {
+            name: Geography.objects.create(name=name, display_name=f"{name} level")
+            for name in ("state", "us-city", "county")
+        }
+        GeographyUnit.objects.create(geo_id="PA", name="PA", display_name="Pennsylvania", level=3, geo_level=levels["state"])
+        GeographyUnit.objects.create(geo_id="jfk", name="jfk", display_name="New York City", level=4, geo_level=levels["us-city"])
+        GeographyUnit.objects.create(geo_id="42003", name="42003", display_name="Allegheny", level=5, geo_level=levels["county"])
+
+    def _ids(self, indicators):
+        with patch("indicatorsets.views.requests.get") as mock_get:
+            mock_get.return_value = MagicMock(
+                status_code=200, json=lambda: {"epidata": ["state:PA"]}
+            )
+            response = self.client.post(
+                reverse("get_available_geos"),
+                data=json.dumps({"indicators": indicators}),
+                content_type="application/json",
+            )
+        return sorted(
+            child["id"]
+            for group in response.json()["geographic_granularities"]
+            for child in group["children"]
+        )
+
+    def test_fluview_indicators_add_fluview_places_once(self):
+        indicators = [
+            {"_endpoint": "covidcast", "data_source": "src", "indicator": "sig"},
+            {"_endpoint": "fluview", "data_source": "fluview", "indicator": "wili"},
+        ]
+        self.assertEqual(self._ids(indicators), ["state:PA", "us-city:jfk"])
+
+    def test_without_fluview_only_covidcast_coverage(self):
+        indicators = [{"_endpoint": "covidcast", "data_source": "src", "indicator": "sig"}]
+        self.assertEqual(self._ids(indicators), ["state:PA"])
+
+
+class FilterPanelIncludesFluviewTests(TestCase):
+    def test_census_division_and_city_include_fluview_sets(self):
+        from indicatorsets.filters import IndicatorSetFilter
+
+        for location in ("census-region:cen1", "us-city:jfk", "state:PA"):
+            with self.subTest(location):
+                self.assertTrue(IndicatorSetFilter.include_fluview(str([location])))
+        self.assertFalse(IndicatorSetFilter.include_fluview(str(["county:42003"])))
+
+
+class CovidcastOnlySelectionHasNoFluviewTests(TestCase):
+    """A covidcast-only selection is unchanged by fluview sharing the dropdown."""
+
+    PAYLOAD = {
+        "indicators": [
+            {"_endpoint": "covidcast", "data_source": "src", "indicator": "sig", "time_type": "day"}
+        ],
+        "covidCastGeographicValues": {
+            "state": [{"id": "state:PA", "text": "Pennsylvania", "geoType": "state"}],
+            "nation": [{"id": "nation:US", "text": "United States", "geoType": "nation"}],
+        },
+        "start_date": "2024-01-01",
+        "end_date": "2024-03-01",
+    }
+
+    def test_use_main_locations_gives_fluview_nothing(self):
+        rewritten = use_main_locations(self.PAYLOAD)
+        self.assertEqual(rewritten["fluviewLocations"], [])
+        self.assertEqual(
+            rewritten["covidCastGeographicValues"],
+            self.PAYLOAD["covidCastGeographicValues"],
+        )
+
+    @patch("indicatorsets.views.log_form_stats")
+    @patch("indicatorsets.views.generate_query_code_epiweek", return_value=([], []))
+    @patch("indicatorsets.views.preview_epiweek_data", return_value=[])
+    @patch("indicatorsets.views.generate_epiweek_export_url", return_value=[])
+    @patch("indicatorsets.views.preview_covidcast_data", return_value=[])
+    @patch("indicatorsets.views.generate_covidcast_indicators_export_url", return_value=[])
+    def test_views_emit_no_fluview_output(
+        self, _export_cc, _preview_cc, mock_export, mock_preview, mock_code, mock_stats
+    ):
+        for name in ("export", "preview_data", "create_query_code"):
+            self.client.post(
+                reverse(name), data=json.dumps(self.PAYLOAD), content_type="application/json"
+            )
+        mock_export.assert_not_called()
+        mock_preview.assert_not_called()
+        mock_code.assert_not_called()
+        for call in mock_stats.call_args_list:
+            self.assertEqual(call.args[1]["fluviewLocations"], [])
+
+
+class ModalScriptsAreVersionedTests(TestCase):
+    """The two modal scripts call into each other, so a browser must never pair
+    a fresh copy of one with a cached copy of the other."""
+
+    def test_both_scripts_carry_the_app_version(self):
+        response = self.client.get(reverse("indicatorsets"))
+        for script in ("js/indicatorHandler.js", "js/selectedIndicatorsModal.js"):
+            with self.subTest(script):
+                self.assertContains(response, f"{script}?v={settings.APP_VERSION}")
+
+
+class FluviewCheckFiltersUntranslatableAnswerTests(TestCase):
+    @patch("indicatorsets.views.requests.get")
+    def test_only_fluview_indicators_come_back_for_a_county(self, mock_get):
+        indicators = [
+            {"_endpoint": "fluview", "data_source": "fluview", "indicator": "wili"},
+            {"_endpoint": "fluview", "data_source": "fluview_clinical", "indicator": "percent_positive"},
+            {"_endpoint": "covidcast", "data_source": "nssp", "indicator": "smoothed_pct_ed_visits_rsv"},
+        ]
+        response = self.client.get(
+            reverse("check_fluview_geo_coverage"),
+            {"geo": "county:42003", "indicators": json.dumps(indicators)},
+        )
+        mock_get.assert_not_called()
+        self.assertEqual(
+            [i["indicator"] for i in response.json()["not_covered_indicators"]],
+            ["wili", "percent_positive"],
+        )

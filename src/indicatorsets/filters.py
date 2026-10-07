@@ -14,7 +14,7 @@ from indicatorsets.utils import (
 )
 from indicators.models import Indicator
 from base.models import Pathogen, Geography, SeverityPyramidRung
-from alternative_interface.helper import COVIDCAST_FLUVIEW_LOCATIONS_MAPPING
+from indicatorsets.utils.locations import to_fluview_region
 
 
 logger = logging.getLogger(__name__)
@@ -139,12 +139,7 @@ class IndicatorSetFilter(django_filters.FilterSet):
 
     @staticmethod
     def include_fluview(values):
-        include_fluview = False
-        for value in ast.literal_eval(values):
-            if COVIDCAST_FLUVIEW_LOCATIONS_MAPPING.get(value):
-                include_fluview = True
-                break
-        return include_fluview
+        return any(to_fluview_region(value) for value in ast.literal_eval(values))
 
     def location_search_filter(self, queryset, name, value):
         if not value:

@@ -44,7 +44,8 @@ def generate_covidcast_dataset_epivis(indicator, covidcast_geos):
 def generate_fluview_dataset_epivis(indicator, fluview_geos):
     datasets = []
     for geo in fluview_geos:
-        if geo["id"] not in indicator.get("notCoveredGeos", []):
+        # The modal records uncovered locations by their main-dropdown id.
+        if geo.get("location_id", geo["id"]) not in indicator.get("notCoveredGeos", []):
             datasets.append(
                 {
                     "color": generate_random_color(),

@@ -40,7 +40,7 @@ function addSelectedIndicator(element) {
             element.dataset.indicatorSet,
             element.dataset.indicator
         );
-        if (element.dataset.endpoint !== "covidcast" && !indicatorHandler.nonCovidcastIndicatorSets.includes(element.dataset.indicatorSet)) {
+        if (!MAIN_LOCATION_ENDPOINTS.includes(element.dataset.endpoint) && !indicatorHandler.nonCovidcastIndicatorSets.includes(element.dataset.indicatorSet)) {
             indicatorHandler.nonCovidcastIndicatorSets.push(
                 element.dataset.indicatorSet
             );
@@ -107,6 +107,10 @@ var currentMode = "epivis";
  * the server so they stay in step with MIGRATED_DATASOURCES. */
 const V5_DATA_SOURCES = typeof v5DataSources !== "undefined" ? v5DataSources : [];
 const V5_ENDPOINTS = typeof v5Endpoints !== "undefined" ? v5Endpoints : [];
+
+// Endpoints whose locations come from the main Location(s) dropdown rather
+// than a dropdown of their own.
+const MAIN_LOCATION_ENDPOINTS = ["covidcast", "fluview"];
 
 function isV5Indicator(indicator) {
     return (
@@ -283,6 +287,9 @@ async function checkGeoCoverage(geoValue) {
 }
 
 async function checkFluviewGeoCoverage(geoValue) {
+    if (indicatorHandler.getFluviewIndicators().length === 0) {
+        return [];
+    }
     try {
         const result = await $.ajax({
             url: "check_fluview_geo_coverage/",
@@ -294,7 +301,10 @@ async function checkFluviewGeoCoverage(geoValue) {
         }); 
         for (const checkedIndicator of checkedIndicatorMembers.filter((indicator) => indicator["_endpoint"] === "fluview" || indicator["_endpoint"] === "fluview_clinical")) {
             if (result["not_covered_indicators"].some((indicator) => indicator.indicator === checkedIndicator.indicator)) {
-                checkedIndicator["notCoveredGeos"] = [geoValue];
+                checkedIndicator["notCoveredGeos"] = checkedIndicator["notCoveredGeos"] || [];
+                if (!checkedIndicator["notCoveredGeos"].includes(geoValue)) {
+                    checkedIndicator["notCoveredGeos"].push(geoValue);
+                }
             }
         }
         return result["not_covered_indicators"];
@@ -336,8 +346,23 @@ function warnIfCovidcastGeoNotCovered(geo) {
     });
 }
 
+// Fluview reads its locations from the main dropdown too; the server maps
+// each pick to a fluview region and answers "not covered" when there is none.
+function warnIfFluviewGeoNotCovered(geo) {
+    checkFluviewGeoCoverage(geo.id).then((notCoveredIndicators) => {
+        if (notCoveredIndicators.length > 0) {
+            showNotCoveredGeoWarningMessage(notCoveredIndicators, geo);
+        }
+    });
+}
+
+function warnIfGeoNotCovered(geo) {
+    warnIfCovidcastGeoNotCovered(geo);
+    warnIfFluviewGeoNotCovered(geo);
+}
+
 $("#geographic_value").on("select2:select", function (e) {
-    warnIfCovidcastGeoNotCovered(e.params.data);
+    warnIfGeoNotCovered(e.params.data);
 });
 
 $("#fillMethod").on("change", function () {
@@ -348,30 +373,6 @@ $("#fillMethod").on("change", function () {
     }
     $("#geographic_value").select2("data").forEach(warnIfCovidcastGeoNotCovered);
 });
-
-$("#otherEndpointLocations").on("select2:select", "#fluviewLocations", function (e) {
-    var geo = e.params.data;
-    checkFluviewGeoCoverage(geo.id).then((notCoveredIndicators) => {
-        if (notCoveredIndicators.length > 0) {
-            showNotCoveredGeoWarningMessage(notCoveredIndicators, geo);
-        }
-    });
-});
-
-function showFluviewLocationSelect() {
-    if (indicatorHandler.getFluviewIndicators().length > 0) {
-        if (document.getElementsByName("fluviewLocations").length === 0) {
-            indicatorHandler.showfluviewLocations();
-        } else {
-            // IF code goes here, we assume that otherEndpointLocationWarning & fluviewRegion selector is already on the page, but is just hidden, so we should just show it.
-            $("#fluviewDiv").show();
-        }
-    } else {
-        // If there are no non-covidcast indicators selected then hide otherEndpointLocationWarning & fluviewLocations selector.
-        $("#fluviewLocations").val(null).trigger("change");
-        $("#fluviewDiv").hide();
-    }
-}
 
 function showNIDSSFluLocationSelect() {
     if (indicatorHandler.getNIDSSFluIndicators().length > 0) {
@@ -456,7 +457,6 @@ function showNonDelphiIndicatorSetsLocations() {
     if (indicatorHandler.nonCovidcastIndicatorSets.length > 0) {
         var otherEndpointIndicatorSetsLocationMessage = `<div class="alert alert-info" data-mdb-alert-init role="alert">For indicator set(s): ${indicatorHandler.nonCovidcastIndicatorSets.join(", ")}, instead of the Location(s) menu, please use the Geographic Value menu below.</div>`
         $("#differentLocationNote").html(otherEndpointIndicatorSetsLocationMessage);
-        showFluviewLocationSelect();
         showNIDSSFluLocationSelect();
         showNIDSSDengueLocationSelect();
         showFlusurvLocationSelect();
@@ -505,13 +505,13 @@ $("#showSelectedIndicatorsButton").click(async function () {
 
     const selectedGeos = [...locationIds, ...preservedIds];
     $('#geographic_value').val(selectedGeos).trigger('change');
-    if (!indicatorHandler.checkForCovidcastIndicators()) {
+    if (!indicatorHandler.usesMainLocations()) {
         $('#geographic_value').val(null).trigger('change');
         $("#geographic_value").prop("disabled", true);
     } else {
         $("#geographic_value").prop("disabled", false);
     }
-    $('#geographic_value').select2("data").forEach(warnIfCovidcastGeoNotCovered);
+    $('#geographic_value').select2("data").forEach(warnIfGeoNotCovered);
 });
 
 
@@ -519,7 +519,7 @@ $("#showSelectedIndicatorsButton").click(async function () {
 function submitMode(event) {
     event.preventDefault();
     var geographicValues = $('#geographic_value').select2('data');
-    if (indicatorHandler.checkForCovidcastIndicators()) {
+    if (indicatorHandler.usesMainLocations()) {
         if (geographicValues.length === 0) {
             appendAlert("Please select at least one geographic location", "warning")
             return;
@@ -602,7 +602,7 @@ window.addEventListener('load', function() {
                         ind.indicator
                      );
                      
-                     if (ind._endpoint !== "covidcast" && !indicatorHandler.nonCovidcastIndicatorSets.includes(ind.indicator_set)) {
+                     if (!MAIN_LOCATION_ENDPOINTS.includes(ind._endpoint) && !indicatorHandler.nonCovidcastIndicatorSets.includes(ind.indicator_set)) {
                         indicatorHandler.nonCovidcastIndicatorSets.push(ind.indicator_set);
                      }
                  });
