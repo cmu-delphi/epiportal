@@ -10,7 +10,7 @@ from textwrap import dedent
 import requests
 from delphi_utils import get_structured_logger
 from django.conf import settings
-from django.db.models import Case, IntegerField, Value, When
+from django.db.models import Case, IntegerField, Q, Value, When
 from django.http import JsonResponse
 from django.views.generic import ListView
 from epiweeks import Week
@@ -22,6 +22,11 @@ from indicatorsets.models import ColumnDescription, FilterDescription, Indicator
 from indicatorsets.utils.caching import safe_cache_get, safe_cache_set
 from indicatorsets.utils.constants import MIGRATED_DATASOURCES, V5_NATIVE_ENDPOINTS
 from indicatorsets.utils.epidata import epidata_auth
+from indicatorsets.utils.locations import (
+    FLUVIEW_LOCATION_LEVELS,
+    to_fluview_region,
+    use_main_locations,
+)
 from indicatorsets.utils.sources import EPIWEEK_SOURCES
 from indicatorsets.utils import (
     InvalidApiKeyError,
@@ -392,6 +397,8 @@ def epivis(request):
     if request.method == "POST":
         datasets = []
         data = json.loads(request.body)
+        # Fluview's locations come from the main Location(s) dropdown.
+        data = use_main_locations(data)
         indicators = data.get("indicators", [])
         covidcast_geos = data.get("covidCastGeographicValues", [])
         fluview_geos = data.get("fluviewLocations", [])
@@ -451,6 +458,8 @@ def generate_export_data_url(request):
         data_export_block = "To download data, please click on the link or copy/paste command(s) into your terminal: <br>{}"
         data_export_commands = []
         data = json.loads(request.body)
+        # Fluview's locations come from the main Location(s) dropdown.
+        data = use_main_locations(data)
         start_date = data.get("start_date", "")
         end_date = data.get("end_date", "")
         indicators = data.get("indicators", [])
@@ -536,6 +545,8 @@ def generate_export_data_url(request):
 def preview_data(request):
     if request.method == "POST":
         data = json.loads(request.body)
+        # Fluview's locations come from the main Location(s) dropdown.
+        data = use_main_locations(data)
         log_form_stats(request, data, "preview")
         log_form_data(request, data, "preview")
         start_date = data.get("start_date", "")
@@ -618,6 +629,8 @@ def preview_data(request):
 def create_query_code(request):
     if request.method == "POST":
         data = json.loads(request.body)
+        # Fluview's locations come from the main Location(s) dropdown.
+        data = use_main_locations(data)
         log_form_stats(request, data, "code")
         log_form_data(request, data, "code")
         start_date = data.get("start_date", "")
@@ -709,6 +722,11 @@ def get_available_geos(request):
         geo_values = []
         data = json.loads(request.body)
         indicators = data.get("indicators", [])
+        # Fluview takes its locations from this dropdown too. Read it from the
+        # request now: ``data`` and ``indicators`` are reused below.
+        include_fluview_places = any(
+            indicator.get("_endpoint") == "fluview" for indicator in indicators
+        )
         grouped_indicators = group_by_property(indicators, "data_source")
         for data_source, indicators in grouped_indicators.items():
             indicators_str = ",".join(
@@ -734,6 +752,9 @@ def get_available_geos(request):
         unique_values = set(geo_values)
         geo_levels = set([el.split(":")[0] for el in unique_values])
         geo_unit_ids = set([geo_value.split(":")[1] for geo_value in unique_values])
+        units_query = Q(geo_level__name__in=geo_levels, geo_id__in=geo_unit_ids)
+        if include_fluview_places:
+            units_query |= Q(geo_level__name__in=FLUVIEW_LOCATION_LEVELS)
         geographic_granularities = [
             {
                 "id": f"{geo_unit.geo_level.name}:{geo_unit.geo_id}",
@@ -741,8 +762,7 @@ def get_available_geos(request):
                 "text": geo_unit.display_name,
                 "geoTypeDisplayName": geo_unit.geo_level.display_name,
             }
-            for geo_unit in GeographyUnit.objects.filter(geo_level__name__in=geo_levels)
-            .filter(geo_id__in=geo_unit_ids)
+            for geo_unit in GeographyUnit.objects.filter(units_query)
             .prefetch_related("geo_level")
             .order_by("level")
         ]
@@ -808,12 +828,25 @@ def get_related_indicators_json(request):
 def check_fluview_geo_coverage(request):
     null_data_indicators = []
     if request.method == "GET":
-        geo_value = request.GET.get("geo")
+        # The modal sends main-dropdown ids; fluview takes region ids.
+        geo_value = to_fluview_region(request.GET.get("geo"))
         indicators = request.GET.get("indicators")
         start_date = 199740
         end_date = Week.fromdate(datetime.today())
         end_date = f"{end_date.year}{end_date.week if end_date.week >= 10 else '0' + str(end_date.week)}"
         indicators = json.loads(indicators)
+        if geo_value is None:
+            # A place fluview has no region for (e.g. a county): nothing
+            # selected here is covered, and there is nothing to ask Epidata.
+            return JsonResponse(
+                {
+                    "not_covered_indicators": [
+                        indicator
+                        for indicator in indicators
+                        if indicator["data_source"] in ("fluview", "fluview_clinical")
+                    ]
+                }
+            )
 
         fluview_indicators = {}
         fluview_clinical_indicators = {}
