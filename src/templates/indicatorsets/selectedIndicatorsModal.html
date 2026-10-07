@@ -184,6 +184,8 @@
         </div>
     </div>
 </div>
-<script src="{% static 'js/indicatorHandler.js' %}"></script>
-<script src="{% static 'js/selectedIndicatorsModal.js' %}"></script>
+{# Versioned as a pair: each calls into the other, and a fresh copy of one with a #}
+{# cached copy of the other breaks the modal. Bump APP_VERSION when they change. #}
+<script src="{% static 'js/indicatorHandler.js' %}?v={{ APP_VERSION }}"></script>
+<script src="{% static 'js/selectedIndicatorsModal.js' %}?v={{ APP_VERSION }}"></script>
 <script src="{% static 'js/select2_init.js' %}"></script>

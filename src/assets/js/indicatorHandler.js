@@ -91,89 +91,6 @@ class IndicatorHandler {
         { id: "UT", text: "UT" },
     ];
 
-    fluviewLocations = [
-        { id: "nat", text: "U.S. National" },
-        { id: "hhs1", text: "HHS Region 1" },
-        { id: "hhs2", text: "HHS Region 2" },
-        { id: "hhs3", text: "HHS Region 3" },
-        { id: "hhs4", text: "HHS Region 4" },
-        { id: "hhs5", text: "HHS Region 5" },
-        { id: "hhs6", text: "HHS Region 6" },
-        { id: "hhs7", text: "HHS Region 7" },
-        { id: "hhs8", text: "HHS Region 8" },
-        { id: "hhs9", text: "HHS Region 9" },
-        { id: "hhs10", text: "HHS Region 10" },
-        { id: "cen1", text: "Census Region 1" },
-        { id: "cen2", text: "Census Region 2" },
-        { id: "cen3", text: "Census Region 3" },
-        { id: "cen4", text: "Census Region 4" },
-        { id: "cen5", text: "Census Region 5" },
-        { id: "cen6", text: "Census Region 6" },
-        { id: "cen7", text: "Census Region 7" },
-        { id: "cen8", text: "Census Region 8" },
-        { id: "cen9", text: "Census Region 9" },
-        { id: "AK", text: "AK" },
-        { id: "AL", text: "AL" },
-        { id: "AR", text: "AR" },
-        { id: "AZ", text: "AZ" },
-        { id: "CA", text: "CA" },
-        { id: "CO", text: "CO" },
-        { id: "CT", text: "CT" },
-        { id: "DC", text: "DC" },
-        { id: "DE", text: "DE" },
-        { id: "FL", text: "FL" },
-        { id: "GA", text: "GA" },
-        { id: "HI", text: "HI" },
-        { id: "IA", text: "IA" },
-        { id: "ID", text: "ID" },
-        { id: "IL", text: "IL" },
-        { id: "IN", text: "IN" },
-        { id: "KS", text: "KS" },
-        { id: "KY", text: "KY" },
-        { id: "LA", text: "LA" },
-        { id: "MA", text: "MA" },
-        { id: "MD", text: "MD" },
-        { id: "ME", text: "ME" },
-        { id: "MI", text: "MI" },
-        { id: "MN", text: "MN" },
-        { id: "MO", text: "MO" },
-        { id: "MS", text: "MS" },
-        { id: "MT", text: "MT" },
-        { id: "NC", text: "NC" },
-        { id: "ND", text: "ND" },
-        { id: "NE", text: "NE" },
-        { id: "NH", text: "NH" },
-        { id: "NJ", text: "NJ" },
-        { id: "NM", text: "NM" },
-        { id: "NV", text: "NV" },
-        { id: "NY", text: "NY" },
-        { id: "OH", text: "OH" },
-        { id: "OK", text: "OK" },
-        { id: "OR", text: "OR" },
-        { id: "PA", text: "PA" },
-        { id: "RI", text: "RI" },
-        { id: "SC", text: "SC" },
-        { id: "SD", text: "SD" },
-        { id: "TN", text: "TN" },
-        { id: "TX", text: "TX" },
-        { id: "UT", text: "UT" },
-        { id: "VA", text: "VA" },
-        { id: "VT", text: "VT" },
-        { id: "WA", text: "WA" },
-        { id: "WI", text: "WI" },
-        { id: "WV", text: "WV" },
-        { id: "WY", text: "WY" },
-        { id: "ny_minus_jfk", text: "NY (minus NYC)" },
-        { id: "as", text: "American Samoa" },
-        { id: "mp", text: "Mariana Islands" },
-        { id: "gu", text: "Guam" },
-        { id: "pr", text: "Puerto Rico" },
-        { id: "vi", text: "Virgin Islands" },
-        { id: "ord", text: "Chicago" },
-        { id: "lax", text: "Los Angeles" },
-        { id: "jfk", text: "New York City" },
-    ];
-
     nidssFluLocations = [
         { id: 'nationwide', text: 'Taiwan National' },
         { id: 'central', text: 'Central' },
@@ -294,10 +211,12 @@ class IndicatorHandler {
       ];
     nwssSources = ['CDC_Biobot', 'CDC_Verily', 'State_Territory', 'WastewaterSCAN'];
 
-    checkForCovidcastIndicators() {
-        return this.indicators.some((indicator) => {
-            return indicator["_endpoint"] === "covidcast";
-        });
+    // Covidcast and fluview both take their locations from the main
+    // Location(s) dropdown.
+    usesMainLocations() {
+        return this.indicators.some((indicator) =>
+            ["covidcast", "fluview"].includes(indicator["_endpoint"])
+        );
     }
 
     getCovidcastIndicators() {
@@ -405,15 +324,6 @@ class IndicatorHandler {
                     ));
             payload.covidcastGeoValues = covidcastGeoValues;
         }
-        var fluviewGeoValues = $("#fluviewLocations").select2("data")
-        if (fluviewGeoValues !== undefined && fluviewGeoValues !== null) {
-            fluviewGeoValues = Object.values(
-                fluviewGeoValues
-                    .flat()
-                    .map(({ id }) => id
-                    ));
-            payload.fluviewGeoValues = fluviewGeoValues;
-        }
         var nidssFluGeoValues = $("#nidssFluLocations").select2("data")
         if (nidssFluGeoValues !== undefined && nidssFluGeoValues !== null) {
             nidssFluGeoValues = Object.values(
@@ -461,28 +371,6 @@ class IndicatorHandler {
         }
         return payload;
 
-    }
-
-    showfluviewLocations() {
-        var fluviewLocationselect = `
-        <hr>
-        <div class="row margin-top-1rem" id="fluviewDiv">
-            <div class="col-2">
-                <label for="fluviewLocations" class="col-form-label">ILINet Location(s):</label>
-            </div>
-            <div class="col-10">
-                <select id="fluviewLocations" name="fluviewLocations" class="form-select" multiple="multiple"></select>
-            </div>
-        </div><hr>`;
-        if ($("#otherEndpointLocations").length) {
-            $("#otherEndpointLocations").append(fluviewLocationselect);
-            $("#fluviewLocations").select2({
-                placeholder: "Select ILINet Location(s)",
-                data: this.fluviewLocations,
-                allowClear: true,
-                width: "100%",
-            });
-        }
     }
 
     showNIDSSFluLocations() {
@@ -662,7 +550,6 @@ class IndicatorHandler {
             $("#geographic_value").select2("data"),
             ({ geoType }) => [geoType]
         );
-        const fluviewLocations = $("#fluviewLocations").select2("data");
         const nidssFluLocations = $("#nidssFluLocations").select2("data");
         const nidssDengueLocations = $("#nidssDengueLocations").select2("data");
         const flusurvLocations = $("#flusurvLocations").select2("data");
@@ -673,7 +560,6 @@ class IndicatorHandler {
         const submitData = {
             indicators: this.indicators,
             covidCastGeographicValues: covidCastGeographicValues,
-            fluviewLocations: fluviewLocations,
             nidssFluLocations: nidssFluLocations,
             nidssDengueLocations: nidssDengueLocations,
             flusurvLocations: flusurvLocations,
@@ -737,7 +623,6 @@ class IndicatorHandler {
     }
 
     exportData() {
-        const fluviewLocations = $("#fluviewLocations").select2("data");
         const nidssFluLocations = $("#nidssFluLocations").select2("data");
         const nidssDengueLocations = $("#nidssDengueLocations").select2("data");
         const flusurvLocations = $("#flusurvLocations").select2("data");
@@ -758,7 +643,6 @@ class IndicatorHandler {
             end_date: document.getElementById("end_date").value,
             indicators: this.indicators,
             covidCastGeographicValues: covidCastGeographicValues,
-            fluviewLocations: fluviewLocations,
             nidssFluLocations: nidssFluLocations,
             nidssDengueLocations: nidssDengueLocations,
             flusurvLocations: flusurvLocations,
@@ -833,7 +717,6 @@ class IndicatorHandler {
 
     previewData() {
         $('#loader').show();
-        const fluviewLocations = $("#fluviewLocations").select2("data");
         const nidssFluLocations = $("#nidssFluLocations").select2("data");
         const nidssDengueLocations = $("#nidssDengueLocations").select2("data");
         const flusurvLocations = $("#flusurvLocations").select2("data");
@@ -854,7 +737,6 @@ class IndicatorHandler {
             end_date: document.getElementById("end_date").value,
             indicators: this.indicators,
             covidCastGeographicValues: covidCastGeographicValues,
-            fluviewLocations: fluviewLocations,
             nidssFluLocations: nidssFluLocations,
             nidssDengueLocations: nidssDengueLocations,
             flusurvLocations: flusurvLocations,
@@ -893,7 +775,6 @@ class IndicatorHandler {
     }
 
     createQueryCode() {
-        const fluviewLocations = $("#fluviewLocations").select2("data");
         const nidssFluLocations = $("#nidssFluLocations").select2("data");
         const nidssDengueLocations = $("#nidssDengueLocations").select2("data");
         const flusurvLocations = $("#flusurvLocations").select2("data");
@@ -911,7 +792,6 @@ class IndicatorHandler {
             end_date: document.getElementById("end_date").value,
             indicators: this.indicators,
             covidCastGeographicValues: covidCastGeographicValues,
-            fluviewLocations: fluviewLocations,
             nidssFluLocations: nidssFluLocations,
             nidssDengueLocations: nidssDengueLocations,
             flusurvLocations: flusurvLocations,

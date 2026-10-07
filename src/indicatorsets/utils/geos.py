@@ -10,6 +10,7 @@ from indicatorsets.utils.caching import safe_cache_get, safe_cache_set
 from indicatorsets.utils.constants import DEFAULT_FILL_METHOD
 from indicatorsets.utils.epidata import epidata_auth, group_v5_indicators_by_source
 from indicatorsets.utils.helpers import is_filled_fill_method, list_to_dict
+from indicatorsets.utils.locations import FLUVIEW_ONLY_LEVELS
 
 logger = get_structured_logger("indicatorsets.utils")
 
@@ -149,6 +150,19 @@ def get_covidcast_geo_coverage(geo, indicators, fill_method=DEFAULT_FILL_METHOD)
     ``"v4"`` or ``None``).
     """
     geo_type, geo_value = geo.split(":", 1)
+    if geo_type in FLUVIEW_ONLY_LEVELS:
+        # Fluview-only places (cities, territories, census divisions) have no
+        # covidcast data; answer without asking Epidata.
+        return [
+            {
+                "data_source": indicator["data_source"],
+                "indicator": indicator["indicator"],
+                "covered": False,
+                "route": None,
+            }
+            for indicator in indicators
+            if indicator.get("_endpoint") == "covidcast"
+        ]
     # Both APIs store geo values lowercase; the picker spells states upper.
     geo_value = geo_value.lower()
     covidcast_indicators = [

@@ -4,9 +4,9 @@ import requests
 from django.conf import settings
 from delphi_utils import get_structured_logger
 
-from alternative_interface.helper import COVIDCAST_FLUVIEW_LOCATIONS_MAPPING
 from indicatorsets.utils import get_epiweek
 from indicatorsets.utils.epidata import epidata_auth
+from indicatorsets.utils.locations import to_fluview_region
 
 logger = get_structured_logger("alternative_interface.utils")
 
@@ -45,11 +45,10 @@ def get_covidcast_data(indicator, start_date, end_date, geo, api_key):
 
 
 def get_fluview_data(indicator, geo, start_date, end_date, api_key):
-    region = None
-    try:
-        region = COVIDCAST_FLUVIEW_LOCATIONS_MAPPING[geo]
-    except KeyError:
-        region = geo.split(":")[1]
+    region = to_fluview_region(geo)
+    if region is None:
+        # A place fluview has no region for (e.g. a county): nothing to ask.
+        return []
     time_values = f"{start_date}--{end_date}"
     if indicator["time_type"] == "week":
         start_day, end_day = get_epiweek(start_date, end_date)
