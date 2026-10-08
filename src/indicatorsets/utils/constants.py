@@ -27,8 +27,11 @@ MIGRATED_DATASOURCES = {
 # Epidata v5 keys every source on ``fill_method``, naming how gaps in the
 # reported series were filled. Users pick one for the whole submission rather
 # than per indicator, since a single value keeps mixed selections comparable.
-FILL_METHODS = ("source", "fill_ave", "fill_zero")
+FILL_METHODS = ("source", "ave", "zero")
 DEFAULT_FILL_METHOD = ""
+# v5 renamed these; pages cached before the rename and saved download links
+# still send the old names.
+LEGACY_FILL_METHODS = {"fill_ave": "ave", "fill_zero": "zero"}
 
 # Endpoints that are v5-native: they have no v4 equivalent to fall back to, so
 # they are not in MIGRATED_DATASOURCES yet every request for them is a v5 one.

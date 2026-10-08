@@ -6,7 +6,11 @@ from datetime import datetime as dtime
 
 from epiweeks import Week
 
-from indicatorsets.utils.constants import DEFAULT_FILL_METHOD, FILL_METHODS
+from indicatorsets.utils.constants import (
+    DEFAULT_FILL_METHOD,
+    FILL_METHODS,
+    LEGACY_FILL_METHODS,
+)
 
 
 def list_to_dict(lst):
@@ -64,6 +68,7 @@ def normalize_fill_method(value):
     export URLs and generated snippets, so anything unrecognised is discarded
     rather than passed through.
     """
+    value = LEGACY_FILL_METHODS.get(value, value)
     return value if value in FILL_METHODS else DEFAULT_FILL_METHOD
 
 
@@ -73,4 +78,4 @@ def is_filled_fill_method(fill_method):
     No fill_method and ``source`` both mean the series as reported, which v4
     can serve too; only the filled ones have no v4 equivalent.
     """
-    return fill_method in ("fill_ave", "fill_zero")
+    return fill_method in ("ave", "zero")
