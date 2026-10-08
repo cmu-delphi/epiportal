@@ -18,7 +18,7 @@ from indicatorsets.utils.constants import MIGRATED_DATASOURCES, V5_NATIVE_ENDPOI
 # key column, so these suffixes are a dimension of one signal rather than
 # signals of their own. Verified on beta_nssp, where every `_fa`/`_fz` name
 # collapses onto a base signal v5 still carries.
-FILL_METHOD_SUFFIXES = {"_fa": "fill_ave", "_fz": "fill_zero"}
+FILL_METHOD_SUFFIXES = {"_fa": "ave", "_fz": "zero"}
 
 # Signals v5 renamed rather than dropped, keyed by v5 source name. Deciding
 # that `total_a` means `positive_a` takes domain knowledge no heuristic has, so

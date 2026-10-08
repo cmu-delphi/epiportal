@@ -133,89 +133,13 @@ class IndicatorHandler {
         { id: 'yunlin_county', text: 'Yunlin County' },
     ];
 
-    pophiveLocations = [
-        { id: "us", geo_type: "nation", text: "U.S. National" },
-        { id: "1", geo_type: "hhs", text: "HHS Region 1" },
-        { id: "2", geo_type: "hhs", text: "HHS Region 2" },
-        { id: "3", geo_type: "hhs", text: "HHS Region 3" },
-        { id: "4", geo_type: "hhs", text: "HHS Region 4" },
-        { id: "5", geo_type: "hhs", text: "HHS Region 5" },
-        { id: "6", geo_type: "hhs", text: "HHS Region 6" },
-        { id: "7", geo_type: "hhs", text: "HHS Region 7" },
-        { id: "8", geo_type: "hhs", text: "HHS Region 8" },
-        { id: "9", geo_type: "hhs", text: "HHS Region 9" },
-        { id: "10", geo_type: "hhs", text: "HHS Region 10" },
-        { id: "ak", geo_type: "state", text: "AK" },
-        { id: "al", geo_type: "state", text: "AL" },
-        { id: "ar", geo_type: "state", text: "AR" },
-        { id: "az", geo_type: "state", text: "AZ" },
-        { id: "ca", geo_type: "state", text: "CA" },
-        { id: "co", geo_type: "state", text: "CO" },
-        { id: "ct", geo_type: "state", text: "CT" },
-        { id: "dc", geo_type: "state", text: "DC" },
-        { id: "de", geo_type: "state", text: "DE" },
-        { id: "fl", geo_type: "state", text: "FL" },
-        { id: "ga", geo_type: "state", text: "GA" },
-        { id: "hi", geo_type: "state", text: "HI" },
-        { id: "ia", geo_type: "state", text: "IA" },
-        { id: "id", geo_type: "state", text: "ID" },
-        { id: "il", geo_type: "state", text: "IL" },
-        { id: "in", geo_type: "state", text: "IN" },
-        { id: "ks", geo_type: "state", text: "KS" },
-        { id: "ky", geo_type: "state", text: "KY" },
-        { id: "la", geo_type: "state", text: "LA" },
-        { id: "ma", geo_type: "state", text: "MA" },
-        { id: "md", geo_type: "state", text: "MD" },
-        { id: "me", geo_type: "state", text: "ME" },
-        { id: "mi", geo_type: "state", text: "MI" },
-        { id: "mn", geo_type: "state", text: "MN" },
-        { id: "mo", geo_type: "state", text: "MO" },
-        { id: "ms", geo_type: "state", text: "MS" },
-        { id: "mt", geo_type: "state", text: "MT" },
-        { id: "nc", geo_type: "state", text: "NC" },
-        { id: "nd", geo_type: "state", text: "ND" },
-        { id: "ne", geo_type: "state", text: "NE" },
-        { id: "nh", geo_type: "state", text: "NH" },
-        { id: "nj", geo_type: "state", text: "NJ" },
-        { id: "nm", geo_type: "state", text: "NM" },
-        { id: "nv", geo_type: "state", text: "NV" },
-        { id: "ny", geo_type: "state", text: "NY" },
-        { id: "oh", geo_type: "state", text: "OH" },
-        { id: "ok", geo_type: "state", text: "OK" },
-        { id: "or", geo_type: "state", text: "OR" },
-        { id: "pa", geo_type: "state", text: "PA" },
-        { id: "ri", geo_type: "state", text: "RI" },
-        { id: "sc", geo_type: "state", text: "SC" },
-        { id: "sd", geo_type: "state", text: "SD" },
-        { id: "tn", geo_type: "state", text: "TN" },
-        { id: "tx", geo_type: "state", text: "TX" },
-        { id: "ut", geo_type: "state", text: "UT" },
-        { id: "va", geo_type: "state", text: "VA" },
-        { id: "vt", geo_type: "state", text: "VT" },
-        { id: "wa", geo_type: "state", text: "WA" },
-        { id: "wi", geo_type: "state", text: "WI" },
-        { id: "wv", geo_type: "state", text: "WV" },
-        { id: "wy", geo_type: "state", text: "WY" },
-    ]
-
-    nwssPcrTargets = [
-        'fluav',
-        'fluav a h5',
-        'hmpxv',
-        'hmpxv clade i',
-        'hmpxv clade ii',
-        'mev_wt',
-        'nvo',
-        'rsv',
-        'sars-cov-2',
-      ];
     nwssSources = ['CDC_Biobot', 'CDC_Verily', 'State_Territory', 'WastewaterSCAN'];
 
-    // Covidcast and fluview both take their locations from the main
-    // Location(s) dropdown.
+    // Covidcast, fluview and pophive (Cosmos) take their locations from the
+    // main Location(s) dropdown.
     usesMainLocations() {
         return this.indicators.some((indicator) =>
-            ["covidcast", "fluview"].includes(indicator["_endpoint"])
+            ["covidcast", "fluview", "pophive"].includes(indicator["_endpoint"])
         );
     }
 
@@ -352,15 +276,6 @@ class IndicatorHandler {
             payload.flusurvGeoValues = flusurvGeoValues;
         }
 
-        var pophiveGeoValues = $("#pophiveLocations").select2("data")
-        if (pophiveGeoValues !== undefined && pophiveGeoValues !== null) {
-            pophiveGeoValues = Object.values(
-                pophiveGeoValues
-                    .flat()
-                    .map(({ id }) => id
-                    ));
-            payload.pophiveGeoValues = pophiveGeoValues;
-        }
         var pophiveAgeGroupData = getSelectedPophiveAgeGroup();
         if (pophiveAgeGroupData.length > 0) {
             payload.pophiveAgeGroup = pophiveAgeGroupData[0].id;
@@ -439,32 +354,21 @@ class IndicatorHandler {
         }
     }
 
-    showPophiveLocations() {
-        var pophiveLocationselect = `
+    // Cosmos (pophive) takes its locations from the main Location(s)
+    // dropdown; only its age group needs a control of its own.
+    showPophiveAgeGroup() {
+        var pophiveAgeGroupSelect = `
         <hr>
         <div class="row margin-top-1rem" id="pophiveDiv">
             <div class="col-2">
-                <label for="pophiveLocations" class="col-form-label">Cosmos Location(s):</label>
+                <label for="pophiveAgeGroup" class="col-form-label">Cosmos Age Group:</label>
             </div>
             <div class="col-10">
-                <select id="pophiveLocations" name="pophiveLocations" class="form-select" multiple="multiple"></select>
-            </div>
-
-            <div class="col-2 margin-top-1rem">
-                <label for="pophiveAgeGroup" class="col-form-label">Age Group:</label>
-            </div>
-            <div class="col-10 margin-top-1rem">
                 <select id="pophiveAgeGroup" name="pophiveAgeGroup" class="form-select"></select>
             </div>
         </div><hr>`;
         if ($("#otherEndpointLocations").length) {
-            $("#otherEndpointLocations").append(pophiveLocationselect);
-            $("#pophiveLocations").select2({
-                placeholder: "Select Cosmos Location(s)",
-                data: this.pophiveLocations,
-                allowClear: true,
-                width: "100%",
-            });
+            $("#otherEndpointLocations").append(pophiveAgeGroupSelect);
             // A handful of options, one choice: a plain select, no select2
             // search box.
             $.get("get_pophive_age_groups/", function (response) {
@@ -553,7 +457,6 @@ class IndicatorHandler {
         const nidssFluLocations = $("#nidssFluLocations").select2("data");
         const nidssDengueLocations = $("#nidssDengueLocations").select2("data");
         const flusurvLocations = $("#flusurvLocations").select2("data");
-        const pophiveLocations = $("#pophiveLocations").select2("data");
         const pophiveAgeGroup = getSelectedPophiveAgeGroup();
         const nwssSource = $("#nwssSource").select2("data");
         const nwssGeographicValue = $("#nwssGeographicValue").val();
@@ -563,7 +466,6 @@ class IndicatorHandler {
             nidssFluLocations: nidssFluLocations,
             nidssDengueLocations: nidssDengueLocations,
             flusurvLocations: flusurvLocations,
-            pophiveLocations: pophiveLocations,
             pophiveAgeGroup: pophiveAgeGroup,
             nwssSource: nwssSource,
             nwssGeographicValue: nwssGeographicValue,
@@ -626,7 +528,6 @@ class IndicatorHandler {
         const nidssFluLocations = $("#nidssFluLocations").select2("data");
         const nidssDengueLocations = $("#nidssDengueLocations").select2("data");
         const flusurvLocations = $("#flusurvLocations").select2("data");
-        const pophiveLocations = $("#pophiveLocations").select2("data");
         const pophiveAgeGroup = getSelectedPophiveAgeGroup();
         const nwssGeographicValue = $("#nwssGeographicValue").val();
         const nwssSource = $("#nwssSource").select2("data");
@@ -646,7 +547,6 @@ class IndicatorHandler {
             nidssFluLocations: nidssFluLocations,
             nidssDengueLocations: nidssDengueLocations,
             flusurvLocations: flusurvLocations,
-            pophiveLocations: pophiveLocations,
             pophiveAgeGroup: pophiveAgeGroup,
             nwssGeographicValue: nwssGeographicValue,
             nwssSource: nwssSource,
@@ -720,7 +620,6 @@ class IndicatorHandler {
         const nidssFluLocations = $("#nidssFluLocations").select2("data");
         const nidssDengueLocations = $("#nidssDengueLocations").select2("data");
         const flusurvLocations = $("#flusurvLocations").select2("data");
-        const pophiveLocations = $("#pophiveLocations").select2("data");
         const pophiveAgeGroup = getSelectedPophiveAgeGroup();
         const nwssSource = $("#nwssSource").select2("data");
         const nwssGeographicValue = $("#nwssGeographicValue").val();
@@ -740,7 +639,6 @@ class IndicatorHandler {
             nidssFluLocations: nidssFluLocations,
             nidssDengueLocations: nidssDengueLocations,
             flusurvLocations: flusurvLocations,
-            pophiveLocations: pophiveLocations,
             pophiveAgeGroup: pophiveAgeGroup,
             nwssSource: nwssSource,
             nwssGeographicValue: nwssGeographicValue,
@@ -778,7 +676,6 @@ class IndicatorHandler {
         const nidssFluLocations = $("#nidssFluLocations").select2("data");
         const nidssDengueLocations = $("#nidssDengueLocations").select2("data");
         const flusurvLocations = $("#flusurvLocations").select2("data");
-        const pophiveLocations = $("#pophiveLocations").select2("data");
         const pophiveAgeGroup = getSelectedPophiveAgeGroup();
         const nwssSource = $("#nwssSource").select2("data");
         const nwssGeographicValue = $("#nwssGeographicValue").val();
@@ -795,7 +692,6 @@ class IndicatorHandler {
             nidssFluLocations: nidssFluLocations,
             nidssDengueLocations: nidssDengueLocations,
             flusurvLocations: flusurvLocations,
-            pophiveLocations: pophiveLocations,
             pophiveAgeGroup: pophiveAgeGroup,
             nwssSource: nwssSource,
             nwssGeographicValue: nwssGeographicValue,

@@ -6,10 +6,10 @@ from django.conf import settings
 from django.http import HttpResponse, HttpResponseBadRequest, HttpResponseForbidden
 
 from indicatorsets.utils.constants import (
-    FILL_METHODS,
     MIGRATED_DATASOURCES,
     V5_NATIVE_ENDPOINTS,
 )
+from indicatorsets.utils.helpers import normalize_fill_method
 
 logger = get_structured_logger("indicatorsets.proxy_views")
 
@@ -45,10 +45,10 @@ def download_viz_export(request):
     if extra_keys:
         params["extra_keys"] = extra_keys
     # Unknown values are dropped rather than forwarded: the caller is the
-    # user's own browser, and Epidata treats an unrecognised fill_method as a
-    # filter that matches nothing.
-    fill_method = request.GET.get("fill_method")
-    if fill_method in FILL_METHODS:
+    # user's own browser, and Epidata rejects an unrecognised fill_method. Old
+    # names in links saved before v5 renamed them are translated.
+    fill_method = normalize_fill_method(request.GET.get("fill_method"))
+    if fill_method:
         params["fill_method"] = fill_method
     api_key = request.GET.get("token") or settings.EPIDATA_API_KEY
     if api_key:

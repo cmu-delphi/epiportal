@@ -24,7 +24,10 @@ from indicatorsets.utils.constants import MIGRATED_DATASOURCES, V5_NATIVE_ENDPOI
 from indicatorsets.utils.epidata import epidata_auth
 from indicatorsets.utils.locations import (
     FLUVIEW_LOCATION_LEVELS,
+    POPHIVE_LOCATION_LEVELS,
+    POPHIVE_STATES_WITHOUT_DATA,
     to_fluview_region,
+    to_pophive_location,
     use_main_locations,
 )
 from indicatorsets.utils.sources import EPIWEEK_SOURCES
@@ -727,6 +730,9 @@ def get_available_geos(request):
         include_fluview_places = any(
             indicator.get("_endpoint") == "fluview" for indicator in indicators
         )
+        include_pophive_places = any(
+            indicator.get("_endpoint") == "pophive" for indicator in indicators
+        )
         grouped_indicators = group_by_property(indicators, "data_source")
         for data_source, indicators in grouped_indicators.items():
             indicators_str = ",".join(
@@ -755,6 +761,15 @@ def get_available_geos(request):
         units_query = Q(geo_level__name__in=geo_levels, geo_id__in=geo_unit_ids)
         if include_fluview_places:
             units_query |= Q(geo_level__name__in=FLUVIEW_LOCATION_LEVELS)
+        if include_pophive_places:
+            # Pophive (Cosmos) too, minus the territories it has no data for.
+            units_query |= Q(geo_level__name__in=POPHIVE_LOCATION_LEVELS) & ~Q(
+                geo_level__name="state",
+                geo_id__in=[
+                    *POPHIVE_STATES_WITHOUT_DATA,
+                    *(geo_id.upper() for geo_id in POPHIVE_STATES_WITHOUT_DATA),
+                ],
+            )
         geographic_granularities = [
             {
                 "id": f"{geo_unit.geo_level.name}:{geo_unit.geo_id}",
@@ -917,6 +932,35 @@ def check_fluview_geo_coverage(request):
         return JsonResponse(
             {"not_covered_indicators": not_covered_indicators}, safe=False
         )
+
+
+def check_pophive_geo_coverage(request):
+    """Tell the selected-indicators modal which pophive (Cosmos) indicators
+    have no data for one main-dropdown location.
+
+    Expects a JSON body ``{"geo": "geo_type:geo_value", "indicators": [...]}``.
+    Pophive has every signal at every nation, HHS and state location, so the
+    answer follows from the location alone and Epidata is never asked.
+    """
+    if request.method != "POST":
+        return JsonResponse({"error": "POST required"}, status=405)
+    try:
+        data = json.loads(request.body)
+    except ValueError:
+        return JsonResponse({"error": "Invalid JSON body"}, status=400)
+    indicators = data.get("indicators") or []
+    if not isinstance(indicators, list):
+        return JsonResponse({"error": "Expected indicators"}, status=400)
+    covered = to_pophive_location(data.get("geo") or "") is not None
+    return JsonResponse(
+        {
+            "not_covered_indicators": [
+                indicator
+                for indicator in indicators
+                if indicator.get("_endpoint") == "pophive" and not covered
+            ]
+        }
+    )
 
 
 def check_covidcast_geo_coverage(request):

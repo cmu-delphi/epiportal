@@ -110,7 +110,7 @@ const V5_ENDPOINTS = typeof v5Endpoints !== "undefined" ? v5Endpoints : [];
 
 // Endpoints whose locations come from the main Location(s) dropdown rather
 // than a dropdown of their own.
-const MAIN_LOCATION_ENDPOINTS = ["covidcast", "fluview"];
+const MAIN_LOCATION_ENDPOINTS = ["covidcast", "fluview", "pophive"];
 
 // Preselected in the main Location(s) dropdown when nothing else is.
 const DEFAULT_LOCATION_ID = "nation:US";
@@ -359,9 +359,43 @@ function warnIfFluviewGeoNotCovered(geo) {
     });
 }
 
+async function checkPophiveGeoCoverage(geoValue) {
+    const pophiveIndicators = checkedIndicatorMembers.filter(
+        (indicator) => indicator["_endpoint"] === "pophive"
+    );
+    if (pophiveIndicators.length === 0) {
+        return [];
+    }
+    try {
+        const result = await $.ajax({
+            url: "check_pophive_geo_coverage/",
+            type: "POST",
+            dataType: "json",
+            contentType: "application/json",
+            headers: { "X-CSRFToken": Cookies.get("csrftoken") },
+            data: JSON.stringify({ geo: geoValue, indicators: pophiveIndicators }),
+        });
+        return result["not_covered_indicators"];
+    } catch (error) {
+        console.error("Error fetching Cosmos geo coverage:", error);
+        return [];
+    }
+}
+
+// Cosmos (pophive) reads its locations from the main dropdown too; places it
+// has no data for (counties, territories, ...) are skipped, so say so.
+function warnIfPophiveGeoNotCovered(geo) {
+    checkPophiveGeoCoverage(geo.id).then((notCoveredIndicators) => {
+        if (notCoveredIndicators.length > 0) {
+            showNotCoveredGeoWarningMessage(notCoveredIndicators, geo);
+        }
+    });
+}
+
 function warnIfGeoNotCovered(geo) {
     warnIfCovidcastGeoNotCovered(geo);
     warnIfFluviewGeoNotCovered(geo);
+    warnIfPophiveGeoNotCovered(geo);
 }
 
 $("#geographic_value").on("select2:select", function (e) {
@@ -423,18 +457,16 @@ function showFlusurvLocationSelect() {
 }
 
 
-function showPophiveLocationSelect() {
+// Cosmos (pophive) indicators get an age group control below the main
+// Location(s) dropdown; their locations come from that dropdown.
+function showPophiveAgeGroupSelect() {
     if (indicatorHandler.getPophiveIndicators().length > 0) {
-        if (document.getElementsByName("pophiveLocations").length === 0) {
-            indicatorHandler.showPophiveLocations();
+        if (document.getElementById("pophiveAgeGroup") === null) {
+            indicatorHandler.showPophiveAgeGroup();
         } else {
-            // IF code goes here, we assume that otherEndpointLocationWarning & pophiveRegion selector is already on the page, but is just hidden, so we should just show it.
             $("#pophiveDiv").show();
         }
-    }
-    else {
-        // If there are no non-covidcast indicators selected then hide otherEndpointLocationWarning & pophiveLocations selector.
-        $("#pophiveLocations").val(null).trigger("change");
+    } else {
         selectDefaultPophiveAgeGroup();
         $("#pophiveDiv").hide();
     }
@@ -457,17 +489,25 @@ function showNwssFieldsSelect() {
 }
 
 function showNonDelphiIndicatorSetsLocations() {
-    if (indicatorHandler.nonCovidcastIndicatorSets.length > 0) {
+    const hasOwnLocationMenus = indicatorHandler.nonCovidcastIndicatorSets.length > 0;
+    if (hasOwnLocationMenus) {
         var otherEndpointIndicatorSetsLocationMessage = `<div class="alert alert-info" data-mdb-alert-init role="alert">For indicator set(s): ${indicatorHandler.nonCovidcastIndicatorSets.join(", ")}, instead of the Location(s) menu, please use the Geographic Value menu below.</div>`
         $("#differentLocationNote").html(otherEndpointIndicatorSetsLocationMessage);
-        showNIDSSFluLocationSelect();
-        showNIDSSDengueLocationSelect();
-        showFlusurvLocationSelect();
-        showPophiveLocationSelect();
-        showNwssFieldsSelect();
-        $("#otherEndpointLocationsWrapper").show();
     } else {
         $("#differentLocationNote").html("");
+    }
+    // Each of these shows its control when its indicators are selected and
+    // hides it otherwise.
+    showNIDSSFluLocationSelect();
+    showNIDSSDengueLocationSelect();
+    showFlusurvLocationSelect();
+    showPophiveAgeGroupSelect();
+    showNwssFieldsSelect();
+    // The age group sits in this section too, though Cosmos uses the main
+    // Location(s) dropdown.
+    if (hasOwnLocationMenus || indicatorHandler.getPophiveIndicators().length > 0) {
+        $("#otherEndpointLocationsWrapper").show();
+    } else {
         $("#otherEndpointLocationsWrapper").hide();
     }
 }
