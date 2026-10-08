@@ -31,7 +31,7 @@ from epiportal.redaction import install_log_redaction, redact_sentry_event
 # the download proxy); scrub them from every log record.
 install_log_redaction()
 
-APP_VERSION = "1.3.0"
+APP_VERSION = "1.3.1"
 ALTERNATIVE_INTERFACE_VERSION = "1.0.11"
 
 
