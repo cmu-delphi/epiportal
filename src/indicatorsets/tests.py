@@ -4433,6 +4433,15 @@ class FillMethodViewTests(TestCase):
         "indicator_set_short_name": "NWSS",
     }
 
+    def setUp(self):
+        # NWSS locations come from the main dropdown's counties.
+        patcher = patch(
+            "indicatorsets.utils.locations.nwss_county_sewersheds",
+            return_value={"42003": ["sewershed_1"]},
+        )
+        patcher.start()
+        self.addCleanup(patcher.stop)
+
     def _nwss_epivis_params(self, payload):
         response = self.client.post(
             reverse("epivis"),
@@ -4448,8 +4457,7 @@ class FillMethodViewTests(TestCase):
         params = self._nwss_epivis_params(
             {
                 "indicators": [self.NWSS_INDICATOR],
-                "covidCastGeographicValues": {},
-                "nwssGeographicValue": ["sewershed_1"],
+                "covidCastGeographicValues": {"county": [{"id": "county:42003"}]},
                 "nwssSource": [{"id": "CDC_Biobot"}],
                 "fillMethod": "ave",
             }
@@ -4460,8 +4468,7 @@ class FillMethodViewTests(TestCase):
         params = self._nwss_epivis_params(
             {
                 "indicators": [self.NWSS_INDICATOR],
-                "covidCastGeographicValues": {},
-                "nwssGeographicValue": ["sewershed_1"],
+                "covidCastGeographicValues": {"county": [{"id": "county:42003"}]},
                 "nwssSource": [{"id": "CDC_Biobot"}],
             }
         )
@@ -4471,8 +4478,7 @@ class FillMethodViewTests(TestCase):
         params = self._nwss_epivis_params(
             {
                 "indicators": [self.NWSS_INDICATOR],
-                "covidCastGeographicValues": {},
-                "nwssGeographicValue": ["sewershed_1"],
+                "covidCastGeographicValues": {"county": [{"id": "county:42003"}]},
                 "nwssSource": [{"id": "CDC_Biobot"}],
                 "fillMethod": "fill_everything",
             }
@@ -4487,8 +4493,7 @@ class FillMethodViewTests(TestCase):
             data=json.dumps(
                 {
                     "indicators": [self.NWSS_INDICATOR],
-                    "covidCastGeographicValues": {},
-                    "nwssGeographicValue": ["sewershed_1"],
+                    "covidCastGeographicValues": {"county": [{"id": "county:42003"}]},
                     "nwssSource": [{"id": "CDC_Biobot"}],
                     "fillMethod": "zero",
                 }
@@ -6141,3 +6146,237 @@ class LegacyFillMethodNamesTests(TestCase):
                 {"source": "nssp", "signal": "sig", "fill_method": "fill_zero"},
             )
         self.assertEqual(mock_get.call_args.kwargs["params"]["fill_method"], "zero")
+
+
+NWSS_INDICATOR = {"_endpoint": "nwss", "data_source": "nwss", "indicator": "flu_avg_conc"}
+NWSS_SOURCE = [{"id": "CDC_Verily", "text": "CDC_Verily"}]
+NWSS_CROSSWALK = {"42003": ["1768", "1764"], "42125": ["1764", "1900"]}
+NWSS_CROSSWALK_CSV = (
+    "from_val,to_val,to_name\n"
+    "2170,00005,\n"
+    "1768,42003,Allegheny PA\n"
+    "1764,42003,Allegheny PA\n"
+    "1764,42125,Washington PA\n"
+)
+
+
+def _patch_nwss_crosswalk(crosswalk=NWSS_CROSSWALK):
+    return patch("indicatorsets.utils.locations.nwss_county_sewersheds", return_value=crosswalk)
+
+
+class NwssCountySewershedsTests(TestCase):
+    @patch("indicatorsets.utils.nwss.safe_cache_set")
+    @patch("indicatorsets.utils.nwss.safe_cache_get", return_value=None)
+    @patch("indicatorsets.utils.nwss.requests.get")
+    def test_groups_sewersheds_by_county_and_skips_unnamed_rows(self, mock_get, _get, mock_set):
+        from indicatorsets.utils.nwss import nwss_county_sewersheds
+
+        mock_get.return_value = MagicMock(status_code=200, text=NWSS_CROSSWALK_CSV)
+        crosswalk = nwss_county_sewersheds()
+        self.assertEqual(crosswalk, {"42003": ["1768", "1764"], "42125": ["1764"]})
+        self.assertEqual(mock_set.call_args.args[1], crosswalk)
+
+    @patch("indicatorsets.utils.nwss.safe_cache_get", return_value={"42003": ["1768"]})
+    @patch("indicatorsets.utils.nwss.requests.get")
+    def test_a_cached_crosswalk_is_used(self, mock_get, _get):
+        from indicatorsets.utils.nwss import nwss_county_sewersheds
+
+        self.assertEqual(nwss_county_sewersheds(), {"42003": ["1768"]})
+        mock_get.assert_not_called()
+
+    @patch("indicatorsets.utils.nwss.safe_cache_set")
+    @patch("indicatorsets.utils.nwss.safe_cache_get", return_value=None)
+    @patch("indicatorsets.utils.nwss.requests.get", side_effect=requests.ConnectionError)
+    def test_a_failed_request_returns_nothing_and_is_not_cached(self, _req, _get, mock_set):
+        from indicatorsets.utils.nwss import nwss_county_sewersheds
+
+        self.assertEqual(nwss_county_sewersheds(), {})
+        mock_set.assert_not_called()
+
+
+class ToNwssSewershedsTests(TestCase):
+    def test_counties_and_everything_else(self):
+        from indicatorsets.utils.locations import to_nwss_sewersheds
+
+        cases = {
+            "county:42003": ["1768", "1764"],
+            "county:01001": [],
+            "state:PA": [],
+            "nation:US": [],
+            "42003": [],
+            "": [],
+            None: [],
+        }
+        with _patch_nwss_crosswalk():
+            for location_id, sewersheds in cases.items():
+                with self.subTest(location_id):
+                    self.assertEqual(to_nwss_sewersheds(location_id), sewersheds)
+
+
+class NwssLocationsTests(TestCase):
+    def test_counties_translate_once_per_sewershed(self):
+        from indicatorsets.utils.locations import nwss_locations
+
+        geos = {
+            "county": [_geo("county:42003"), _geo("county:42125")],
+            "state": [_geo("state:PA")],
+        }
+        with _patch_nwss_crosswalk():
+            self.assertEqual(nwss_locations(geos), ["1768", "1764", "1900"])
+
+    def test_nothing_selected_in_any_spelling(self):
+        from indicatorsets.utils.locations import nwss_locations
+
+        with _patch_nwss_crosswalk():
+            for empty in ({}, [], None):
+                with self.subTest(empty=empty):
+                    self.assertEqual(nwss_locations(empty), [])
+
+
+class UseMainLocationsForNwssTests(TestCase):
+    GEOS = {"county": [_geo("county:42003")]}
+
+    def test_nwss_gets_sewersheds_and_a_stale_key_is_replaced(self):
+        with _patch_nwss_crosswalk():
+            rewritten = use_main_locations(
+                {
+                    "indicators": [NWSS_INDICATOR],
+                    "covidCastGeographicValues": self.GEOS,
+                    "nwssGeographicValue": ["9999,9998"],
+                }
+            )
+        self.assertEqual(rewritten["nwssGeographicValue"], ["1768", "1764"])
+
+    def test_no_nwss_indicator_means_no_sewersheds_and_no_crosswalk(self):
+        with _patch_nwss_crosswalk() as mock_crosswalk:
+            rewritten = use_main_locations(
+                {
+                    "indicators": [{"_endpoint": "covidcast", "data_source": "src", "indicator": "sig"}],
+                    "covidCastGeographicValues": self.GEOS,
+                    "nwssGeographicValue": ["9999"],
+                }
+            )
+        self.assertEqual(rewritten["nwssGeographicValue"], [])
+        mock_crosswalk.assert_not_called()
+
+
+class FormViewsGiveNwssMainLocationsTests(TestCase):
+    PAYLOAD = {
+        "indicators": [NWSS_INDICATOR],
+        "covidCastGeographicValues": {
+            "county": [{"id": "county:42003", "text": "Allegheny", "geoType": "county"}],
+            "state": [{"id": "state:PA", "text": "Pennsylvania", "geoType": "state"}],
+        },
+        "nwssGeographicValue": ["9999,9998"],  # stale page
+        "nwssSource": NWSS_SOURCE,
+        "start_date": "2024-01-01",
+        "end_date": "2024-03-01",
+    }
+
+    def test_every_view_gets_the_translated_sewersheds(self):
+        cases = {
+            "export": ("indicatorsets.views.generate_nwss_export_url", 3, []),
+            "preview_data": ("indicatorsets.views.preview_nwss_data", 3, []),
+            "create_query_code": ("indicatorsets.views.generate_query_code_nwss", 3, ([], [])),
+            "epivis": ("indicatorsets.views.generate_nwss_dataset_epivis", 2, []),
+        }
+        for name, (target, position, returns) in cases.items():
+            with self.subTest(name), _patch_nwss_crosswalk():
+                with patch(target, return_value=returns) as mock_fn:
+                    self.client.post(
+                        reverse(name), data=json.dumps(self.PAYLOAD), content_type="application/json"
+                    )
+                self.assertEqual(mock_fn.call_args.args[position], ["1768", "1764"])
+
+    @patch("indicatorsets.views.log_form_stats")
+    def test_logging_counts_sewersheds(self, mock_stats):
+        with _patch_nwss_crosswalk(), patch("indicatorsets.views.preview_nwss_data", return_value=[]):
+            self.client.post(
+                reverse("preview_data"), data=json.dumps(self.PAYLOAD), content_type="application/json"
+            )
+        self.assertEqual(mock_stats.call_args.args[1]["nwssGeographicValue"], ["1768", "1764"])
+
+
+class NwssQueryCodeListsEachSewershedTests(TestCase):
+    def test_one_string_per_sewershed(self):
+        python_blocks, r_blocks = generate_query_code_nwss(
+            [NWSS_INDICATOR], "2024-01-01", "2024-03-01", ["1768", "1764"], NWSS_SOURCE, ""
+        )
+        self.assertIn('["1768", "1764"]', python_blocks[0])
+
+
+class AvailableGeosOfferNwssCountiesTests(TestCase):
+    def setUp(self):
+        from base.models import Geography, GeographyUnit
+
+        levels = {
+            name: Geography.objects.create(name=name, display_name=f"{name} level")
+            for name in ("state", "county")
+        }
+        for level, geo_id in (("state", "PA"), ("county", "42003"), ("county", "01001")):
+            GeographyUnit.objects.create(
+                geo_id=geo_id, name=geo_id, display_name=geo_id, level=1, geo_level=levels[level]
+            )
+
+    def _ids(self, indicators):
+        with _patch_nwss_crosswalk(), patch("indicatorsets.views.requests.get") as mock_get:
+            mock_get.return_value = MagicMock(status_code=200, json=lambda: {"epidata": []})
+            response = self.client.post(
+                reverse("get_available_geos"),
+                data=json.dumps({"indicators": indicators}),
+                content_type="application/json",
+            )
+        return sorted(
+            child["id"]
+            for group in response.json()["geographic_granularities"]
+            for child in group["children"]
+        )
+
+    def test_nwss_indicators_add_counties_with_sewersheds(self):
+        self.assertEqual(self._ids([NWSS_INDICATOR]), ["county:42003"])
+
+    def test_no_nwss_indicator_adds_nothing(self):
+        self.assertEqual(
+            self._ids([{"_endpoint": "covidcast", "data_source": "src", "indicator": "sig"}]), []
+        )
+
+
+class CheckNwssGeoCoverageTests(TestCase):
+    def _check(self, geo, indicators):
+        with _patch_nwss_crosswalk():
+            return self.client.post(
+                reverse("check_nwss_geo_coverage"),
+                data=json.dumps({"geo": geo, "indicators": indicators}),
+                content_type="application/json",
+            )
+
+    def test_counties_without_sewersheds_and_other_levels_are_not_covered(self):
+        for geo in ("county:01001", "state:PA", "nation:US"):
+            with self.subTest(geo):
+                response = self._check(geo, [NWSS_INDICATOR])
+                self.assertEqual(
+                    [i["indicator"] for i in response.json()["not_covered_indicators"]],
+                    ["flu_avg_conc"],
+                )
+
+    def test_a_county_with_sewersheds_is_covered_and_only_nwss_is_answered(self):
+        response = self._check(
+            "county:42003",
+            [NWSS_INDICATOR, {"_endpoint": "covidcast", "data_source": "src", "indicator": "sig"}],
+        )
+        self.assertEqual(response.json()["not_covered_indicators"], [])
+
+    def test_rejects_get_and_bad_bodies(self):
+        self.assertEqual(self.client.get(reverse("check_nwss_geo_coverage")).status_code, 405)
+        response = self.client.post(
+            reverse("check_nwss_geo_coverage"), data="not json", content_type="application/json"
+        )
+        self.assertEqual(response.status_code, 400)
+
+
+class NwssCountyMappingEndpointRemovedTests(TestCase):
+    def test_url_is_gone(self):
+        from django.urls import NoReverseMatch
+
+        with self.assertRaises(NoReverseMatch):
+            reverse("get_nwss_county_mapping")

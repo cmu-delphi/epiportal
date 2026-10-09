@@ -3,8 +3,11 @@
 The main dropdown lists geography units as ``"<level>:<geo_id>"``. Covidcast
 reads them as they are; fluview takes the same places as region ids, which
 outside nation and HHS are just the ``geo_id``; pophive (Cosmos) takes
-``(geo_type, geo_id)`` pairs at the nation, HHS and state levels.
+``(geo_type, geo_id)`` pairs at the nation, HHS and state levels; NWSS takes
+the sewersheds of the picked counties.
 """
+
+from indicatorsets.utils.nwss import nwss_county_sewersheds
 
 # Levels whose units fluview has a region for.
 FLUVIEW_LOCATION_LEVELS = frozenset(
@@ -90,6 +93,41 @@ def pophive_locations(covidcast_geos):
     return locations
 
 
+def to_nwss_sewersheds(location_id):
+    """Return the NWSS sewershed ids of a main-dropdown county, or ``[]``.
+
+    ``county:42003`` -> Allegheny's sewersheds. NWSS has data per sewershed
+    only, and only counties are offered: a state would mean hundreds of series.
+    """
+    if not location_id or ":" not in location_id:
+        return []
+    level, geo_id = location_id.split(":", 1)
+    if level != "county":
+        return []
+    return list(nwss_county_sewersheds().get(geo_id, []))
+
+
+def nwss_counties():
+    """The FIPS codes of the counties some NWSS sewershed serves."""
+    return list(nwss_county_sewersheds())
+
+
+def nwss_locations(covidcast_geos):
+    """NWSS's share of the main dropdown's payload: sewershed ids, each once.
+
+    A sewershed that serves two picked counties is listed once.
+    """
+    if not isinstance(covidcast_geos, dict):
+        return []
+    sewersheds = []
+    for geos in covidcast_geos.values():
+        for geo in geos:
+            for sewershed in to_nwss_sewersheds(geo.get("id")):
+                if sewershed not in sewersheds:
+                    sewersheds.append(sewershed)
+    return sewersheds
+
+
 def split_locations(covidcast_geos):
     """Split the main dropdown's payload into ``(covidcast share, fluview share)``.
 
@@ -121,13 +159,15 @@ def split_locations(covidcast_geos):
 
 
 def use_main_locations(data):
-    """Return a copy of a submitted form payload with both shares in place.
+    """Return a copy of a submitted form payload with every share in place.
 
-    The ``fluviewLocations`` and ``pophiveLocations`` keys a stale page may
-    still send are replaced by shares derived from the main dropdown. Each
-    endpoint only gets locations when one of its indicators is selected: their
-    builders run on locations alone, so a covidcast-only pick of, say, a state
-    would otherwise add output nobody asked for.
+    The ``fluviewLocations``, ``pophiveLocations`` and ``nwssGeographicValue``
+    keys a stale page may still send are replaced by shares derived from the
+    main dropdown. Each endpoint only gets locations when one of its
+    indicators is selected: their builders run on locations alone, so a
+    covidcast-only pick of, say, a state would otherwise add output nobody
+    asked for. That also keeps the NWSS crosswalk from being fetched for
+    nothing.
     """
     covidcast_share, fluview_share = split_locations(
         data.get("covidCastGeographicValues")
@@ -142,9 +182,15 @@ def use_main_locations(data):
         if "pophive" in endpoints
         else []
     )
+    nwss_share = (
+        nwss_locations(data.get("covidCastGeographicValues"))
+        if "nwss" in endpoints
+        else []
+    )
     return {
         **data,
         "covidCastGeographicValues": covidcast_share,
         "fluviewLocations": fluview_share,
         "pophiveLocations": pophive_share,
+        "nwssGeographicValue": nwss_share,
     }
