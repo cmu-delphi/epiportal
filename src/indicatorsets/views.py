@@ -2,8 +2,6 @@ from delphi_utils.logger import LoggerThread
 import base64
 import json
 import sys
-import csv
-import io
 from datetime import datetime
 from textwrap import dedent
 
@@ -26,7 +24,9 @@ from indicatorsets.utils.locations import (
     FLUVIEW_LOCATION_LEVELS,
     POPHIVE_LOCATION_LEVELS,
     POPHIVE_STATES_WITHOUT_DATA,
+    nwss_counties,
     to_fluview_region,
+    to_nwss_sewersheds,
     to_pophive_location,
     use_main_locations,
 )
@@ -733,6 +733,9 @@ def get_available_geos(request):
         include_pophive_places = any(
             indicator.get("_endpoint") == "pophive" for indicator in indicators
         )
+        include_nwss_places = any(
+            indicator.get("_endpoint") == "nwss" for indicator in indicators
+        )
         grouped_indicators = group_by_property(indicators, "data_source")
         for data_source, indicators in grouped_indicators.items():
             indicators_str = ",".join(
@@ -769,6 +772,11 @@ def get_available_geos(request):
                     *POPHIVE_STATES_WITHOUT_DATA,
                     *(geo_id.upper() for geo_id in POPHIVE_STATES_WITHOUT_DATA),
                 ],
+            )
+        if include_nwss_places:
+            # NWSS, at the counties some sewershed serves.
+            units_query |= Q(
+                geo_level__name="county", geo_id__in=nwss_counties()
             )
         geographic_granularities = [
             {
@@ -963,6 +971,34 @@ def check_pophive_geo_coverage(request):
     )
 
 
+def check_nwss_geo_coverage(request):
+    """Tell the selected-indicators modal which NWSS indicators have no data
+    for one main-dropdown location.
+
+    Expects a JSON body ``{"geo": "geo_type:geo_value", "indicators": [...]}``.
+    NWSS is offered at counties some sewershed serves; the crosswalk answers
+    that, so ``/viz`` is never asked.
+    """
+    if request.method != "POST":
+        return JsonResponse({"error": "POST required"}, status=405)
+    try:
+        data = json.loads(request.body)
+    except ValueError:
+        return JsonResponse({"error": "Invalid JSON body"}, status=400)
+    indicators = data.get("indicators") or []
+    if not isinstance(indicators, list):
+        return JsonResponse({"error": "Expected indicators"}, status=400)
+    nwss_indicators = [
+        indicator for indicator in indicators if indicator.get("_endpoint") == "nwss"
+    ]
+    covered = bool(nwss_indicators) and bool(
+        to_nwss_sewersheds(data.get("geo") or "")
+    )
+    return JsonResponse(
+        {"not_covered_indicators": [] if covered else nwss_indicators}
+    )
+
+
 def check_covidcast_geo_coverage(request):
     """Tell the selected-indicators modal which covidcast indicators have data
     for one geo, and whether v5 or v4 will serve them.
@@ -1018,41 +1054,3 @@ def get_pophive_age_groups(request):
         except requests.RequestException:
             logger.exception("Error getting pophive age groups")
     return JsonResponse({"age_groups": pophive_age_groups})
-
-
-def get_nwss_county_mapping(request):
-    nwss_county_mapping = safe_cache_get("nwss_county_mapping", []) or []
-    nwss_county_mapping = []
-    url = settings.EPIDATA_V5_URL + "geomap/nwss_sewershed_crosswalk?other_geo_type=county"
-    if not nwss_county_mapping:
-        try:
-            response = requests.get(url, timeout=(5, 30))
-            response.raise_for_status()
-            csv_file = io.StringIO(response.text)
-            csv_reader = csv.DictReader(csv_file)
-            json_data: str = json.loads(json.dumps(list(csv_reader), indent=4))
-            nwss_county_mapping_dict = dict()
-            for el in json_data:
-                if el["to_name"] == "":
-                    continue
-                if el["to_val"] not in nwss_county_mapping_dict.keys():
-                    county_name = f'{" ".join(el["to_name"].strip().split(" ")[:-1])}, {el["to_name"].strip().split(" ")[-1]}'
-                    nwss_county_mapping_dict[el["to_val"]] = {
-                        "county": county_name,
-                        "nwss": str(el["from_val"])
-                    }
-                else:
-                    nwss_county_mapping_dict[el["to_val"]]["nwss"] += f",{str(el['from_val'])}"
-            for v in nwss_county_mapping_dict.values():
-                nwss_county_mapping.append(
-                    {
-                        "id": v["nwss"],
-                        "text": v["county"],
-                    }
-                )
-                nwss_county_mapping = sorted(nwss_county_mapping, key=lambda x: x["text"])
-            safe_cache_set("nwss_county_mapping", nwss_county_mapping, 60 * 60 * 24)
-            logger.info(f"Fetched: {len(nwss_county_mapping)} locations.")
-        except requests.RequestException:
-            logger.exception("Error getting nwss county mapping")
-    return JsonResponse({"nwss_county_mapping": nwss_county_mapping})

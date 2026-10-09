@@ -110,7 +110,7 @@ const V5_ENDPOINTS = typeof v5Endpoints !== "undefined" ? v5Endpoints : [];
 
 // Endpoints whose locations come from the main Location(s) dropdown rather
 // than a dropdown of their own.
-const MAIN_LOCATION_ENDPOINTS = ["covidcast", "fluview", "pophive"];
+const MAIN_LOCATION_ENDPOINTS = ["covidcast", "fluview", "pophive", "nwss"];
 
 // Preselected in the main Location(s) dropdown when nothing else is.
 const DEFAULT_LOCATION_ID = "nation:US";
@@ -392,10 +392,45 @@ function warnIfPophiveGeoNotCovered(geo) {
     });
 }
 
+async function checkNwssGeoCoverage(geoValue) {
+    const nwssIndicators = checkedIndicatorMembers.filter(
+        (indicator) => indicator["_endpoint"] === "nwss"
+    );
+    if (nwssIndicators.length === 0) {
+        return [];
+    }
+    try {
+        const result = await $.ajax({
+            url: "check_nwss_geo_coverage/",
+            type: "POST",
+            dataType: "json",
+            contentType: "application/json",
+            headers: { "X-CSRFToken": Cookies.get("csrftoken") },
+            data: JSON.stringify({ geo: geoValue, indicators: nwssIndicators }),
+        });
+        return result["not_covered_indicators"];
+    } catch (error) {
+        console.error("Error fetching NWSS geo coverage:", error);
+        return [];
+    }
+}
+
+// NWSS reads its locations from the main dropdown too, as the sewersheds of
+// the picked counties; anything else (states, counties with no sewershed) is
+// skipped, so say so.
+function warnIfNwssGeoNotCovered(geo) {
+    checkNwssGeoCoverage(geo.id).then((notCoveredIndicators) => {
+        if (notCoveredIndicators.length > 0) {
+            showNotCoveredGeoWarningMessage(notCoveredIndicators, geo);
+        }
+    });
+}
+
 function warnIfGeoNotCovered(geo) {
     warnIfCovidcastGeoNotCovered(geo);
     warnIfFluviewGeoNotCovered(geo);
     warnIfPophiveGeoNotCovered(geo);
+    warnIfNwssGeoNotCovered(geo);
 }
 
 $("#geographic_value").on("select2:select", function (e) {
@@ -474,7 +509,7 @@ function showPophiveAgeGroupSelect() {
 
 function showNwssFieldsSelect() {
     if (indicatorHandler.getNwssIndicators().length > 0) {
-        if (document.getElementsByName("nwssGeographicValue").length === 0) {
+        if (document.getElementById("nwssSource") === null) {
             indicatorHandler.showNwssFields();
         } else {
             $("#nwssDiv").show();
@@ -483,7 +518,6 @@ function showNwssFieldsSelect() {
     else {
         $("#nwssPcrTarget").val(null).trigger("change");
         $("#nwssSource").val(null).trigger("change");
-        $("#nwssGeographicValue").val("");
         $("#nwssDiv").hide();
     }
 }
@@ -503,9 +537,13 @@ function showNonDelphiIndicatorSetsLocations() {
     showFlusurvLocationSelect();
     showPophiveAgeGroupSelect();
     showNwssFieldsSelect();
-    // The age group sits in this section too, though Cosmos uses the main
-    // Location(s) dropdown.
-    if (hasOwnLocationMenus || indicatorHandler.getPophiveIndicators().length > 0) {
+    // The Cosmos age group and the NWSS source sit in this section too, though
+    // both use the main Location(s) dropdown.
+    if (
+        hasOwnLocationMenus ||
+        indicatorHandler.getPophiveIndicators().length > 0 ||
+        indicatorHandler.getNwssIndicators().length > 0
+    ) {
         $("#otherEndpointLocationsWrapper").show();
     } else {
         $("#otherEndpointLocationsWrapper").hide();

@@ -6,6 +6,7 @@ from indicatorsets.views import (
     IndicatorSetListView,
     check_covidcast_geo_coverage,
     check_fluview_geo_coverage,
+    check_nwss_geo_coverage,
     check_pophive_geo_coverage,
     create_query_code,
     epivis,
@@ -15,7 +16,6 @@ from indicatorsets.views import (
     preview_data,
     get_table_stats_info,
     get_pophive_age_groups,
-    get_nwss_county_mapping,
 )
 
 urlpatterns: list[URLPattern] = [
@@ -56,9 +56,9 @@ urlpatterns: list[URLPattern] = [
         name="get_pophive_age_groups",
     ),
     path(
-        "get_nwss_county_mapping/",
-        get_nwss_county_mapping,
-        name="get_nwss_county_mapping",
+        "check_nwss_geo_coverage/",
+        check_nwss_geo_coverage,
+        name="check_nwss_geo_coverage",
     ),
     path(
         "download_export/",
