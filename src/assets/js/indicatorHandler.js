@@ -135,11 +135,11 @@ class IndicatorHandler {
 
     nwssSources = ['CDC_Biobot', 'CDC_Verily', 'State_Territory', 'WastewaterSCAN'];
 
-    // Covidcast, fluview and pophive (Cosmos) take their locations from the
-    // main Location(s) dropdown.
+    // Covidcast, fluview, pophive (Cosmos) and nwss take their locations from
+    // the main Location(s) dropdown.
     usesMainLocations() {
         return this.indicators.some((indicator) =>
-            ["covidcast", "fluview", "pophive"].includes(indicator["_endpoint"])
+            ["covidcast", "fluview", "pophive", "nwss"].includes(indicator["_endpoint"])
         );
     }
 
@@ -280,10 +280,6 @@ class IndicatorHandler {
         if (pophiveAgeGroupData.length > 0) {
             payload.pophiveAgeGroup = pophiveAgeGroupData[0].id;
         }
-        var nwssGeographicValue = $("#nwssGeographicValue").val();
-        if (nwssGeographicValue && nwssGeographicValue.length > 0) {
-            payload.nwssGeographicValue = nwssGeographicValue;
-        }
         return payload;
 
     }
@@ -404,14 +400,6 @@ class IndicatorHandler {
                     <select id="nwssSource" name="nwssSource" class="form-select" multiple="multiple"></select>
                 </div>
             </div>
-            <div class="row margin-top-1rem">
-                <div class="col-2">
-                    <label for="nwssGeographicValue" class="col-form-label">Geographic Value:</label>
-                </div>
-                <div class="col-10">
-                    <select id="nwssGeographicValue" name="nwssGeographicValue" class="form-select" multiple="multiple"></select>
-                </div>
-            </div>
         </div><hr>`;
         if ($("#otherEndpointLocations").length) {
             $("#otherEndpointLocations").append(nwssFields);
@@ -436,16 +424,6 @@ class IndicatorHandler {
                 allowClear: true,
                 width: "100%",
             });
-            $.get("get_nwss_county_mapping/", function (response) {
-                $("#nwssGeographicValue").select2({
-                    placeholder: "Select Geographic Value",
-                    data: response.nwss_county_mapping,
-                    maximumSelectionLength: 5,
-                    minimumSelectionLength: 1,
-                    allowClear: true,
-                    width: "100%",
-                });
-            });
         }
     }
 
@@ -459,7 +437,6 @@ class IndicatorHandler {
         const flusurvLocations = $("#flusurvLocations").select2("data");
         const pophiveAgeGroup = getSelectedPophiveAgeGroup();
         const nwssSource = $("#nwssSource").select2("data");
-        const nwssGeographicValue = $("#nwssGeographicValue").val();
         const submitData = {
             indicators: this.indicators,
             covidCastGeographicValues: covidCastGeographicValues,
@@ -468,7 +445,6 @@ class IndicatorHandler {
             flusurvLocations: flusurvLocations,
             pophiveAgeGroup: pophiveAgeGroup,
             nwssSource: nwssSource,
-            nwssGeographicValue: nwssGeographicValue,
             fillMethod: getFillMethod(),
             apiKey: document.getElementById("apiKey").value ? document.getElementById("apiKey").value : "",
             clientId: clientId ? clientId : "Not available",
@@ -529,7 +505,6 @@ class IndicatorHandler {
         const nidssDengueLocations = $("#nidssDengueLocations").select2("data");
         const flusurvLocations = $("#flusurvLocations").select2("data");
         const pophiveAgeGroup = getSelectedPophiveAgeGroup();
-        const nwssGeographicValue = $("#nwssGeographicValue").val();
         const nwssSource = $("#nwssSource").select2("data");
         let dataFormat = 'csv';
         if ($("#data_format_json").is(":checked")) {
@@ -548,7 +523,6 @@ class IndicatorHandler {
             nidssDengueLocations: nidssDengueLocations,
             flusurvLocations: flusurvLocations,
             pophiveAgeGroup: pophiveAgeGroup,
-            nwssGeographicValue: nwssGeographicValue,
             nwssSource: nwssSource,
             fillMethod: getFillMethod(),
             apiKey: document.getElementById("apiKey").value ? document.getElementById("apiKey").value : "",
@@ -622,7 +596,6 @@ class IndicatorHandler {
         const flusurvLocations = $("#flusurvLocations").select2("data");
         const pophiveAgeGroup = getSelectedPophiveAgeGroup();
         const nwssSource = $("#nwssSource").select2("data");
-        const nwssGeographicValue = $("#nwssGeographicValue").val();
         const covidCastGeographicValues = Object.groupBy(
             $("#geographic_value").select2("data"),
             ({ geoType }) => [geoType]
@@ -641,7 +614,6 @@ class IndicatorHandler {
             flusurvLocations: flusurvLocations,
             pophiveAgeGroup: pophiveAgeGroup,
             nwssSource: nwssSource,
-            nwssGeographicValue: nwssGeographicValue,
             fillMethod: getFillMethod(),
             apiKey: document.getElementById("apiKey").value ? document.getElementById("apiKey").value : "",
             clientId: clientId ? clientId : "Not available",
@@ -678,7 +650,6 @@ class IndicatorHandler {
         const flusurvLocations = $("#flusurvLocations").select2("data");
         const pophiveAgeGroup = getSelectedPophiveAgeGroup();
         const nwssSource = $("#nwssSource").select2("data");
-        const nwssGeographicValue = $("#nwssGeographicValue").val();
         const covidCastGeographicValues = Object.groupBy(
             $("#geographic_value").select2("data"),
             ({ geoType }) => [geoType]
@@ -694,7 +665,6 @@ class IndicatorHandler {
             flusurvLocations: flusurvLocations,
             pophiveAgeGroup: pophiveAgeGroup,
             nwssSource: nwssSource,
-            nwssGeographicValue: nwssGeographicValue,
             fillMethod: getFillMethod(),
             apiKey: document.getElementById("apiKey").value ? document.getElementById("apiKey").value : "",
             clientId: clientId ? clientId : "Not available",
