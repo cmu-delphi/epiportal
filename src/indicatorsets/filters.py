@@ -14,7 +14,7 @@ from indicatorsets.utils import (
 )
 from indicators.models import Indicator
 from base.models import Pathogen, Geography, SeverityPyramidRung
-from indicatorsets.utils.locations import to_fluview_region
+from indicatorsets.utils.locations import to_fluview_region, to_nwss_sewersheds
 
 
 logger = logging.getLogger(__name__)
@@ -141,18 +141,31 @@ class IndicatorSetFilter(django_filters.FilterSet):
     def include_fluview(values):
         return any(to_fluview_region(value) for value in ast.literal_eval(values))
 
+    @staticmethod
+    def include_nwss(values):
+        # v5 has NWSS per sewershed only, so a county matches when some
+        # sewershed serves it, the same rule the modal's coverage check uses.
+        return any(to_nwss_sewersheds(value) for value in ast.literal_eval(values))
+
     def location_search_filter(self, queryset, name, value):
         if not value:
             return queryset
         indicator_sets = []
         filtered_indicators = get_list_of_indicators_filtered_by_geo(value)
         include_fluview = self.include_fluview(value)
+        include_nwss = self.include_nwss(value)
         query = Q()
         if filtered_indicators:
             for item in filtered_indicators:
                 query |= Q(source__name=item["source"], name=item["signal"])
         if include_fluview:
             query |= Q(indicator_set__epidata_endpoint="fluview")
+        if include_nwss:
+            query |= Q(indicator_set__epidata_endpoint="nwss")
+        if not query:
+            # An empty Q() matches every indicator; nothing covers the place.
+            self.indicators_qs = self.indicators_qs.none()
+            return queryset.none()
         self.indicators_qs = self.indicators_qs.filter(query)
         indicator_sets = list(self.indicators_qs.values_list("indicator_set_id", flat=True).order_by("indicator_set_id").distinct())
         return queryset.filter(id__in=indicator_sets)
