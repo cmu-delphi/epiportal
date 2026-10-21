@@ -394,6 +394,68 @@ class IndicatorSetFilterTests(TestCase):
             IndicatorSetFilter.include_fluview("['country:us']")
         )
 
+    def test_include_nwss_needs_a_county_some_sewershed_serves(self):
+        with _patch_nwss_crosswalk():
+            self.assertTrue(IndicatorSetFilter.include_nwss("['county:42003']"))
+            self.assertTrue(
+                IndicatorSetFilter.include_nwss("['state:PA', 'county:42125']")
+            )
+            self.assertFalse(IndicatorSetFilter.include_nwss("['county:01001']"))
+            # States are not offered for NWSS, even where sewersheds exist.
+            self.assertFalse(IndicatorSetFilter.include_nwss("['state:PA']"))
+
+    # Epidata's geo coverage knows the covidcast signal at either county, but
+    # never NWSS: v5 files NWSS under sewersheds, not counties.
+    @patch(
+        "indicatorsets.filters.get_list_of_indicators_filtered_by_geo",
+        return_value=[{"source": "nssp", "signal": "pct_ed_visits_covid"}],
+    )
+    def test_location_search_keeps_nwss_sets_for_counties_with_sewersheds(self, _):
+        Indicator.objects.create(
+            name="pct_ed_visits_covid",
+            source=SourceSubdivision.objects.create(name="nssp"),
+            indicator_set=self.covidcast_set,
+        )
+        nwss_set = IndicatorSet.objects.create(
+            name="NWSS set", epidata_endpoint="nwss", source_type="covidcast"
+        )
+        Indicator.objects.create(
+            name="covid_avg_conc",
+            source=SourceSubdivision.objects.create(name="nwss"),
+            indicator_set=nwss_set,
+        )
+        data = QueryDict(mutable=True)
+        with _patch_nwss_crosswalk():
+            data.setlist("location_search", ["county:42003"])
+            filtered = IndicatorSetFilter(
+                data=data, queryset=IndicatorSet.objects.all()
+            ).qs
+            self.assertIn(nwss_set, filtered)
+            self.assertIn(self.covidcast_set, filtered)
+
+            data.setlist("location_search", ["county:01001"])
+            filtered = IndicatorSetFilter(
+                data=data, queryset=IndicatorSet.objects.all()
+            ).qs
+            self.assertNotIn(nwss_set, filtered)
+            self.assertIn(self.covidcast_set, filtered)
+
+    @patch("indicatorsets.filters.get_list_of_indicators_filtered_by_geo", return_value=[])
+    def test_location_search_returns_nothing_when_nothing_covers_the_place(self, _):
+        Indicator.objects.create(
+            name="pct_ed_visits_covid",
+            source=SourceSubdivision.objects.create(name="nssp"),
+            indicator_set=self.covidcast_set,
+        )
+        data = QueryDict(mutable=True)
+        data.setlist("location_search", ["county:01001"])
+        with _patch_nwss_crosswalk():
+            location_filter = IndicatorSetFilter(
+                data=data, queryset=IndicatorSet.objects.all()
+            )
+            self.assertFalse(location_filter.qs.exists())
+            self.assertFalse(location_filter.indicators_qs.exists())
+
     def test_odp_filter_by_comma_separated_ids(self):
         data = QueryDict(f"odp={self.acme_provider.id},{self.cdc_provider.id}")
         filtered = IndicatorSetFilter(data=data, queryset=IndicatorSet.objects.all()).qs
