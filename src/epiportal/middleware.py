@@ -7,6 +7,7 @@ import uuid
 from typing import Any
 
 from delphi_utils import get_structured_logger
+from django.core.exceptions import DisallowedHost
 from django.utils.deprecation import MiddlewareMixin
 
 from epiportal.utils import get_client_ip
@@ -54,6 +55,22 @@ def _sanitize_headers(meta: dict) -> dict[str, str]:
     return headers
 
 
+def _safe_absolute_uri(request) -> tuple[str, bool]:
+    """
+    Return (absolute_uri, host_disallowed).
+
+    request.build_absolute_uri() validates the Host header against
+    ALLOWED_HOSTS and raises DisallowedHost for unknown hosts. Django already
+    rejects and reports such requests itself, so here we fall back to the raw
+    Host header to keep request logging working.
+    """
+    try:
+        return request.build_absolute_uri(), False
+    except DisallowedHost:
+        raw_host = request.META.get("HTTP_HOST", "")
+        return f"{request.scheme}://{raw_host}{request.get_full_path()}", True
+
+
 class RequestLoggingMiddleware(MiddlewareMixin):
     """
     Middleware that logs every HTTP request with comprehensive request and response data.
@@ -79,12 +96,14 @@ class RequestLoggingMiddleware(MiddlewareMixin):
                 else None
             )
 
+            full_uri, host_disallowed = _safe_absolute_uri(request)
+
             # Build comprehensive log data
             log_data: dict[str, Any] = {
                 "request_id": getattr(request, "_request_id", None),
                 "method": request.method,
                 "path": request.path,
-                "full_uri": request.build_absolute_uri(),
+                "full_uri": full_uri,
                 "query_string": request.META.get("QUERY_STRING") or "",
                 "query_params": dict(request.GET) if request.GET else {},
                 "client_ip": get_client_ip(request),
@@ -96,6 +115,10 @@ class RequestLoggingMiddleware(MiddlewareMixin):
                 "response_status": response.status_code,
                 "response_content_type": response.get("Content-Type", ""),
             }
+
+            if host_disallowed:
+                log_data["host_disallowed"] = True
+                log_data["rejected_host"] = request.META.get("HTTP_HOST", "")
 
             # Authentication / user info
             if hasattr(request, "user") and request.user.is_authenticated:
