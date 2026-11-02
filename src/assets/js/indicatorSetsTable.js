@@ -306,7 +306,7 @@ function format(rowData, relatedIndicators) {
             const enabledEndpoints = ["covidcast", "fluview", "nidss_flu", "nidss_dengue", "flusurv", "pophive", "nwss"];
             disabled = enabledEndpoints.includes(indicator.endpoint) ? "" : "disabled";
             sourceType = indicator.source_type;
-            var restricted = indicator.restricted != "No";
+            var restricted = indicator.restricted === true;
             if (disabled === "disabled") {
                 checkboxTitle =
                     "Visualization functionality for this endpoint is coming soon.";

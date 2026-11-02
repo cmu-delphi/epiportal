@@ -18,7 +18,7 @@ from indicators.models import (
     OtherEndpointIndicator,
     USStateIndicator,
 )
-from indicatorsets.models import IndicatorSet, NonDelphiIndicatorSet
+from indicatorsets.models import IndicatorSet
 
 logger = logging.getLogger(__name__)
 
@@ -669,7 +669,7 @@ class NonDelphiIndicatorResource(ModelResource):
     indicator_set = Field(
         attribute="indicator_set",
         column_name="Indicator Set",
-        widget=PermissiveForeignKeyWidget(NonDelphiIndicatorSet),
+        widget=PermissiveForeignKeyWidget(IndicatorSet),
     )
     use_in_express_interface = Field(
         attribute="use_in_express_interface", column_name="Include in express app"

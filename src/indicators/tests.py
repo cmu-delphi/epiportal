@@ -47,7 +47,7 @@ class IndicatorDisplayNameTests(TestCase):
         cls.source = SourceSubdivision.objects.create(name="covid_src")
         cls.indicator_set = IndicatorSet.objects.create(
             name="Covid indicators",
-            source_type="covidcast",
+            kind="delphi",
         )
 
     def test_get_display_name_prefers_display_name(self):
@@ -86,7 +86,7 @@ class IndicatorGeographyTests(TestCase):
         cls.source = SourceSubdivision.objects.create(name="geo_src")
         cls.indicator_set = IndicatorSet.objects.create(
             name="Geo set",
-            source_type="covidcast",
+            kind="delphi",
         )
         cls.indicator = Indicator.objects.create(
             name="geo_sig",
@@ -123,7 +123,7 @@ class IndicatorProxyModelTests(TestCase):
         cls.source = SourceSubdivision.objects.create(name="proxy_src")
         cls.indicator_set = IndicatorSet.objects.create(
             name="Proxy set",
-            source_type="covidcast",
+            kind="delphi",
         )
 
     def test_other_endpoint_proxy_resolves_same_row(self):
@@ -165,7 +165,7 @@ class IndicatorImportResourceTests(TestCase):
         cls.source = SourceSubdivision.objects.create(name="import_src")
         cls.indicator_set = IndicatorSet.objects.create(
             name="Import test set",
-            source_type="covidcast",
+            kind="delphi",
         )
 
     def test_non_delphi_import_only_deletes_other_non_delphi_indicators(self):
@@ -232,7 +232,7 @@ class SkipRowIndicatorSetColumnTests(TestCase):
     def setUpTestData(cls):
         cls.indicator_set = IndicatorSet.objects.create(
             name="Alabama COVID-19 ED visits",
-            source_type="us_state",
+            kind="us_states",
         )
 
     def test_us_state_row_with_known_indicator_set_is_not_skipped(self):
@@ -283,7 +283,7 @@ class IndicatorResourceProcessorTests(TestCase):
     def setUpTestData(cls):
         cls.indicator_set = IndicatorSet.objects.create(
             name="Import test set",
-            source_type="covidcast",
+            kind="delphi",
         )
         cls.source = SourceSubdivision.objects.create(name="import_src")
 

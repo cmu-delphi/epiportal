@@ -32,7 +32,7 @@ def _create_express_indicator(menu_item="COVID-19", signal_name="test_signal"):
         name=f"Set {signal_name}",
         short_name="TS",
         epidata_endpoint="covidcast",
-        source_type="covidcast",
+        kind="delphi",
     )
     indicator = Indicator.objects.create(
         name=signal_name,
@@ -134,7 +134,7 @@ class GetChartDataNormalizationTests(TestCase):
             name="Set",
             short_name="S",
             epidata_endpoint="covidcast",
-            source_type="covidcast",
+            kind="delphi",
         )
         indicators = []
         for name in ("sig_low", "sig_high"):

@@ -24,9 +24,7 @@ from indicatorsets.models import (
     ColumnDescription,
     FilterDescription,
     IndicatorSet,
-    NonDelphiIndicatorSet,
     OriginalDataProvider,
-    USStateIndicatorSet,
 )
 from indicatorsets.utils import (
     NO_DATA_MESSAGE,
@@ -84,10 +82,6 @@ from indicatorsets.utils.v5_diff import (
 )
 from indicatorsets.views import age_group_sort_key, get_related_indicators
 from indicatorsets.filters import IndicatorSetFilter
-from indicatorsets.resources import (
-    IndicatorSetResource,
-    NonDelphiIndicatorSetResource,
-)
 from base.models import Pathogen
 from datasources.models import SourceSubdivision
 from indicators.models import Indicator
@@ -143,7 +137,7 @@ class IndicatorSetModelTests(TestCase):
         indicator_set = IndicatorSet.objects.create(
             name="ILI surveillance",
             short_name="ILI",
-            source_type="covidcast",
+            kind="delphi",
         )
         self.assertEqual(str(indicator_set), "ILI surveillance")
 
@@ -183,17 +177,17 @@ class GroupedDataProviderChoicesTests(TestCase):
         IndicatorSet.objects.create(
             name="State set",
             original_data_provider=pa_provider,
-            source_type="us_state",
+            kind="us_states",
         )
         IndicatorSet.objects.create(
             name="Federal set",
             original_data_provider=cdc_provider,
-            source_type="covidcast",
+            kind="delphi",
         )
         IndicatorSet.objects.create(
             name="Other set",
             original_data_provider=acme_provider,
-            source_type="covidcast",
+            kind="delphi",
         )
 
         grouped = get_grouped_original_data_provider_choices()
@@ -275,9 +269,9 @@ class IndicatorSetListViewTests(TestCase):
         provider = OriginalDataProvider.objects.create(name="Acme Labs")
         IndicatorSet.objects.create(
             name="JSON test set",
-            source_type="covidcast",
-            temporal_scope_end="Ongoing",
-            dua_required="No",
+            kind="delphi",
+            ongoing=True,
+            dua_required=False,
             original_data_provider=provider,
         )
         response = self.client.get(reverse("indicatorsets"), {"format": "json"})
@@ -292,12 +286,12 @@ class IndicatorSetListViewTests(TestCase):
         provider = OriginalDataProvider.objects.create(name="Filtered provider")
         matched_set = IndicatorSet.objects.create(
             name="Matched set",
-            source_type="covidcast",
+            kind="delphi",
             original_data_provider=provider,
         )
         IndicatorSet.objects.create(
             name="Other set",
-            source_type="covidcast",
+            kind="delphi",
         )
         response = self.client.get(
             reverse("indicatorsets"),
@@ -308,6 +302,41 @@ class IndicatorSetListViewTests(TestCase):
         self.assertEqual(payload["recordsTotal"], 1)
         self.assertEqual(payload["data"][0]["DT_RowId"], matched_set.id)
 
+    def test_json_shows_ongoing_in_end_column(self):
+        IndicatorSet.objects.create(
+            name="Ongoing set",
+            kind="non_delphi",
+            ongoing=True,
+            temporal_scope_end="",
+            dua_required=True,
+        )
+        response = self.client.get(reverse("indicatorsets"), {"format": "json"})
+        row = response.json()["data"][0]
+        self.assertEqual(row["temporal_scope_end"], "Ongoing")
+        self.assertEqual(row["kind"], "non_delphi")
+        self.assertEqual(row["dua_required"], "Yes")
+        self.assertNotIn("source_type", row)
+
+    def test_json_keeps_end_date_when_not_ongoing(self):
+        IndicatorSet.objects.create(
+            name="Ended set", kind="delphi", temporal_scope_end="2023-05-01"
+        )
+        response = self.client.get(reverse("indicatorsets"), {"format": "json"})
+        row = response.json()["data"][0]
+        self.assertEqual(row["temporal_scope_end"], "2023-05-01")
+        self.assertEqual(row["dua_required"], "No")
+
+    def test_top_priority_is_ongoing_unrestricted_delphi(self):
+        IndicatorSet.objects.create(
+            name="A restricted set", kind="delphi", ongoing=True, dua_required=True
+        )
+        IndicatorSet.objects.create(
+            name="B open set", kind="delphi", ongoing=True, dua_required=False
+        )
+        response = self.client.get(reverse("indicatorsets"), {"format": "json"})
+        names = [row["name"] for row in response.json()["data"]]
+        self.assertEqual(names, ["B open set", "A restricted set"])
+
 
 class GetRelatedIndicatorsTests(TestCase):
     @classmethod
@@ -317,8 +346,8 @@ class GetRelatedIndicatorsTests(TestCase):
             name="Related set",
             short_name="RS",
             epidata_endpoint="covidcast",
-            source_type="covidcast",
-            dua_required="No",
+            kind="delphi",
+            dua_required=False,
         )
         cls.indicator = Indicator.objects.create(
             name="sig_a",
@@ -341,18 +370,22 @@ class GetRelatedIndicatorsTests(TestCase):
         result = get_related_indicators(Indicator.objects.all(), [self.indicator_set.id])
         self.assertEqual(result[0]["display_name"], "Custom label")
 
+    def test_restricted_is_the_dua_required_flag(self):
+        result = get_related_indicators(Indicator.objects.all(), [self.indicator_set.id])
+        self.assertIs(result[0]["restricted"], False)
+
 
 class IndicatorSetFilterTests(TestCase):
     @classmethod
     def setUpTestData(cls):
         cls.covidcast_set = IndicatorSet.objects.create(
             name="Covidcast set",
-            source_type="covidcast",
-            temporal_scope_end="Ongoing",
+            kind="delphi",
+            ongoing=True,
         )
         cls.non_delphi_set = IndicatorSet.objects.create(
             name="External set",
-            source_type="non_delphi",
+            kind="non_delphi",
             temporal_scope_end="2020",
         )
         cls.acme_provider = OriginalDataProvider.objects.create(
@@ -365,12 +398,12 @@ class IndicatorSetFilterTests(TestCase):
         )
         cls.acme_set = IndicatorSet.objects.create(
             name="Acme set",
-            source_type="covidcast",
+            kind="delphi",
             original_data_provider=cls.acme_provider,
         )
         cls.cdc_set = IndicatorSet.objects.create(
             name="CDC set",
-            source_type="covidcast",
+            kind="delphi",
             original_data_provider=cls.cdc_provider,
         )
 
@@ -385,6 +418,24 @@ class IndicatorSetFilterTests(TestCase):
         filtered = IndicatorSetFilter(data=data, queryset=IndicatorSet.objects.all()).qs
         self.assertIn(self.covidcast_set, filtered)
         self.assertNotIn(self.non_delphi_set, filtered)
+
+    def test_hosted_by_delphi_filter_uses_kind(self):
+        us_states_set = IndicatorSet.objects.create(
+            name="State set", kind="us_states"
+        )
+        data = {"hosted_by_delphi": "on"}
+        filtered = IndicatorSetFilter(data=data, queryset=IndicatorSet.objects.all()).qs
+        self.assertIn(self.acme_set, filtered)
+        self.assertNotIn(us_states_set, filtered)
+
+    def test_ongoing_filter_uses_flag(self):
+        ended_set = IndicatorSet.objects.create(
+            name="Ended set", kind="delphi", temporal_scope_end="2023-05-01"
+        )
+        data = {"temporal_scope_end": "Ongoing"}
+        filtered = IndicatorSetFilter(data=data, queryset=IndicatorSet.objects.all()).qs
+        self.assertEqual(list(filtered), [self.covidcast_set])
+        self.assertNotIn(ended_set, filtered)
 
     def test_include_fluview_detects_mapped_locations(self):
         self.assertTrue(
@@ -417,7 +468,7 @@ class IndicatorSetFilterTests(TestCase):
             indicator_set=self.covidcast_set,
         )
         nwss_set = IndicatorSet.objects.create(
-            name="NWSS set", epidata_endpoint="nwss", source_type="covidcast"
+            name="NWSS set", epidata_endpoint="nwss", kind="delphi"
         )
         Indicator.objects.create(
             name="covid_avg_conc",
@@ -477,70 +528,6 @@ class IndicatorSetFilterTests(TestCase):
         filtered = IndicatorSetFilter(data=data, queryset=IndicatorSet.objects.all()).qs
         self.assertIn(self.acme_set, filtered)
         self.assertNotIn(self.cdc_set, filtered)
-
-
-class IndicatorSetImportResourceTests(TestCase):
-    def test_non_delphi_import_only_deletes_other_non_delphi_sets(self):
-        delphi_set = IndicatorSet.objects.create(
-            name="Delphi set",
-            source_type="covidcast",
-        )
-        kept_non_delphi = IndicatorSet.objects.create(
-            name="Kept non-delphi set",
-            source_type="non_delphi",
-        )
-        removed_non_delphi = IndicatorSet.objects.create(
-            name="Removed non-delphi set",
-            source_type="non_delphi",
-        )
-
-        resource = NonDelphiIndicatorSetResource()
-        resource.imported_rows_pks = [kept_non_delphi.pk]
-        resource.after_import(None, None, dry_run=False)
-
-        self.assertTrue(IndicatorSet.objects.filter(pk=delphi_set.pk).exists())
-        self.assertTrue(IndicatorSet.objects.filter(pk=kept_non_delphi.pk).exists())
-        self.assertFalse(IndicatorSet.objects.filter(pk=removed_non_delphi.pk).exists())
-
-    def test_delphi_import_only_deletes_other_delphi_sets(self):
-        non_delphi_set = IndicatorSet.objects.create(
-            name="Non-delphi set",
-            source_type="non_delphi",
-        )
-        kept_delphi = IndicatorSet.objects.create(
-            name="Kept delphi set",
-            source_type="covidcast",
-        )
-        removed_delphi = IndicatorSet.objects.create(
-            name="Removed delphi set",
-            source_type="other_endpoint",
-        )
-
-        resource = IndicatorSetResource()
-        resource.imported_rows_pks = [kept_delphi.pk]
-        resource.after_import(None, None, dry_run=False)
-
-        self.assertTrue(IndicatorSet.objects.filter(pk=non_delphi_set.pk).exists())
-        self.assertTrue(IndicatorSet.objects.filter(pk=kept_delphi.pk).exists())
-        self.assertFalse(IndicatorSet.objects.filter(pk=removed_delphi.pk).exists())
-
-
-class IndicatorSetProxyModelTests(TestCase):
-    def test_non_delphi_proxy(self):
-        indicator_set = IndicatorSet.objects.create(
-            name="Non-delphi proxy set",
-            source_type="non_delphi",
-        )
-        proxy = NonDelphiIndicatorSet.objects.get(pk=indicator_set.pk)
-        self.assertIsInstance(proxy, NonDelphiIndicatorSet)
-
-    def test_us_state_proxy(self):
-        indicator_set = IndicatorSet.objects.create(
-            name="US state proxy set",
-            source_type="us_state",
-        )
-        proxy = USStateIndicatorSet.objects.get(pk=indicator_set.pk)
-        self.assertIsInstance(proxy, USStateIndicatorSet)
 
 
 class OriginalDataProviderUtilsTests(TestCase):
@@ -4903,10 +4890,10 @@ class DiffV5IndicatorsV4OnlyReportTests(TestCase):
         legacy = SourceSubdivision.objects.create(name="fb-survey")
         nwss = SourceSubdivision.objects.create(name="beta_nwss")
         covidcast_set = IndicatorSet.objects.create(
-            name="Covidcast set", source_type="covidcast", epidata_endpoint="covidcast"
+            name="Covidcast set", kind="delphi", epidata_endpoint="covidcast"
         )
         nwss_set = IndicatorSet.objects.create(
-            name="NWSS set", source_type="other_endpoint", epidata_endpoint="nwss"
+            name="NWSS set", kind="delphi", epidata_endpoint="nwss"
         )
         # migrated source: one signal v5 has, one it does not
         Indicator.objects.create(
