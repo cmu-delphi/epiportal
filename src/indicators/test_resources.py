@@ -232,6 +232,7 @@ class IndicatorResourceTests(TestCase):
         self.assertFalse(Indicator.objects.exists())
         self.assertEqual(len(resource.warnings), 1)
         self.assertIn("Nevada typo", resource.warnings[0])
+        self.assertIn("Unknown or hidden indicator set", resource.warnings[0])
 
     def test_unknown_delphi_source_is_skipped_with_warning(self):
         resource, result = run_import(
@@ -339,6 +340,35 @@ class IndicatorResourceTests(TestCase):
 
     def test_warnings_default_to_empty_list(self):
         self.assertEqual(IndicatorResource().warnings, [])
+
+    def test_missing_show_in_epiportal_column_aborts_import(self):
+        Indicator.objects.create(name="kept", indicator_set=self.state_set)
+        dataset = indicators_dataset({"indicator": "kept", "indicator_set": "State set"})
+        del dataset["show_in_epiportal"]
+
+        result = IndicatorResource().import_data(dataset, dry_run=False)
+
+        self.assertTrue(result.has_errors())
+        self.assertIn("'show_in_epiportal'", str(result.base_errors[0].error))
+        self.assertEqual(
+            list(Indicator.objects.values_list("name", flat=True)), ["kept"]
+        )
+
+    def test_unrecognised_show_in_epiportal_hides_with_warning(self):
+        resource, _ = run_import(
+            indicators_dataset(
+                {
+                    "indicator": "sig",
+                    "indicator_set": "State set",
+                    "show_in_epiportal": "Yes",
+                }
+            )
+        )
+
+        self.assertFalse(Indicator.objects.exists())
+        self.assertEqual(len(resource.warnings), 1)
+        self.assertIn("'Yes'", resource.warnings[0])
+        self.assertIn("sig", resource.warnings[0])
 
     def test_resource_columns_exist_in_sheet_header(self):
         resource = IndicatorResource()

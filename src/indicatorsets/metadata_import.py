@@ -28,6 +28,9 @@ from indicatorsets.resources import IndicatorSetResource
 logger = logging.getLogger(__name__)
 
 MAX_WARNINGS_SHOWN = 20
+MAX_DUPLICATE_NAMES_SHOWN = 5
+# Marks the warnings for duplicate rows, which drop no data: the first row wins.
+DUPLICATE_WARNING_MARKER = " rows differ: "
 
 # (settings key, resource class, first header cell when the tab has a preamble)
 TABS = (
@@ -89,10 +92,14 @@ def run_metadata_import(
     for tab, _resource_class, header_first_cell in TABS:
         try:
             csv_text = fetch(settings.SPREADSHEET_URLS[tab])
+            datasets[tab] = load_dataset(csv_text, header_first_cell)
         except requests.RequestException as e:
             logger.exception("Spreadsheet download failed", extra={"tab": tab})
             raise MetadataImportError(f"Could not download {tab}: {e!r}") from e
-        datasets[tab] = load_dataset(csv_text, header_first_cell)
+        except (UnicodeDecodeError, csv.Error, tablib.InvalidDimensions) as e:
+            # E.g. an HTML login page served after a sharing change.
+            logger.exception("Spreadsheet is not valid CSV", extra={"tab": tab})
+            raise MetadataImportError(f"Could not read {tab} as CSV: {e!r}") from e
 
     results = []
     with transaction.atomic():
@@ -104,7 +111,7 @@ def run_metadata_import(
                 raise_errors=False,
                 collect_failed_rows=True,
             )
-            if result.has_errors():
+            if result.has_errors() or result.has_validation_errors():
                 raise MetadataImportError(_describe_errors(tab, result))
             results.append(
                 TabResult(
@@ -116,6 +123,14 @@ def run_metadata_import(
                     warnings=list(resource.warnings),
                 )
             )
+    for r in results:
+        if r.warnings:
+            logger.warning(
+                "Metadata import warnings for %s:\n%s",
+                r.tab,
+                "\n".join(r.warnings),
+                extra={"tab": r.tab, "warnings": r.warnings},
+            )
     return results
 
 
@@ -126,6 +141,8 @@ def _describe_errors(tab: str, result) -> str:
     for line, errors in result.row_errors()[:5]:
         for error in errors:
             lines.append(f"Line number: {line} - {error.error!r}")
+    for invalid_row in result.invalid_rows[:5]:
+        lines.append(f"Line number: {invalid_row.number} - {invalid_row.error!r}")
     return "\n".join(lines)
 
 
@@ -137,6 +154,37 @@ def format_results(results: list[TabResult]) -> list[str]:
     ]
 
 
+def admin_warning_lines(results: list[TabResult]) -> list[str]:
+    """Warnings for the admin, those meaning data was dropped first.
+
+    Duplicate-row warnings drop nothing, so each tab's are collapsed into one
+    line; the full list goes to the log.
+    """
+    dropped = []
+    duplicate_lines = []
+    for r in results:
+        duplicates = []
+        for warning in r.warnings:
+            if DUPLICATE_WARNING_MARKER in warning:
+                duplicates.append(warning.split(DUPLICATE_WARNING_MARKER, 1)[1])
+            else:
+                dropped.append(f"{r.tab}: {warning}")
+        if duplicates:
+            names = ", ".join(duplicates[:MAX_DUPLICATE_NAMES_SHOWN])
+            if len(duplicates) > MAX_DUPLICATE_NAMES_SHOWN:
+                names += ", ..."
+            duplicate_lines.append(
+                f"{r.tab}: {len(duplicates)} duplicate rows differ from the "
+                f"first row, which was kept: {names}"
+            )
+    lines = dropped[:MAX_WARNINGS_SHOWN]
+    if len(dropped) > MAX_WARNINGS_SHOWN:
+        lines.append(
+            f"... and {len(dropped) - MAX_WARNINGS_SHOWN} more warnings (see the log)"
+        )
+    return lines + duplicate_lines
+
+
 def import_metadata_from_admin(admin_instance, request) -> HttpResponse:
     try:
         results = run_metadata_import()
@@ -144,10 +192,8 @@ def import_metadata_from_admin(admin_instance, request) -> HttpResponse:
         admin_instance.message_user(request, str(e), level=messages.ERROR)
         return redirect(".")
 
-    lines = format_results(results)
-    warnings = [warning for r in results for warning in r.warnings]
-    lines.extend(warnings[:MAX_WARNINGS_SHOWN])
-    if len(warnings) > MAX_WARNINGS_SHOWN:
-        lines.append(f"... and {len(warnings) - MAX_WARNINGS_SHOWN} more warnings")
-    admin_instance.message_user(request, "\n".join(lines), level=messages.INFO)
+    for line in format_results(results):
+        admin_instance.message_user(request, line, level=messages.INFO)
+    for line in admin_warning_lines(results):
+        admin_instance.message_user(request, line, level=messages.WARNING)
     return redirect(".")

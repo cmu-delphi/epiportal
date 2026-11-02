@@ -15,6 +15,12 @@ def parse_bool(value) -> bool:
     return str(value).strip().lower() == "true"
 
 
+def is_unrecognised_bool(value) -> bool:
+    """True for a non-empty value other than TRUE/FALSE, which parse_bool reads as False."""
+    text = str(value or "").strip().lower()
+    return bool(text) and text not in ("true", "false")
+
+
 def normalize_sheet_date(value: str | None) -> str:
     """Return an ISO date for dates and epiweeks (CDC Sunday start); other text is kept."""
     text = (value or "").strip()

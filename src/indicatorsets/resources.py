@@ -8,6 +8,7 @@ from base.sheet_values import (
     drop_duplicate_rows,
     geographic_scope_id,
     geography_ids,
+    is_unrecognised_bool,
     normalize_sheet_date,
     parse_bool,
     pathogen_ids,
@@ -41,6 +42,8 @@ def original_data_provider_id(name: str) -> int | None:
 
 
 class IndicatorSetResource(CustomModelResource):
+    required_columns = ("show_in_epiportal", "kind")
+
     name = Field(attribute="name", column_name="indicator_set")
     short_name = Field(attribute="short_name", column_name="short_name")
     description = Field(attribute="description", column_name="description")
@@ -168,6 +171,14 @@ class IndicatorSetResource(CustomModelResource):
 
     def before_import_row(self, row, **kwargs):
         strip_all_string_values(row)
+        if row.get("indicator_set") and is_unrecognised_bool(
+            row.get("show_in_epiportal")
+        ):
+            self.warnings.append(
+                f"Unrecognised show_in_epiportal value "
+                f"{row.get('show_in_epiportal')!r} (hidden) for indicator set: "
+                f"{row['indicator_set']}"
+            )
         for column in ("show_in_epiportal", "ongoing", "dua_required"):
             row[column] = parse_bool(row.get(column))
         for column in ("temporal_scope_start", "temporal_scope_end"):

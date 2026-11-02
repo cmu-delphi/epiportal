@@ -6,6 +6,7 @@ from base.sheet_values import (
     drop_duplicate_rows,
     geographic_scope_id,
     geography_ids,
+    is_unrecognised_bool,
     normalize_sheet_date,
     parse_bool,
     pathogen_ids,
@@ -21,6 +22,14 @@ class ParseBoolTests(SimpleTestCase):
             self.assertIs(parse_bool(v), True)
         for v in ("FALSE", "False", "", None, "no"):
             self.assertIs(parse_bool(v), False)
+
+
+class IsUnrecognisedBoolTests(SimpleTestCase):
+    def test_values(self):
+        for v in ("Yes", "no", "1", " maybe "):
+            self.assertIs(is_unrecognised_bool(v), True)
+        for v in ("TRUE", "false", " False ", "", None, True, False):
+            self.assertIs(is_unrecognised_bool(v), False)
 
 
 class NormalizeSheetDateTests(SimpleTestCase):

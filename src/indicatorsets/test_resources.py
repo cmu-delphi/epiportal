@@ -250,6 +250,39 @@ class IndicatorSetResourceTests(TestCase):
         self.assertEqual(result.totals["skip"], 2)
         self.assertEqual(sorted(IndicatorSet.objects.values_list("pk", flat=True)), pks)
 
+    def test_missing_control_column_aborts_import_and_keeps_sets(self):
+        for column in ("show_in_epiportal", "kind"):
+            with self.subTest(column=column):
+                IndicatorSet.objects.create(name="Kept", kind="delphi")
+                dataset = sets_dataset({"indicator_set": "Kept"})
+                del dataset[column]
+
+                result = IndicatorSetResource().import_data(dataset, dry_run=False)
+
+                self.assertTrue(result.has_errors())
+                self.assertIn(repr(column), str(result.base_errors[0].error))
+                self.assertEqual(
+                    list(IndicatorSet.objects.values_list("name", flat=True)),
+                    ["Kept"],
+                )
+                IndicatorSet.objects.all().delete()
+
+    def test_unrecognised_show_in_epiportal_hides_with_warning(self):
+        resource, _ = run_import(
+            sets_dataset({"indicator_set": "Yes set", "show_in_epiportal": "Yes"})
+        )
+
+        self.assertFalse(IndicatorSet.objects.exists())
+        self.assertEqual(len(resource.warnings), 1)
+        self.assertIn("'Yes'", resource.warnings[0])
+        self.assertIn("Yes set", resource.warnings[0])
+
+    def test_false_show_in_epiportal_does_not_warn(self):
+        resource, _ = run_import(
+            sets_dataset({"indicator_set": "Hidden", "show_in_epiportal": "false"})
+        )
+        self.assertEqual(resource.warnings, [])
+
     def test_resource_columns_exist_in_sheet_header(self):
         resource = IndicatorSetResource()
         for field in resource.get_import_fields():

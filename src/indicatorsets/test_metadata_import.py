@@ -4,10 +4,12 @@ import requests
 from django.conf import settings
 from django.contrib import admin, messages
 from django.contrib.messages.storage.fallback import FallbackStorage
+from django.core.exceptions import ValidationError
 from django.test import RequestFactory, TestCase
 from tablib import Dataset
 
 from alternative_interface.models import ExpressViewIndicator
+from alternative_interface.resources import ExpressViewIndicatorResource
 from datasources.admin import SourceSubdivisionAdmin
 from datasources.models import SourceSubdivision
 from datasources.tests import sources_dataset
@@ -20,6 +22,9 @@ from indicatorsets.metadata_import import (
     import_metadata_from_admin,
     load_dataset,
     run_metadata_import,
+)
+from indicatorsets.metadata_import import (
+    run_metadata_import as real_run_metadata_import,
 )
 from indicatorsets.models import IndicatorSet
 from indicatorsets.test_resources import sets_dataset
@@ -167,6 +172,139 @@ class MetadataImportTests(TestCase):
 
         self.assertEqual(ExpressViewIndicator.objects.count(), 1)
         self.assertEqual(results[-1].new, 1)
+        self.assertEqual(
+            results[-1].warnings,
+            ["Skipped dashboard row 'COVID-19': indicator chng/missing not found"],
+        )
+
+    def test_dashboard_placeholder_rows_are_dropped_quietly(self):
+        results = run_metadata_import(
+            fake_fetch(
+                sheet_csvs(
+                    express_view_indicators=dashboard_csv(
+                        dashboard_row(),
+                        dashboard_row(**{"Indicator Source": "", "Indicator Name": ""}),
+                        dashboard_row(**{"Indicator Source": "", "Indicator Name": "soon"}),
+                        dashboard_row(**{"Indicator Name": ""}),
+                    )
+                )
+            )
+        )
+
+        self.assertEqual(ExpressViewIndicator.objects.count(), 1)
+        self.assertEqual(results[-1].warnings, [])
+
+    def test_missing_indicators_column_rolls_back_earlier_tabs(self):
+        existing = SourceSubdivision.objects.create(name="old_source")
+        indicators = indicators_dataset(
+            {"source": "chng", "indicator": "smoothed_cli", "indicator_set": "Delphi set"}
+        )
+        del indicators["show_in_epiportal"]
+
+        with self.assertRaises(MetadataImportError) as caught:
+            run_metadata_import(
+                fake_fetch(sheet_csvs(indicators=indicators.export("csv")))
+            )
+
+        self.assertIn("indicators", str(caught.exception))
+        self.assertIn("show_in_epiportal", str(caught.exception))
+        self.assertEqual(list(SourceSubdivision.objects.all()), [existing])
+        self.assertFalse(IndicatorSet.objects.exists())
+        self.assertFalse(Indicator.objects.exists())
+        self.assertFalse(ExpressViewIndicator.objects.exists())
+
+    def test_missing_dashboard_column_aborts_and_keeps_dashboard(self):
+        run_metadata_import(fake_fetch(sheet_csvs()))
+        csv_text = dashboard_csv(dashboard_row()).replace(
+            "Indicator Source", "Source"
+        )
+
+        with self.assertRaises(MetadataImportError) as caught:
+            run_metadata_import(
+                fake_fetch(sheet_csvs(express_view_indicators=csv_text))
+            )
+
+        self.assertIn("Indicator Source", str(caught.exception))
+        self.assertEqual(ExpressViewIndicator.objects.count(), 1)
+
+    def test_html_instead_of_csv_changes_nothing(self):
+        existing = SourceSubdivision.objects.create(name="old_source")
+        # The second line is wider than the first, which tablib rejects.
+        html = (
+            "<!DOCTYPE html><html><head>\n"
+            '<meta name="viewport" content="width=device-width, initial-scale=1, '
+            'maximum-scale=1"><title>Sign in</title></head>\n'
+            "<body><p>Sign in</p></body></html>\n"
+        )
+
+        with self.assertRaises(MetadataImportError) as caught:
+            run_metadata_import(fake_fetch(sheet_csvs(indicator_sets=html)))
+
+        self.assertIn("Could not read indicator_sets as CSV", str(caught.exception))
+        self.assertEqual(list(SourceSubdivision.objects.all()), [existing])
+        self.assertFalse(IndicatorSet.objects.exists())
+
+    def test_undecodable_download_changes_nothing(self):
+        existing = SourceSubdivision.objects.create(name="old_source")
+        error = UnicodeDecodeError("utf-8", b"\xff", 0, 1, "invalid start byte")
+
+        with self.assertRaises(MetadataImportError) as caught:
+            run_metadata_import(fake_fetch(sheet_csvs(sources=error)))
+
+        self.assertIn("Could not read sources as CSV", str(caught.exception))
+        self.assertEqual(list(SourceSubdivision.objects.all()), [existing])
+
+    def test_validation_error_rolls_back_everything(self):
+        existing = SourceSubdivision.objects.create(name="old_source")
+        invalid = MagicMock()
+        invalid.has_errors.return_value = False
+        invalid.has_validation_errors.return_value = True
+        invalid.base_errors = []
+        invalid.row_errors.return_value = []
+        invalid.invalid_rows = [MagicMock(number=3, error=ValidationError("bad"))]
+
+        with patch.object(IndicatorResource, "import_data", return_value=invalid):
+            with self.assertRaises(MetadataImportError) as caught:
+                run_metadata_import(fake_fetch(sheet_csvs()))
+
+        self.assertIn("Line number: 3", str(caught.exception))
+        self.assertEqual(list(SourceSubdivision.objects.all()), [existing])
+        self.assertFalse(IndicatorSet.objects.exists())
+
+    def test_dashboard_validation_error_is_skipped_with_warning(self):
+        with patch.object(
+            ExpressViewIndicatorResource,
+            "validate_instance",
+            side_effect=ValidationError("bad order"),
+        ):
+            results = run_metadata_import(fake_fetch(sheet_csvs()))
+
+        self.assertFalse(ExpressViewIndicator.objects.exists())
+        self.assertEqual(len(results[-1].warnings), 1)
+        self.assertIn("bad order", results[-1].warnings[0])
+
+    def test_warnings_are_logged_in_full(self):
+        sets = sets_dataset(
+            {"indicator_set": "Delphi set"},
+            *(
+                row
+                for i in range(25)
+                for row in (
+                    {"indicator_set": f"Set {i}", "pathogen": "RSV"},
+                    {"indicator_set": f"Set {i}", "pathogen": "Flu"},
+                )
+            ),
+        )
+
+        with patch("indicatorsets.metadata_import.logger") as mock_logger:
+            run_metadata_import(
+                fake_fetch(sheet_csvs(indicator_sets=sets.export("csv")))
+            )
+
+        mock_logger.warning.assert_called_once()
+        extra = mock_logger.warning.call_args.kwargs["extra"]
+        self.assertEqual(extra["tab"], "indicator_sets")
+        self.assertEqual(len(extra["warnings"]), 25)
 
 
 class ImportMetadataFromAdminTests(TestCase):
@@ -190,11 +328,59 @@ class ImportMetadataFromAdminTests(TestCase):
             response = import_metadata_from_admin(model_admin, request)
 
         self.assertEqual(response.status_code, 302)
+        stored = [(m.level, m.message) for m in request._messages]
+        self.assertEqual(
+            stored,
+            [
+                (messages.INFO, "sources: 1 new, 0 updated, 0 skipped, 0 deleted"),
+                (
+                    messages.INFO,
+                    "indicator_sets: 0 new, 2 updated, 0 skipped, 0 deleted",
+                ),
+                (messages.WARNING, "indicator_sets: set warning"),
+            ],
+        )
+
+    def test_admin_view_shows_dropped_data_before_duplicates(self):
+        sets = sets_dataset(
+            {"indicator_set": "Delphi set"},
+            *(
+                row
+                for i in range(25)
+                for row in (
+                    {"indicator_set": f"Set {i}", "pathogen": "RSV"},
+                    {"indicator_set": f"Set {i}", "pathogen": "Flu"},
+                )
+            ),
+        )
+        indicators = indicators_dataset(
+            {"source": "chng", "indicator": "smoothed_cli", "indicator_set": "Delphi set"},
+            {"source": "chng", "indicator": "typo_sig", "indicator_set": "Delphy set"},
+        )
+        fetch = fake_fetch(
+            sheet_csvs(
+                indicator_sets=sets.export("csv"), indicators=indicators.export("csv")
+            )
+        )
+        request = self.post()
+        model_admin = SourceSubdivisionAdmin(SourceSubdivision, admin.site)
+
+        with patch(
+            "indicatorsets.metadata_import.run_metadata_import",
+            side_effect=lambda: real_run_metadata_import(fetch),
+        ):
+            import_metadata_from_admin(model_admin, request)
+
         stored = list(request._messages)
-        self.assertEqual(len(stored), 1)
-        self.assertEqual(stored[0].level, messages.INFO)
-        self.assertIn("indicator_sets:", stored[0].message)
-        self.assertIn("set warning", stored[0].message)
+        self.assertEqual(
+            [m.level for m in stored], [messages.INFO] * 4 + [messages.WARNING] * 2
+        )
+        warnings = [m.message for m in stored if m.level == messages.WARNING]
+        self.assertIn("Delphy set", warnings[0])
+        self.assertIn("typo_sig", warnings[0])
+        self.assertIn("indicator_sets: 25 duplicate rows", warnings[1])
+        self.assertIn("Set 0, Set 1, Set 2, Set 3, Set 4, ...", warnings[1])
+        self.assertNotIn("Set 5", warnings[1])
 
     def test_admin_view_reports_failure_as_error(self):
         request = self.post()

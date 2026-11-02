@@ -1,7 +1,7 @@
 from import_export.fields import Field
 
 from base.resources import CustomModelResource
-from base.sheet_values import drop_duplicate_rows
+from base.sheet_values import drop_duplicate_rows, strip_column
 from datasources.models import SourceSubdivision
 
 
@@ -13,6 +13,8 @@ def strip_all_string_values(row) -> None:
 
 
 class SourceSubdivisionResource(CustomModelResource):
+    required_columns = ("source",)
+
     name = Field(
         attribute="name",
         column_name="source",
@@ -58,8 +60,13 @@ class SourceSubdivisionResource(CustomModelResource):
         )
         exclude = ("id",)
 
+    def __init__(self, **kwargs):
+        super().__init__(**kwargs)
+        self.warnings: list[str] = []
+
     def before_import(self, dataset, **kwargs):
         super().before_import(dataset, **kwargs)
+        strip_column(dataset, "source")
         self.warnings = [
             f"Duplicate source rows differ: {key}"
             for key in drop_duplicate_rows(dataset, "source")

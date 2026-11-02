@@ -110,6 +110,37 @@ class SourceSubdivisionResourceTests(TestCase):
         )
         self.assertIn("ght", " ".join(resource.warnings))
 
+    def test_duplicate_source_with_trailing_space_first_row_wins(self):
+        resource = SourceSubdivisionResource()
+        dataset = sources_dataset(
+            {"source": "ght", "name": "Google Health Trends"},
+            {"source": "ght ", "name": "Other"},
+        )
+
+        resource.import_data(dataset, dry_run=False, raise_errors=True)
+
+        self.assertEqual(
+            list(SourceSubdivision.objects.values_list("name", "display_name")),
+            [("ght", "Google Health Trends")],
+        )
+        self.assertIn("ght", " ".join(resource.warnings))
+
+    def test_warnings_default_to_empty_list(self):
+        self.assertEqual(SourceSubdivisionResource().warnings, [])
+
+    def test_missing_header_column_aborts_import(self):
+        SourceSubdivision.objects.create(name="old")
+        dataset = sources_dataset({"source": "new", "name": "New"})
+        del dataset["name"]
+
+        result = SourceSubdivisionResource().import_data(dataset, dry_run=False)
+
+        self.assertTrue(result.has_errors())
+        self.assertIn("'name'", str(result.base_errors[0].error))
+        self.assertEqual(
+            list(SourceSubdivision.objects.values_list("name", flat=True)), ["old"]
+        )
+
     def test_source_missing_from_sheet_is_deleted(self):
         SourceSubdivision.objects.create(name="old")
         resource = SourceSubdivisionResource()

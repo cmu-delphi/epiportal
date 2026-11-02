@@ -90,14 +90,50 @@ class CustomModelResourceTests(TestCase):
 
     def test_imported_rows_pks_reset_per_import_instance(self):
         resource = PathogenResource()
-        resource.before_import(None, dry_run=True)
+        resource.before_import(Dataset(headers=["name", "used_in"]), dry_run=True)
         self.assertEqual(resource.imported_rows_pks, [])
+
+    def test_missing_field_column_aborts_import_and_keeps_rows(self):
+        Pathogen.objects.create(name="keep", used_in="indicators")
+        dataset = Dataset(headers=["name"])
+        dataset.append(["new"])
+
+        result = PathogenResource().import_data(dataset, dry_run=False)
+
+        self.assertTrue(result.has_errors())
+        self.assertIn("'used_in'", str(result.base_errors[0].error))
+        self.assertEqual(
+            list(Pathogen.objects.values_list("name", flat=True)), ["keep"]
+        )
+
+    def test_missing_required_column_aborts_import(self):
+        Pathogen.objects.create(name="keep", used_in="indicators")
+        dataset = Dataset(headers=["name", "used_in"])
+        dataset.append(["new", "indicators"])
+
+        result = HidingPathogenResource().import_data(dataset, dry_run=False)
+
+        self.assertTrue(result.has_errors())
+        self.assertIn("'hide'", str(result.base_errors[0].error))
+        self.assertEqual(
+            list(Pathogen.objects.values_list("name", flat=True)), ["keep"]
+        )
+
+    def test_error_names_every_missing_column(self):
+        result = HidingPathogenResource().import_data(
+            Dataset(headers=["other"]), dry_run=False
+        )
+        message = str(result.base_errors[0].error)
+        for column in ("'name'", "'used_in'", "'hide'"):
+            self.assertIn(column, message)
 
     def test_is_excluded_defaults_to_false(self):
         self.assertIs(PathogenResource().is_excluded({"name": "any"}), False)
 
 
 class HidingPathogenResource(PathogenResource):
+    required_columns = ("hide",)
+
     class Meta(PathogenResource.Meta):
         skip_unchanged = True
 

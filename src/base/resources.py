@@ -102,9 +102,25 @@ def get_geographic_mapping_by_name(name):
 
 
 class CustomModelResource(ModelResource):
+    # Columns read by the resource itself besides its fields' columns, such as
+    # the ones deciding which rows are excluded.
+    required_columns: tuple[str, ...] = ()
+
     def before_import(self, dataset, **kwargs):
         self.imported_rows_pks: list[int] = []
         self.deleted_count = 0
+        # A missing column would read as empty in every row, which can exclude
+        # every row and so delete everything; refuse the import instead.
+        required = [field.column_name for field in self.get_import_fields()]
+        required.extend(self.required_columns)
+        headers = dataset.headers or []
+        missing = [
+            column for column in dict.fromkeys(required) if column not in headers
+        ]
+        if missing:
+            raise ValueError(
+                "Columns missing from the sheet: " + ", ".join(map(repr, missing))
+            )
 
     def is_excluded(self, row) -> bool:
         """Rows to skip as if absent from the sheet, so their objects are deleted."""

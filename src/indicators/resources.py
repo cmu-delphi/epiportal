@@ -7,6 +7,7 @@ from base.resources import CustomModelResource
 from base.sheet_values import (
     geographic_scope_id,
     geography_ids,
+    is_unrecognised_bool,
     normalize_sheet_date,
     parse_bool,
     pathogen_ids,
@@ -43,6 +44,8 @@ def named_object_id(model, name: str) -> int | None:
 
 
 class IndicatorResource(CustomModelResource):
+    required_columns = ("show_in_epiportal",)
+
     source = Field(
         attribute="source",
         column_name="source",
@@ -209,6 +212,12 @@ class IndicatorResource(CustomModelResource):
         if row["_kind"] == "delphi":
             source = SourceSubdivision.objects.filter(name=row.get("source")).first()
         row["source"] = source.id if source else None
+        if row.get("indicator") and is_unrecognised_bool(row.get("show_in_epiportal")):
+            self.warnings.append(
+                f"Unrecognised show_in_epiportal value "
+                f"{row.get('show_in_epiportal')!r} (hidden) for indicator: "
+                f"{row['indicator']} ({set_name})"
+            )
         for column in BOOLEAN_COLUMNS:
             row[column] = parse_bool(row.get(column))
         for column in ("temporal_scope_start", "temporal_scope_end"):
@@ -232,8 +241,8 @@ class IndicatorResource(CustomModelResource):
             return True
         if row.get("indicator_set") is None:
             self.warn_once(
-                f"Unknown indicator set {row.get('_set_name')!r} for indicator: "
-                f"{row['indicator']}"
+                f"Unknown or hidden indicator set {row.get('_set_name')!r} "
+                f"for indicator: {row['indicator']}"
             )
             return True
         if row.get("_kind") == "delphi" and row.get("source") is None:

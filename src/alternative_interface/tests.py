@@ -142,7 +142,7 @@ class GetChartDataNormalizationTests(TestCase):
                 display_name=name,
                 source=source,
                 indicator_set=indicator_set,
-                        time_type="day",
+                time_type="day",
             )
             ExpressViewIndicator.objects.create(
                 menu_item="COVID-19",
