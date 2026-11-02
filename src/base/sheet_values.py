@@ -34,6 +34,16 @@ def split_list(value: str | None) -> list[str]:
     return [item.strip() for item in (value or "").split(",") if item.strip()]
 
 
+def strip_column(dataset: tablib.Dataset, column: str) -> None:
+    """Strip the values of one column in place, keeping its position."""
+    if column not in (dataset.headers or []):
+        raise ValueError(f"Column {column!r} is missing from the sheet")
+    index = dataset.headers.index(column)
+    values = [(value or "").strip() for value in dataset[column]]
+    del dataset[column]
+    dataset.insert_col(index, values, header=column)
+
+
 def drop_duplicate_rows(dataset: tablib.Dataset, key_column: str) -> list[str]:
     """
     Keep the first row per key and drop later ones in place.

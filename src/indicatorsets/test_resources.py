@@ -231,6 +231,25 @@ class IndicatorSetResourceTests(TestCase):
         self.assertFalse(IndicatorSet.objects.exists())
         self.assertIn("Mystery set", " ".join(resource.warnings))
 
+    def test_unknown_kind_warns_once(self):
+        resource, _ = run_import(
+            sets_dataset({"indicator_set": "Mystery set", "kind": "other"})
+        )
+        self.assertEqual(len(resource.warnings), 1)
+
+    def test_importing_twice_keeps_every_set(self):
+        dataset = sets_dataset(
+            {"indicator_set": "First", "pathogen": "RSV"},
+            {"indicator_set": "Second", "kind": "us_states"},
+        )
+        run_import(dataset)
+        pks = sorted(IndicatorSet.objects.values_list("pk", flat=True))
+
+        _, result = run_import(dataset)
+
+        self.assertEqual(result.totals["skip"], 2)
+        self.assertEqual(sorted(IndicatorSet.objects.values_list("pk", flat=True)), pks)
+
     def test_resource_columns_exist_in_sheet_header(self):
         resource = IndicatorSetResource()
         for field in resource.get_import_fields():

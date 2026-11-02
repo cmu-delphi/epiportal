@@ -11,6 +11,7 @@ from base.sheet_values import (
     pathogen_ids,
     severity_pyramid_rung_ids,
     split_list,
+    strip_column,
 )
 
 
@@ -50,6 +51,19 @@ class SplitListTests(SimpleTestCase):
     def test_strips_and_drops_empty(self):
         self.assertEqual(split_list(" COVID-19, RSV ,,"), ["COVID-19", "RSV"])
         self.assertEqual(split_list(None), [])
+
+
+class StripColumnTests(SimpleTestCase):
+    def test_strips_values_in_place(self):
+        ds = tablib.Dataset([" a ", " x "], [None, "y"], headers=["k", "v"])
+        strip_column(ds, "k")
+        self.assertEqual(ds.headers, ["k", "v"])
+        self.assertEqual([tuple(r) for r in ds], [("a", " x "), ("", "y")])
+
+    def test_missing_column_names_it(self):
+        ds = tablib.Dataset(["a"], headers=["k"])
+        with self.assertRaisesMessage(ValueError, "indicator_set"):
+            strip_column(ds, "indicator_set")
 
 
 class DropDuplicateRowsTests(SimpleTestCase):

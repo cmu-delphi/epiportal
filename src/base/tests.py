@@ -93,6 +93,54 @@ class CustomModelResourceTests(TestCase):
         resource.before_import(None, dry_run=True)
         self.assertEqual(resource.imported_rows_pks, [])
 
+    def test_is_excluded_defaults_to_false(self):
+        self.assertIs(PathogenResource().is_excluded({"name": "any"}), False)
+
+
+class HidingPathogenResource(PathogenResource):
+    class Meta(PathogenResource.Meta):
+        skip_unchanged = True
+
+    def is_excluded(self, row) -> bool:
+        return row.get("hide") == "yes"
+
+
+def hiding_dataset(*rows: tuple[str, str]) -> Dataset:
+    dataset = Dataset(headers=["name", "used_in", "hide"])
+    for name, hide in rows:
+        dataset.append([name, "indicators", hide])
+    return dataset
+
+
+class CustomModelResourceExclusionTests(TestCase):
+    def test_excluded_row_is_skipped_and_its_existing_object_deleted(self):
+        Pathogen.objects.create(name="hidden", used_in="indicators")
+
+        result = HidingPathogenResource().import_data(
+            hiding_dataset(("hidden", "yes")), dry_run=False, raise_errors=True
+        )
+
+        self.assertEqual(result.totals["skip"], 1)
+        self.assertFalse(Pathogen.objects.filter(name="hidden").exists())
+
+    def test_excluded_new_row_is_not_created(self):
+        HidingPathogenResource().import_data(
+            hiding_dataset(("hidden", "yes")), dry_run=False, raise_errors=True
+        )
+        self.assertFalse(Pathogen.objects.exists())
+
+    def test_unchanged_row_is_skipped_but_kept(self):
+        pathogen = Pathogen.objects.create(name="same", used_in="indicators")
+
+        result = HidingPathogenResource().import_data(
+            hiding_dataset(("same", "")), dry_run=False, raise_errors=True
+        )
+
+        self.assertEqual(result.totals["skip"], 1)
+        self.assertEqual(
+            list(Pathogen.objects.values_list("pk", flat=True)), [pathogen.pk]
+        )
+
 
 class EpidataProxyViewTests(TestCase):
     def setUp(self):

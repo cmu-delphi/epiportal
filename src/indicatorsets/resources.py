@@ -12,6 +12,7 @@ from base.sheet_values import (
     parse_bool,
     pathogen_ids,
     severity_pyramid_rung_ids,
+    strip_column,
 )
 from indicatorsets.models import (
     KIND_CHOICES,
@@ -30,13 +31,6 @@ def strip_all_string_values(row) -> None:
     for key, value in row.items():
         if isinstance(value, str):
             row[key] = value.strip()
-
-
-def strip_column(dataset, column: str) -> None:
-    index = dataset.headers.index(column)
-    values = [(value or "").strip() for value in dataset[column]]
-    del dataset[column]
-    dataset.insert_col(index, values, header=column)
 
 
 def original_data_provider_id(name: str) -> int | None:
@@ -192,31 +186,19 @@ class IndicatorSetResource(CustomModelResource):
         if not row.get("data_use_terms"):
             row["data_use_terms"] = "None found"
 
-    @staticmethod
-    def is_excluded(row) -> bool:
-        """Rows skip_row drops; their sets are deleted like missing ones."""
-        return (
-            not row.get("indicator_set")
-            or not row.get("show_in_epiportal")
-            or row.get("kind") not in KINDS
-        )
-
-    def skip_row(self, instance, original, row, import_validation_errors=None):
+    def is_excluded(self, row) -> bool:
         if not row.get("indicator_set") or not row.get("show_in_epiportal"):
             return True
         if row.get("kind") not in KINDS:
-            self.warnings.append(
+            warning = (
                 f"Unknown kind {row.get('kind')!r} for indicator set: "
                 f"{row['indicator_set']}"
             )
+            # Called more than once per row; set names are unique after dedupe.
+            if warning not in self.warnings:
+                self.warnings.append(warning)
             return True
-        return super().skip_row(instance, original, row, import_validation_errors)
-
-    def after_import_row(self, row, row_result, **kwargs):
-        # A skipped row still carries the existing set's pk; leaving it out
-        # of imported_rows_pks lets after_import delete that set.
-        if not self.is_excluded(row):
-            super().after_import_row(row, row_result, **kwargs)
+        return False
 
     def after_save_instance(self, instance, row, **kwargs):
         provider = instance.original_data_provider
