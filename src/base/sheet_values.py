@@ -2,7 +2,7 @@ import re
 
 import tablib
 from django.db.models import Max
-from epiweeks import Week
+from epiweeks import Week, Year
 
 from base.models import GeographicScope, Geography, Pathogen, SeverityPyramidRung
 from base.resources import get_geographic_mapping_by_name
@@ -25,7 +25,8 @@ def normalize_sheet_date(value: str | None) -> str:
     if epiweek_match:
         year = int(epiweek_match.group(1))
         week = int(epiweek_match.group(2) or epiweek_match.group(3))
-        return Week(year, week).startdate().isoformat()
+        if 1 <= week <= Year(year).totalweeks():
+            return Week(year, week).startdate().isoformat()
     return text
 
 

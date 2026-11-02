@@ -33,6 +33,13 @@ class NormalizeSheetDateTests(SimpleTestCase):
         self.assertEqual(normalize_sheet_date("2023-W40"), "2023-10-01")
         self.assertEqual(normalize_sheet_date("2021w01"), "2021-01-03")
 
+    def test_invalid_week_kept_as_text(self):
+        for bad in ("202300", "202399", "2023w54", "2023w00"):
+            self.assertEqual(normalize_sheet_date(bad), bad)
+
+    def test_week_53_converts_when_year_has_it(self):
+        self.assertEqual(normalize_sheet_date("2020w53"), "2020-12-27")
+
     def test_empty_and_other_text_kept(self):
         self.assertEqual(normalize_sheet_date(""), "")
         self.assertEqual(normalize_sheet_date(None), "")
