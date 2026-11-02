@@ -74,44 +74,23 @@ def get_related_indicators(queryset, indicator_set_ids: list):
     indicators_data = queryset.filter(indicator_set__id__in=indicator_set_ids).values(
         "id",
         "display_name",
-        "member_name",
-        "member_short_name",
         "name",
         "indicator_set__id",
         "indicator_set__name",
         "indicator_set__short_name",
         "indicator_set__epidata_endpoint",
+        "indicator_set__kind",
         "source__name",
         "time_type",
         "description",
-        "member_description",
-        "description",
         "indicator_set__dua_required",
-        "source_type",
     )
 
     for item in indicators_data:
-        display_name = item["display_name"]
-        if not display_name:
-            if item["member_name"]:
-                display_name = item["member_name"]
-            else:
-                display_name = item["name"]
-
-        member_description = (
-            item["member_description"]
-            if item["member_description"]
-            else item["description"]
-        )
-
         related_indicators.append(
             {
                 "id": item["id"],
-                "display_name": display_name,
-                "member_name": item["member_name"] if item["member_name"] else "",
-                "member_short_name": (
-                    item["member_short_name"] if item["member_short_name"] else ""
-                ),
+                "display_name": item["display_name"] or item["name"],
                 "name": item["name"] if item["name"] else "",
                 "indicator_set": item["indicator_set__id"],
                 "indicator_set_name": item["indicator_set__name"],
@@ -128,10 +107,8 @@ def get_related_indicators(queryset, indicator_set_ids: list):
                 "source": item["source__name"] if item["source__name"] else "",
                 "time_type": item["time_type"] if item["time_type"] else "",
                 "description": item["description"] if item["description"] else "",
-                "member_description": member_description,
-                "description": item["description"] if item["description"] else "",
                 "restricted": item["indicator_set__dua_required"],
-                "source_type": item["source_type"],
+                "kind": item["indicator_set__kind"],
             }
         )
     return related_indicators

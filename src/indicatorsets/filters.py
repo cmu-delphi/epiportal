@@ -114,8 +114,8 @@ class IndicatorSetFilter(django_filters.FilterSet):
     def temporal_scope_end_filter(self, queryset, name, value):
         if not value:
             return queryset
-        self.indicators_qs = self.indicators_qs.filter(temporal_scope_end=value)
         # "Ongoing" is the filter's only choice.
+        self.indicators_qs = self.indicators_qs.filter(ongoing=True)
         return queryset.filter(ongoing=True)
 
     def hosted_by_delphi_filter(self, queryset, name, value):

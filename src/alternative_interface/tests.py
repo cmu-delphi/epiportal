@@ -39,7 +39,6 @@ def _create_express_indicator(menu_item="COVID-19", signal_name="test_signal"):
         display_name="Test signal",
         source=source,
         indicator_set=indicator_set,
-        source_type="covidcast",
         time_type="week",
     )
     express = ExpressViewIndicator.objects.create(
@@ -143,8 +142,7 @@ class GetChartDataNormalizationTests(TestCase):
                 display_name=name,
                 source=source,
                 indicator_set=indicator_set,
-                source_type="covidcast",
-                time_type="day",
+                        time_type="day",
             )
             ExpressViewIndicator.objects.create(
                 menu_item="COVID-19",
@@ -433,6 +431,17 @@ class AlternativeInterfaceViewHelperTests(TestCase):
         )
         self.assertEqual(dictionaries[0]["name"], "helper_sig")
         self.assertEqual(dictionaries[0]["data_source"], express.indicator.source.name)
+        self.assertEqual(
+            set(dictionaries[0]),
+            {
+                "_endpoint",
+                "name",
+                "data_source",
+                "time_type",
+                "indicator_set_short_name",
+                "grouping_key",
+            },
+        )
 
     def test_get_indicators_queryset_filters_by_pathogen(self):
         flu = _create_express_indicator(menu_item="Influenza", signal_name="flu_sig")

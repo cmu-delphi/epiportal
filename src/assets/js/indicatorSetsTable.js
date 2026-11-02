@@ -305,7 +305,7 @@ function format(rowData, relatedIndicators) {
             checked = checked ? "checked" : "";
             const enabledEndpoints = ["covidcast", "fluview", "nidss_flu", "nidss_dengue", "flusurv", "pophive", "nwss"];
             disabled = enabledEndpoints.includes(indicator.endpoint) ? "" : "disabled";
-            sourceType = indicator.source_type;
+            sourceType = indicator.kind;
             var restricted = indicator.restricted === true;
             if (disabled === "disabled") {
                 checkboxTitle =
@@ -319,21 +319,21 @@ function format(rowData, relatedIndicators) {
             
             tableMarkup +=
                 "<tr>" +
-                `<td><input ${disabled} title="${checkboxTitle}" type="checkbox" name="selectedIndicator" onclick="addSelectedIndicator(this)" data-indicator-displayname='${indicator.display_name}' data-endpoint="${indicator.endpoint}" data-datasource="${indicator.source}" data-indicator="${indicator.name}" data-time-type="${indicator.time_type}" data-indicator-set="${indicator.indicator_set_name}" data-indicator-set-short-name="${indicator.indicator_set_short_name}" data-member-short-name="${indicator.member_short_name}" ${checked}></td>` +
+                `<td><input ${disabled} title="${checkboxTitle}" type="checkbox" name="selectedIndicator" onclick="addSelectedIndicator(this)" data-indicator-displayname='${indicator.display_name}' data-endpoint="${indicator.endpoint}" data-datasource="${indicator.source}" data-indicator="${indicator.name}" data-time-type="${indicator.time_type}" data-indicator-set="${indicator.indicator_set_name}" data-indicator-set-short-name="${indicator.indicator_set_short_name}" ${checked}></td>` +
                 `<td><span tabindex="0" data-mdb-container="body" data-mdb-popover-init data-mdb-trigger="hover" data-mdb-placement="right" data-mdb-content="${escapeAttr(indicator.description)}">${indicator.display_name}</span></td>` +
-                `<td>${indicator.member_name}</td>` +
-                `<td>${indicator.member_description}</td>` +
+                `<td>${indicator.name}</td>` +
+                `<td>${indicator.description}</td>` +
                 '<td style="width: 60%"></td>' +
                 "</tr>";
         });
         tableMarkup += "</tbody></table>";
         if (disabled === "disabled" || restricted) {
-            if (sourceType === "non_delphi" && sourceType != "us_state") {
+            if (sourceType === "non_delphi") {
                 data +=
                     `<div class="alert alert-warning" data-mdb-alert-init role="alert">` +
                     `   <div>This indicator set is not available via Delphi.  It is included here for general discoverability only, and may or may not be available from the Original Data Provider.</div>` +
                     "</div>";
-            } else if (sourceType === "us_state") {
+            } else if (sourceType === "us_states") {
                 data +=
                     `<div class="alert alert-warning" data-mdb-alert-init role="alert">` +
                     `   <div>This indicator set is not hosted by Delphi and is listed here for discoverability.  It can be found on the website listed under "Documentation".</div>` +

@@ -315,7 +315,6 @@ class IndicatorSetListViewTests(TestCase):
         self.assertEqual(row["temporal_scope_end"], "Ongoing")
         self.assertEqual(row["kind"], "non_delphi")
         self.assertEqual(row["dua_required"], "Yes")
-        self.assertNotIn("source_type", row)
 
     def test_json_keeps_end_date_when_not_ongoing(self):
         IndicatorSet.objects.create(
@@ -351,18 +350,42 @@ class GetRelatedIndicatorsTests(TestCase):
         )
         cls.indicator = Indicator.objects.create(
             name="sig_a",
-            member_name="Member A",
             source=cls.source,
             indicator_set=cls.indicator_set,
-            source_type="covidcast",
             description="Indicator description",
         )
 
-    def test_display_name_falls_back_to_member_name(self):
+    def test_display_name_falls_back_to_name(self):
         qs = Indicator.objects.all()
         result = get_related_indicators(qs, [self.indicator_set.id])
-        self.assertEqual(result[0]["display_name"], "Member A")
-        self.assertEqual(result[0]["member_description"], "Indicator description")
+        self.assertEqual(result[0]["display_name"], "sig_a")
+        self.assertEqual(result[0]["description"], "Indicator description")
+
+    def test_related_indicators_payload(self):
+        state_set = IndicatorSet.objects.create(name="State set", kind="us_states")
+        Indicator.objects.create(name="sig", display_name="", indicator_set=state_set)
+
+        result = get_related_indicators(Indicator.objects.all(), [state_set.id])
+
+        self.assertEqual(result[0]["display_name"], "sig")
+        self.assertEqual(result[0]["kind"], "us_states")
+        self.assertEqual(
+            set(result[0]),
+            {
+                "id",
+                "display_name",
+                "name",
+                "indicator_set",
+                "indicator_set_name",
+                "indicator_set_short_name",
+                "endpoint",
+                "source",
+                "time_type",
+                "description",
+                "restricted",
+                "kind",
+            },
+        )
 
     def test_display_name_uses_explicit_display_name(self):
         self.indicator.display_name = "Custom label"
@@ -436,6 +459,22 @@ class IndicatorSetFilterTests(TestCase):
         filtered = IndicatorSetFilter(data=data, queryset=IndicatorSet.objects.all()).qs
         self.assertEqual(list(filtered), [self.covidcast_set])
         self.assertNotIn(ended_set, filtered)
+
+    def test_ongoing_filter_uses_indicator_flag(self):
+        ongoing = Indicator.objects.create(
+            name="ongoing_sig", indicator_set=self.covidcast_set, ongoing=True
+        )
+        Indicator.objects.create(
+            name="ended_sig",
+            indicator_set=self.covidcast_set,
+            temporal_scope_end="2023-05-01",
+        )
+        ongoing_filter = IndicatorSetFilter(
+            data={"temporal_scope_end": "Ongoing"},
+            queryset=IndicatorSet.objects.all(),
+        )
+        ongoing_filter.qs
+        self.assertEqual(list(ongoing_filter.indicators_qs), [ongoing])
 
     def test_include_fluview_detects_mapped_locations(self):
         self.assertTrue(
