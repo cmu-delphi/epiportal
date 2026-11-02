@@ -76,6 +76,18 @@ class CustomModelResourceTests(TestCase):
         self.assertTrue(Pathogen.objects.filter(name="keep").exists())
         self.assertFalse(Pathogen.objects.filter(name="remove").exists())
 
+    def test_after_import_records_deleted_count(self):
+        Pathogen.objects.create(name="keep", used_in="indicators")
+        Pathogen.objects.create(name="remove", used_in="indicators")
+
+        resource = PathogenResource()
+        dataset = Dataset(headers=["name", "used_in"])
+        dataset.append(["keep", "indicators"])
+
+        resource.import_data(dataset, dry_run=False)
+
+        self.assertEqual(resource.deleted_count, 1)
+
     def test_imported_rows_pks_reset_per_import_instance(self):
         resource = PathogenResource()
         resource.before_import(None, dry_run=True)

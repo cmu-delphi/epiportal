@@ -104,6 +104,7 @@ def get_geographic_mapping_by_name(name):
 class CustomModelResource(ModelResource):
     def before_import(self, dataset, **kwargs):
         self.imported_rows_pks: list[int] = []
+        self.deleted_count = 0
 
     def after_import_row(self, row, row_result, **kwargs):
         pk = getattr(row_result.instance, "pk", None) or row_result.object_id
@@ -113,4 +114,6 @@ class CustomModelResource(ModelResource):
 
     def after_import(self, dataset, result, **kwargs):
         if not kwargs.get("dry_run", False):
-            self._meta.model.objects.exclude(pk__in=self.imported_rows_pks).delete()
+            stale = self._meta.model.objects.exclude(pk__in=self.imported_rows_pks)
+            self.deleted_count = stale.count()
+            stale.delete()
