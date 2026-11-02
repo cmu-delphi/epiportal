@@ -1,12 +1,8 @@
 from django.test import TestCase
 from tablib import Dataset
 
-from datasources.models import OtherEndpointSourceSubdivision, SourceSubdivision
-from datasources.resources import (
-    OtherEndpointSourceSubdivisionResource,
-    SourceSubdivisionResource,
-    strip_all_string_values,
-)
+from datasources.models import SourceSubdivision
+from datasources.resources import SourceSubdivisionResource, strip_all_string_values
 
 
 class SourceSubdivisionModelTests(TestCase):
@@ -31,17 +27,6 @@ class SourceSubdivisionModelTests(TestCase):
             SourceSubdivision.objects.create(name="duplicate")
 
 
-class OtherEndpointSourceSubdivisionTests(TestCase):
-    def test_proxy_uses_same_table(self):
-        SourceSubdivision.objects.create(
-            name="other_src",
-            source_type="other_endpoint",
-        )
-        proxy = OtherEndpointSourceSubdivision.objects.get(name="other_src")
-        self.assertEqual(proxy.source_type, "other_endpoint")
-        self.assertIsInstance(proxy, OtherEndpointSourceSubdivision)
-
-
 class StripAllStringValuesTests(TestCase):
     def test_strips_whitespace_from_string_fields(self):
         row = {"name": "  hospital  ", "count": 1, "note": None}
@@ -51,66 +36,92 @@ class StripAllStringValuesTests(TestCase):
         self.assertIsNone(row["note"])
 
 
+SOURCES_HEADER = (
+    "db_source,source,name,external_name,kind,public,original_data_provider,"
+    "description,reference_indicator,license,dua,documentation_link"
+).split(",")
+
+
+def sources_dataset(*rows: dict) -> Dataset:
+    dataset = Dataset(headers=SOURCES_HEADER)
+    for row in rows:
+        dataset.append([row.get(column, "") for column in SOURCES_HEADER])
+    return dataset
+
+
 class SourceSubdivisionResourceTests(TestCase):
-    def test_import_creates_and_updates_source(self):
+    def test_maps_columns(self):
         resource = SourceSubdivisionResource()
-        dataset = Dataset(headers=["Source Subdivision", "External Name", "Display Name"])
-        dataset.append(["hospital", "Hospital API", "Hospital admissions"])
+        dataset = sources_dataset(
+            {
+                "source": "chng",
+                "db_source": "chng",
+                "name": "Change Healthcare",
+                "external_name": "Change HC",
+                "description": "Claims",
+                "license": "CC BY",
+                "dua": "Yes",
+            }
+        )
 
-        resource.import_data(dataset, dry_run=False)
+        resource.import_data(dataset, dry_run=False, raise_errors=True)
 
-        source = SourceSubdivision.objects.get(name="hospital")
-        self.assertEqual(source.display_name, "Hospital API")
-        self.assertEqual(source.external_name, "Hospital admissions")
+        source = SourceSubdivision.objects.get(name="chng")
+        self.assertEqual(source.datasource_name, "chng")
+        self.assertEqual(source.display_name, "Change Healthcare")
+        self.assertEqual(source.external_name, "Change HC")
+        self.assertEqual(source.description, "Claims")
+        self.assertEqual(source.license, "CC BY")
+        self.assertEqual(source.dua, "Yes")
 
-    def test_after_import_deletes_rows_not_in_spreadsheet(self):
-        SourceSubdivision.objects.create(name="keep")
-        SourceSubdivision.objects.create(name="remove")
-
+    def test_strips_whitespace(self):
         resource = SourceSubdivisionResource()
-        dataset = Dataset(headers=["Source Subdivision"])
-        dataset.append(["keep"])
-
-        resource.import_data(dataset, dry_run=False)
-
-        self.assertTrue(SourceSubdivision.objects.filter(name="keep").exists())
-        self.assertFalse(SourceSubdivision.objects.filter(name="remove").exists())
-
-
-class OtherEndpointSourceSubdivisionResourceTests(TestCase):
-    def test_import_only_deletes_other_other_endpoint_sources(self):
-        covidcast_source = SourceSubdivision.objects.create(
-            name="covidcast_src",
-            source_type="covidcast",
+        resource.import_data(
+            sources_dataset({"source": "  fluview  ", "name": " FluView "}),
+            dry_run=False,
+            raise_errors=True,
         )
-        kept_other_endpoint = SourceSubdivision.objects.create(
-            name="kept_other_endpoint",
-            source_type="other_endpoint",
-        )
-        removed_other_endpoint = SourceSubdivision.objects.create(
-            name="removed_other_endpoint",
-            source_type="other_endpoint",
+        self.assertEqual(
+            SourceSubdivision.objects.get(name="fluview").display_name, "FluView"
         )
 
-        resource = OtherEndpointSourceSubdivisionResource()
-        resource.imported_rows_pks = [kept_other_endpoint.pk]
-        resource.after_import(None, None, dry_run=False)
-
-        self.assertTrue(SourceSubdivision.objects.filter(pk=covidcast_source.pk).exists())
-        self.assertTrue(
-            SourceSubdivision.objects.filter(pk=kept_other_endpoint.pk).exists()
+    def test_empty_source_is_skipped(self):
+        resource = SourceSubdivisionResource()
+        resource.import_data(
+            sources_dataset({"source": "", "name": "No id"}),
+            dry_run=False,
+            raise_errors=True,
         )
-        self.assertFalse(
-            SourceSubdivision.objects.filter(pk=removed_other_endpoint.pk).exists()
+        self.assertFalse(SourceSubdivision.objects.exists())
+
+    def test_duplicate_source_first_row_wins(self):
+        resource = SourceSubdivisionResource()
+        dataset = sources_dataset(
+            {"source": "ght", "name": "Google Health Trends"},
+            {"source": "ght", "name": ""},
         )
 
-    def test_import_sets_other_endpoint_source_type(self):
-        resource = OtherEndpointSourceSubdivisionResource()
-        dataset = Dataset(headers=["Source Subdivision", "External Name"])
-        dataset.append(["  fluview_src  ", "FluView"])
+        resource.import_data(dataset, dry_run=False, raise_errors=True)
 
-        resource.import_data(dataset, dry_run=False)
+        self.assertEqual(SourceSubdivision.objects.filter(name="ght").count(), 1)
+        self.assertEqual(
+            SourceSubdivision.objects.get(name="ght").display_name,
+            "Google Health Trends",
+        )
+        self.assertIn("ght", " ".join(resource.warnings))
 
-        source = OtherEndpointSourceSubdivision.objects.get(name="fluview_src")
-        self.assertEqual(source.source_type, "other_endpoint")
-        self.assertEqual(source.display_name, "FluView")
+    def test_source_missing_from_sheet_is_deleted(self):
+        SourceSubdivision.objects.create(name="old")
+        resource = SourceSubdivisionResource()
+
+        resource.import_data(
+            sources_dataset({"source": "new"}), dry_run=False, raise_errors=True
+        )
+
+        self.assertFalse(SourceSubdivision.objects.filter(name="old").exists())
+        self.assertTrue(SourceSubdivision.objects.filter(name="new").exists())
+
+    def test_resource_columns_exist_in_sheet_header(self):
+        resource = SourceSubdivisionResource()
+        for field in resource.get_import_fields():
+            self.assertIn(field.column_name, SOURCES_HEADER)

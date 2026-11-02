@@ -42,9 +42,10 @@ EPIDATA_URL = os.environ.get("EPIDATA_URL", "https://api.delphi.cmu.edu/epidata/
 EPIDATA_V5_URL = os.environ.get("EPIDATA_V5_URL", "https://delphi.cmu.edu/epidata/v5/").rstrip("/") + "/"
 EPIDATA_API_KEY = os.environ.get("EPIDATA_API_KEY", "")
 
+NEW_SHEET = "https://docs.google.com/spreadsheets/d/1cT6Aijqw_eyXSdGsCiCdNNhWX3SHQ_5u_ec-8vCp1J0/export?format=csv&gid="
+
 SPREADSHEET_URLS = {
-    "source_subdivisions": "https://docs.google.com/spreadsheets/d/1zb7ItJzY5oq1n-2xtvnPBiJu2L3AqmCKubrLkKJZVHs/export?format=csv&gid=0",
-    "other_endpoint_source_subdivisions": "https://docs.google.com/spreadsheets/d/1zb7ItJzY5oq1n-2xtvnPBiJu2L3AqmCKubrLkKJZVHs/export?format=csv&gid=214580132",
+    "sources": NEW_SHEET + "0",
     "indicator_sets": "https://docs.google.com/spreadsheets/d/1zb7ItJzY5oq1n-2xtvnPBiJu2L3AqmCKubrLkKJZVHs/export?format=csv&gid=1266808975",
     "non_delphi_indicator_sets": "https://docs.google.com/spreadsheets/d/1zb7ItJzY5oq1n-2xtvnPBiJu2L3AqmCKubrLkKJZVHs/export?format=csv&gid=1266477926",
     "indicators": "https://docs.google.com/spreadsheets/d/1zb7ItJzY5oq1n-2xtvnPBiJu2L3AqmCKubrLkKJZVHs/export?format=csv&gid=329338228",
