@@ -85,12 +85,9 @@ class IndicatorSetAdmin(ImportExportModelAdmin):
         return custom_urls + urls
 
     def import_from_spreadsheet(self, request):
-        return import_data(
-            self,
-            request,
-            IndicatorSetResource,
-            settings.SPREADSHEET_URLS["indicator_sets"],
-        )
+        from indicatorsets.metadata_import import import_metadata_from_admin
+
+        return import_metadata_from_admin(self, request)
 
     def download_indicator_set(self, request):
         return download_source_file(

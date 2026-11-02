@@ -5,7 +5,7 @@ from import_export.admin import ImportExportModelAdmin
 
 from alternative_interface.models import ExpressViewIndicator
 from alternative_interface.resources import ExpressViewIndicatorResource
-from base.utils import download_source_file, import_data
+from base.utils import download_source_file
 
 
 @admin.register(ExpressViewIndicator)
@@ -35,12 +35,9 @@ class ExpressViewIndicatorAdmin(ImportExportModelAdmin):
         return custom_urls + urls
 
     def import_from_spreadsheet(self, request):
-        return import_data(
-            self,
-            request,
-            ExpressViewIndicatorResource,
-            settings.SPREADSHEET_URLS["express_view_indicators"],
-        )
+        from indicatorsets.metadata_import import import_metadata_from_admin
+
+        return import_metadata_from_admin(self, request)
 
     def download_express_view_indicators(self, request):
         return download_source_file(

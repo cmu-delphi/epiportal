@@ -1,7 +1,7 @@
-from import_export import resources
 from import_export.fields import Field
 from import_export.results import RowResult
 from import_export.widgets import ForeignKeyWidget
+from base.resources import CustomModelResource
 from indicators.models import Indicator
 
 from alternative_interface.models import ExpressViewIndicator
@@ -24,7 +24,7 @@ def process_indicator(row):
         row["Indicator Name"] = None
 
 
-class ExpressViewIndicatorResource(resources.ModelResource):
+class ExpressViewIndicatorResource(CustomModelResource):
     menu_item = Field(attribute="menu_item", column_name="Menu Item")
     indicator = Field(
         attribute="indicator",
@@ -49,9 +49,18 @@ class ExpressViewIndicatorResource(resources.ModelResource):
             return
         process_indicator(row)
 
-    def skip_row(self, instance, original, row, import_validation_errors=None):
-        if not row.get("Menu Item") or not row.get("Indicator Name"):
-            return True
+    def __init__(self, **kwargs):
+        super().__init__(**kwargs)
+        self.warnings: list[str] = []
+
+    def before_import(self, dataset, **kwargs):
+        super().before_import(dataset, **kwargs)
+        self.warnings = []
+
+    def is_excluded(self, row) -> bool:
+        # before_import_row has swapped the indicator name for its id, or for
+        # None when no such indicator exists.
+        return not row.get("Menu Item") or not row.get("Indicator Name")
 
     def import_row(self, row, instance_loader, **kwargs):
         import_result = super().import_row(row, instance_loader, **kwargs)
@@ -63,6 +72,12 @@ class ExpressViewIndicatorResource(resources.ModelResource):
             import_result.diff.append(
                 "Errors: {}\n{}".format(
                     [err.error for err in import_result.errors], row
+                )
+            )
+            self.warnings.append(
+                "Skipped dashboard row {!r}: {}".format(
+                    row.get("Menu Item"),
+                    "; ".join(str(err.error) for err in import_result.errors),
                 )
             )
             import_result.errors = []

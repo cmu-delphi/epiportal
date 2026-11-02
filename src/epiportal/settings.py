@@ -50,7 +50,7 @@ SPREADSHEET_URLS = {
     "indicators": NEW_SHEET + "968826094",
     "column_descriptions": "https://docs.google.com/spreadsheets/d/10BxyiLN7l9PWQuWbDeVmtzte-G9YNSuj2PzjDIy_OEc/export?format=csv&gid=1361858243#gid=1361858243",
     "filter_descriptions": "https://docs.google.com/spreadsheets/d/10BxyiLN7l9PWQuWbDeVmtzte-G9YNSuj2PzjDIy_OEc/export?format=csv&gid=502883488#gid=502883488",
-    "express_view_indicators": "https://docs.google.com/spreadsheets/d/1zb7ItJzY5oq1n-2xtvnPBiJu2L3AqmCKubrLkKJZVHs/export?format=csv&gid=1759850611#gid=1759850611",
+    "express_view_indicators": NEW_SHEET + "27791590",
 }
 
 ENVIRONMENT = os.environ.get("SENTRY_ENVIRONMENT", "development")

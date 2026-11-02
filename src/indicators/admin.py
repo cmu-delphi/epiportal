@@ -4,7 +4,7 @@ from django.urls import path
 from import_export.admin import ImportExportModelAdmin
 
 from base.models import Pathogen, SeverityPyramidRung
-from base.utils import download_source_file, import_data
+from base.utils import download_source_file
 from indicators.models import Category, FormatType, Indicator, IndicatorType
 from indicators.resources import IndicatorResource
 
@@ -89,9 +89,9 @@ class IndicatorAdmin(ImportExportModelAdmin):
         return custom_urls + urls
 
     def import_from_spreadsheet(self, request):
-        return import_data(
-            self, request, IndicatorResource, settings.SPREADSHEET_URLS["indicators"]
-        )
+        from indicatorsets.metadata_import import import_metadata_from_admin
+
+        return import_metadata_from_admin(self, request)
 
     def download_indicator(self, request):
         return download_source_file(
