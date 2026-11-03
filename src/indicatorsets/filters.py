@@ -114,12 +114,13 @@ class IndicatorSetFilter(django_filters.FilterSet):
     def temporal_scope_end_filter(self, queryset, name, value):
         if not value:
             return queryset
-        self.indicators_qs = self.indicators_qs.filter(temporal_scope_end=value)
-        return queryset.filter(temporal_scope_end=value)
+        # "Ongoing" is the filter's only choice.
+        self.indicators_qs = self.indicators_qs.filter(ongoing=True)
+        return queryset.filter(ongoing=True)
 
     def hosted_by_delphi_filter(self, queryset, name, value):
         """
-        Filter for IndicatorSets where source_type is 'covidcast' or 'other_endpoint'
+        Filter for IndicatorSets of kind 'delphi'
         when hosted_by_delphi checkbox is checked.
         """
         # HTML checkboxes send "on" when checked, nothing when unchecked
@@ -133,7 +134,7 @@ class IndicatorSetFilter(django_filters.FilterSet):
 
         if value_str in checked_values or value is True:
             logger.debug("Filtering for hosted_by_delphi=True")
-            return queryset.filter(source_type__in=["covidcast", "other_endpoint"])
+            return queryset.filter(kind="delphi")
 
         return queryset
 

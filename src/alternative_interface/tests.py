@@ -32,14 +32,13 @@ def _create_express_indicator(menu_item="COVID-19", signal_name="test_signal"):
         name=f"Set {signal_name}",
         short_name="TS",
         epidata_endpoint="covidcast",
-        source_type="covidcast",
+        kind="delphi",
     )
     indicator = Indicator.objects.create(
         name=signal_name,
         display_name="Test signal",
         source=source,
         indicator_set=indicator_set,
-        source_type="covidcast",
         time_type="week",
     )
     express = ExpressViewIndicator.objects.create(
@@ -134,7 +133,7 @@ class GetChartDataNormalizationTests(TestCase):
             name="Set",
             short_name="S",
             epidata_endpoint="covidcast",
-            source_type="covidcast",
+            kind="delphi",
         )
         indicators = []
         for name in ("sig_low", "sig_high"):
@@ -143,7 +142,6 @@ class GetChartDataNormalizationTests(TestCase):
                 display_name=name,
                 source=source,
                 indicator_set=indicator_set,
-                source_type="covidcast",
                 time_type="day",
             )
             ExpressViewIndicator.objects.create(
@@ -433,6 +431,17 @@ class AlternativeInterfaceViewHelperTests(TestCase):
         )
         self.assertEqual(dictionaries[0]["name"], "helper_sig")
         self.assertEqual(dictionaries[0]["data_source"], express.indicator.source.name)
+        self.assertEqual(
+            set(dictionaries[0]),
+            {
+                "_endpoint",
+                "name",
+                "data_source",
+                "time_type",
+                "indicator_set_short_name",
+                "grouping_key",
+            },
+        )
 
     def test_get_indicators_queryset_filters_by_pathogen(self):
         flu = _create_express_indicator(menu_item="Influenza", signal_name="flu_sig")

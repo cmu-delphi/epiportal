@@ -1,12 +1,10 @@
 from django.db import models
-from base.models import SOURCE_TYPES
 
 
-DUA_REQUIRED_CHOICES = (
-    ("Yes", "Yes"),
-    ("No", "No"),
-    ("Unknown", "Unknown"),
-    ("Sensor-dependent", "Sensor-dependent"),
+KIND_CHOICES = (
+    ("delphi", "Delphi"),
+    ("non_delphi", "Non-Delphi"),
+    ("us_states", "US States"),
 )
 
 ORIGINAL_DATA_PROVIDER_GROUP_CHOICES = (
@@ -57,9 +55,6 @@ class IndicatorSet(models.Model):
     maintainer_email: models.CharField = models.CharField(
         verbose_name="Maintainer Email", max_length=255, blank=True
     )
-    organization: models.CharField = models.CharField(
-        verbose_name="Organization", max_length=255, blank=True
-    )
     original_data_provider: models.ForeignKey = models.ForeignKey(
         "indicatorsets.OriginalDataProvider",
         related_name="indicator_sets",
@@ -80,12 +75,6 @@ class IndicatorSet(models.Model):
         max_length=255,
         blank=True,
         help_text="Language of the Indicator Set",
-    )
-    version_number: models.CharField = models.CharField(
-        verbose_name="Version Number",
-        max_length=255,
-        blank=True,
-        help_text="Version number of the Indicator Set",
     )
     origin_datasource: models.TextField = models.TextField(
         verbose_name="Origin Data Source",
@@ -137,6 +126,11 @@ class IndicatorSet(models.Model):
         max_length=255,
         blank=True,
         help_text="End date of the temporal scope of the Indicator Set",
+    )
+    ongoing: models.BooleanField = models.BooleanField(
+        verbose_name="Ongoing",
+        default=False,
+        help_text="Indicates if the Indicator Set is still being updated",
     )
     temporal_granularity: models.CharField = models.CharField(
         verbose_name="Temporal Granularity",
@@ -192,11 +186,9 @@ class IndicatorSet(models.Model):
         blank=True,
         help_text="Missingness information of the Indicator Set",
     )
-    dua_required: models.CharField = models.CharField(
+    dua_required: models.BooleanField = models.BooleanField(
         verbose_name="Data Use Agreement Required",
-        max_length=255,
-        blank=True,
-        choices=DUA_REQUIRED_CHOICES,
+        default=False,
         help_text="Indicates if a data use agreement is required for the Indicator Set",
     )
     license: models.CharField = models.CharField(
@@ -218,21 +210,12 @@ class IndicatorSet(models.Model):
         help_text="Link to the documentation for the Indicator Set",
     )
 
-    source_type: models.CharField = models.CharField(
-        verbose_name="Source Type",
-        max_length=255,
-        choices=SOURCE_TYPES,
-        default="covidcast",
-        help_text="Type of source for the indicator set",
-        blank=True,
-        null=True,
-    )
-
-    state: models.CharField = models.CharField(
-        verbose_name="State",
-        max_length=255,
-        blank=True,
-        help_text="State of the indicator set",
+    kind: models.CharField = models.CharField(
+        verbose_name="Kind",
+        max_length=32,
+        choices=KIND_CHOICES,
+        default="delphi",
+        help_text="Who hosts the Indicator Set",
     )
 
     class Meta:
@@ -242,30 +225,6 @@ class IndicatorSet(models.Model):
         indexes = [
             models.Index(fields=["name"], name="indicator_set_name_idx"),
         ]
-        constraints = [
-            models.UniqueConstraint(
-                fields=["name", "original_data_provider"],
-                name="unique_indicator_set_name",
-            )
-        ]
-
-    def __str__(self):
-        return self.name
-
-
-class NonDelphiIndicatorSet(IndicatorSet):
-
-    class Meta:
-        proxy = True
-        verbose_name = "Non-Delphi Indicator Set"
-        verbose_name_plural = "Non-Delphi Indicators Sets"
-
-
-class USStateIndicatorSet(IndicatorSet):
-    class Meta:
-        proxy = True
-        verbose_name = "US State Indicator Set"
-        verbose_name_plural = "US State Indicators Sets"
 
     def __str__(self):
         return self.name
