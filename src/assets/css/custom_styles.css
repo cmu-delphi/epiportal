@@ -1,3 +1,139 @@
+/*--------------------------------------------------------------
+# Theme: red and white, after the EpiPortal redesign slides.
+# The accent replaces the NiceAdmin and MDB blues, except for links,
+# which stay blue; filters and the table sit on white cards with
+# rounded corners.
+--------------------------------------------------------------*/
+:root {
+    --epi-accent: #cc0000;
+    --epi-accent-dark: #a30000;
+    --epi-accent-light: #fdecec;
+    --epi-accent-rgb: 204, 0, 0;
+    --epi-link: #3b71ca;
+    --epi-link-hover: #2c5598;
+    --epi-link-rgb: 59, 113, 202;
+    --epi-text: #212529;
+    --epi-card-radius: 16px;
+    --epi-card-shadow: 0 2px 10px rgba(0, 0, 0, 0.12);
+    --mdb-primary: var(--epi-accent);
+    --mdb-primary-rgb: var(--epi-accent-rgb);
+    --mdb-link-color: var(--epi-link);
+    --mdb-link-color-rgb: var(--epi-link-rgb);
+    --mdb-link-hover-color: var(--epi-link-hover);
+}
+
+body {
+    background: #fff;
+}
+
+a {
+    color: var(--epi-link);
+}
+
+a:hover {
+    color: var(--epi-link-hover);
+}
+
+.btn-primary {
+    --mdb-btn-bg: var(--epi-accent);
+    --mdb-btn-border-color: var(--epi-accent);
+    --mdb-btn-hover-bg: var(--epi-accent-dark);
+    --mdb-btn-hover-border-color: var(--epi-accent-dark);
+    --mdb-btn-focus-bg: var(--epi-accent-dark);
+    --mdb-btn-active-bg: var(--epi-accent-dark);
+    --mdb-btn-active-border-color: var(--epi-accent-dark);
+    --mdb-btn-disabled-bg: var(--epi-accent);
+    --mdb-btn-disabled-border-color: var(--epi-accent);
+    --mdb-btn-focus-shadow-rgb: var(--epi-accent-rgb);
+    --mdb-btn-box-shadow: 0 4px 9px -4px var(--epi-accent-dark);
+    --mdb-btn-box-shadow-state: 0 8px 9px -4px rgba(var(--epi-accent-rgb), 0.3), 0 4px 18px 0 rgba(var(--epi-accent-rgb), 0.2);
+}
+
+.btn-link {
+    --mdb-btn-color: var(--epi-link);
+    --mdb-btn-hover-color: var(--epi-link-hover);
+    --mdb-btn-focus-color: var(--epi-link-hover);
+    --mdb-btn-active-color: var(--epi-link-hover);
+}
+
+/* Help icons: solid red circles instead of blue outlines. */
+.info-button,
+.info-button:hover {
+    color: var(--epi-accent);
+}
+
+.info-button .fa-circle-question {
+    font-weight: 900;
+}
+
+.form-check-input:checked,
+.form-check-input:checked:focus,
+.form-check-input[type=checkbox]:checked,
+.form-check-input[type=checkbox]:checked:focus {
+    border-color: var(--epi-accent);
+    background-color: var(--epi-accent);
+}
+
+.form-check-input[type=checkbox]:checked:focus::before,
+.form-check-input:focus::before {
+    box-shadow: 0 0 0 13px rgba(var(--epi-accent-rgb), 0.15);
+}
+
+.accordion-button:not(.collapsed),
+.accordion-flush .accordion-button:not(.collapsed) {
+    color: var(--epi-accent);
+}
+
+.accordion-flush .accordion-body {
+    color: var(--epi-text);
+}
+
+.select2-container--default .select2-results__option--highlighted[aria-selected],
+.select2-container--default .select2-results__option--highlighted.select2-results__option--selectable {
+    background-color: var(--epi-accent);
+}
+
+/* Filters card. */
+#filter-panel-wrapper {
+    border-radius: var(--epi-card-radius);
+    box-shadow: var(--epi-card-shadow) !important;
+    border: none !important;
+}
+
+#filter-panel-wrapper .card {
+    box-shadow: none;
+    margin-bottom: 0;
+}
+
+.card-title {
+    color: var(--epi-text);
+}
+
+/* Table card: the stats line and selection toolbar stay above it. The
+   container's padding leaves room for the card's shadow. */
+.table-container {
+    padding: 2px 10px 12px 4px;
+}
+
+#indicatorSetsTable_wrapper .dt-layout-row.dt-layout-table {
+    padding: 12px;
+    background: #fff;
+    border-radius: var(--epi-card-radius);
+    box-shadow: var(--epi-card-shadow);
+}
+
+/* Narrow windows have no width to spare: the table's columns already fill
+   them, so keep the card's frame thin. */
+@media (max-width: 1399px) {
+    .table-container {
+        padding: 2px 6px 10px 2px;
+    }
+
+    #indicatorSetsTable_wrapper .dt-layout-row.dt-layout-table {
+        padding: 4px;
+    }
+}
+
 .no-padding-top-bottom {
     padding-top: 0 !important;
     padding-bottom: 0 !important;
@@ -183,7 +319,7 @@ td.dt-empty {
 
 tr:not(.odd-row) > .dtfc-fixed-start,
 tr:not(.odd-row) > .dtfc-fixed-end {
-    background-color: #f6f9ff !important;
+    background-color: #fff !important;
 }
 
 
@@ -264,6 +400,220 @@ tr:not(.odd-row) > .dtfc-fixed-end {
     font-size: 0.85em;
     margin-right: 0.4em;
     margin-bottom: 0.25em;
+}
+
+/* Keep the indicator sets table inside its container: smaller text, tighter
+   cells, and pills that wrap instead of stretching their column to the
+   longest label. */
+#indicatorSetsTable_wrapper table {
+    font-size: 0.875rem;
+}
+
+#indicatorSetsTable_wrapper .dt-scroll-head table > thead > tr > th,
+#indicatorSetsTable > thead > tr > th,
+#indicatorSetsTable > tbody > tr > td {
+    padding-left: 6px;
+    padding-right: 6px;
+}
+
+#indicatorSetsTable .badge-pill-outline {
+    white-space: normal;
+    text-align: left;
+    line-height: 1.25;
+}
+
+/* Indicator set name in the table: opens the details panel. */
+.indicator-set-name-link {
+    color: inherit;
+    text-decoration: underline;
+    text-decoration-color: rgba(0, 0, 0, 0.35);
+    text-underline-offset: 3px;
+}
+
+.indicator-set-name-link:hover,
+.indicator-set-name-link:focus-visible {
+    color: var(--epi-link);
+    text-decoration-color: currentColor;
+}
+
+/* Indicator set details panel (indicatorSetPanel.js): a non-modal <dialog>
+   docked to the right edge of the window, over the table. */
+.indicator-set-panel {
+    position: fixed;
+    inset: 0 0 0 auto;
+    width: min(460px, 100vw);
+    height: 100vh;
+    max-height: 100vh;
+    margin: 0;
+    padding: 0;
+    border: none;
+    border-left: 1px solid #dee2e6;
+    box-shadow: -8px 0 24px rgba(0, 0, 0, 0.15);
+    background: #fff;
+    color: #333;
+    z-index: 1050;
+    transition: transform 0.2s ease;
+}
+
+.indicator-set-panel[open] {
+    display: flex;
+    flex-direction: column;
+}
+
+@starting-style {
+    .indicator-set-panel[open] {
+        transform: translateX(100%);
+    }
+}
+
+.indicator-set-panel-header {
+    display: flex;
+    align-items: flex-start;
+    gap: 12px;
+    padding: 20px 20px 14px;
+    border-bottom: 1px solid #dee2e6;
+}
+
+.indicator-set-panel-heading {
+    flex: 1;
+    min-width: 0;
+}
+
+.indicator-set-panel-provider {
+    font-size: 0.75rem;
+    font-weight: 600;
+    letter-spacing: 0.04em;
+    text-transform: uppercase;
+    color: var(--epi-accent);
+}
+
+.indicator-set-panel-title {
+    margin: 4px 0 8px;
+    font-size: 1.15rem;
+    font-weight: 600;
+    line-height: 1.35;
+    color: #212529;
+}
+
+.indicator-set-panel-tags {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 4px 0;
+}
+
+/* Sized like .badge-pill-outline so the tags line up with the pathogen pills. */
+.indicator-set-panel-tag {
+    display: inline-block;
+    border: 1px solid transparent;
+    border-radius: 50rem;
+    padding: 0.35em 0.65em;
+    font-size: 0.85em;
+    font-weight: 700;
+    line-height: 1;
+    margin-right: 0.4em;
+    margin-bottom: 0.25em;
+}
+
+.indicator-set-panel-tag.ongoing {
+    background: #e6f4ea;
+    color: #1e7b3c;
+}
+
+.indicator-set-panel-tag.hosted {
+    background: var(--epi-accent-light);
+    color: var(--epi-accent-dark);
+}
+
+.indicator-set-panel-close {
+    flex-shrink: 0;
+    width: 32px;
+    height: 32px;
+    border: none;
+    border-radius: 6px;
+    background: transparent;
+    color: #555;
+    font-size: 1.1rem;
+}
+
+.indicator-set-panel-close:hover,
+.indicator-set-panel-close:focus-visible {
+    background: #f1f3f5;
+}
+
+.indicator-set-panel-close:focus-visible {
+    outline: 2px solid var(--epi-accent);
+    outline-offset: 1px;
+}
+
+.indicator-set-panel-body {
+    flex: 1;
+    overflow-y: auto;
+    padding: 16px 20px;
+    font-size: 0.875rem;
+}
+
+.indicator-set-panel-body > * + * {
+    margin-top: 18px;
+}
+
+.indicator-set-panel-description {
+    margin-bottom: 0;
+    line-height: 1.55;
+}
+
+.indicator-set-panel-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 12px 16px;
+}
+
+.indicator-set-panel-field.wide {
+    grid-column: 1 / -1;
+}
+
+.indicator-set-panel-label {
+    font-size: 0.75rem;
+    color: #6c757d;
+    margin-bottom: 2px;
+}
+
+.indicator-set-panel-value {
+    overflow-wrap: anywhere;
+}
+
+.indicator-set-panel-pills .badge-pill-outline {
+    display: inline-block;
+    margin-top: 2px;
+    white-space: normal;
+    text-align: left;
+}
+
+.indicator-set-panel-notes {
+    border: 1px solid #dee2e6;
+    border-radius: 8px;
+}
+
+.indicator-set-panel-notes > summary {
+    padding: 10px 14px;
+    font-weight: 600;
+    cursor: pointer;
+}
+
+.indicator-set-panel-notes-body {
+    display: grid;
+    gap: 12px;
+    padding: 12px 14px;
+    border-top: 1px solid #dee2e6;
+}
+
+.indicator-set-panel-footer {
+    display: flex;
+    padding: 14px 20px;
+    border-top: 1px solid #dee2e6;
+}
+
+.indicator-set-panel-footer[hidden] {
+    display: none;
 }
 
 .table-stats-info {

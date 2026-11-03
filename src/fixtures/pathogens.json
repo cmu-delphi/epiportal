@@ -24,7 +24,7 @@
         "pk": 3,
         "fields": {
             "name": "Dengue",
-            "display_name": "dengue",
+            "display_name": "Dengue",
             "used_in": "indicatorsets",
             "display_order_number": 4
         }
@@ -73,8 +73,8 @@
         "model": "base.pathogen",
         "pk": 8,
         "fields": {
-            "name": "Human orthopneumovirus",
-            "display_name": "human orthopneumovirus",
+            "name": "Human Orthopneumovirus",
+            "display_name": "Human Orthopneumovirus",
             "used_in": "indicatorsets",
             "display_order_number": 9
         }
@@ -94,7 +94,7 @@
         "pk": 10,
         "fields": {
             "name": "Influenza",
-            "display_name": "influenza",
+            "display_name": "Influenza",
             "used_in": "indicatorsets",
             "display_order_number": 11
         }
@@ -103,8 +103,8 @@
         "model": "base.pathogen",
         "pk": 11,
         "fields": {
-            "name": "measles",
-            "display_name": "measles",
+            "name": "Measles",
+            "display_name": "Measles",
             "used_in": "indicatorsets",
             "display_order_number": 12
         }
@@ -114,7 +114,7 @@
         "pk": 12,
         "fields": {
             "name": "Mpox",
-            "display_name": "mpox",
+            "display_name": "Mpox",
             "used_in": "indicatorsets",
             "display_order_number": 13
         }
@@ -123,8 +123,8 @@
         "model": "base.pathogen",
         "pk": 13,
         "fields": {
-            "name": "mumps",
-            "display_name": "mumps",
+            "name": "Mumps",
+            "display_name": "Mumps",
             "used_in": "indicatorsets",
             "display_order_number": 14
         }
@@ -134,7 +134,7 @@
         "pk": 14,
         "fields": {
             "name": "Norovirus",
-            "display_name": "norovirus",
+            "display_name": "Norovirus",
             "used_in": "indicatorsets",
             "display_order_number": 15
         }
@@ -154,7 +154,7 @@
         "pk": 16,
         "fields": {
             "name": "Pneumonia",
-            "display_name": "pneumonia",
+            "display_name": "Pneumonia",
             "used_in": "indicatorsets",
             "display_order_number": 17
         }
@@ -173,8 +173,8 @@
         "model": "base.pathogen",
         "pk": 18,
         "fields": {
-            "name": "tuberculosis",
-            "display_name": "tuberculosis",
+            "name": "Tuberculosis",
+            "display_name": "Tuberculosis",
             "used_in": "indicatorsets",
             "display_order_number": 20
         }
@@ -193,8 +193,8 @@
         "model": "base.pathogen",
         "pk": 20,
         "fields": {
-            "name": "pathogen independent",
-            "display_name": "pathogen independent",
+            "name": "Pathogen Independent",
+            "display_name": "Pathogen Independent",
             "used_in": "indicatorsets",
             "display_order_number": 22
         }

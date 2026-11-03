@@ -15,7 +15,7 @@
 
     <div class="d-flex h-100 align-items-stretch">
         <!-- Filter Panel Wrapper -->
-        <div id="filter-panel-wrapper" class="bg-white border-end shadow-sm" style="width: 350px; min-width: 350px; transition: all 0.3s ease; overflow-y: auto; overflow-x: hidden; flex-shrink: 0; margin-right: 1rem;">
+        <div id="filter-panel-wrapper" class="bg-white border-end shadow-sm" style="width: 300px; min-width: 300px; transition: all 0.3s ease; overflow-y: auto; overflow-x: hidden; flex-shrink: 0; margin-right: 1rem;">
             {% include "indicatorsets/indicatorSetsFilters.html" %}
         </div>
         
@@ -42,8 +42,8 @@
                 toggleBtn.addEventListener('click', function() {
                     if (filterPanel.classList.contains('collapsed')) {
                         // Expand
-                        filterPanel.style.width = '350px';
-                        filterPanel.style.minWidth = '350px';
+                        filterPanel.style.width = '300px';
+                        filterPanel.style.minWidth = '300px';
                         filterPanel.style.marginRight = '1rem';
                         filterPanel.style.opacity = '1';
                         filterPanel.classList.remove('collapsed');
