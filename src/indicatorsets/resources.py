@@ -1,601 +1,226 @@
-from django.db.models import Max
-from django.db import transaction
 from import_export import resources
 from import_export.fields import Field
 from import_export.widgets import ForeignKeyWidget, ManyToManyWidget
 
-from alternative_interface.models import ExpressViewIndicator
 from base.models import GeographicScope, Geography, Pathogen, SeverityPyramidRung
-from base.resources import CustomModelResource, get_geographic_mapping_by_name
-from indicators.models import Indicator
+from base.resources import CustomModelResource
+from base.sheet_values import (
+    drop_duplicate_rows,
+    geographic_scope_id,
+    geography_ids,
+    is_unrecognised_bool,
+    normalize_sheet_date,
+    parse_bool,
+    pathogen_ids,
+    severity_pyramid_rung_ids,
+    strip_column,
+)
 from indicatorsets.models import (
-    IndicatorSet,
-    NonDelphiIndicatorSet,
-    USStateIndicatorSet,
+    KIND_CHOICES,
     ColumnDescription,
     FilterDescription,
+    IndicatorSet,
     OriginalDataProvider,
 )
 
-
-def process_geographic_scope(row) -> None:
-    if row["Geographic Coverage"]:
-        geographic_scope_name = row["Geographic Coverage"].strip()
-        geographic_scope_obj, _ = GeographicScope.objects.get_or_create(
-            name=geographic_scope_name,
-            used_in="indicatorsets",
-            defaults={
-                "used_in": "indicatorsets",
-            },
-        )
-        row["Geographic Coverage"] = geographic_scope_obj.id
-
-
-def process_severity_pyramid_rungs(row) -> None:
-    severity_pyramid_rung_ids = []
-    if row["Surveillance Categories"]:
-        severity_pyramid_rungs = row["Surveillance Categories"].split(",")
-        for spr in severity_pyramid_rungs:
-            spr_name = spr.strip()
-            severity_pyramid_rung_obj, _ = SeverityPyramidRung.objects.get_or_create(
-                name=spr_name,
-                used_in="indicatorsets",
-                defaults={"display_name": spr_name.capitalize()},
-            )
-            severity_pyramid_rung_ids.append(severity_pyramid_rung_obj.id)
-    row["Surveillance Categories"] = ",".join(map(str, severity_pyramid_rung_ids))
-
-
-def process_pathogens(row) -> None:
-    pathogen_ids = []
-    if row["Pathogen(s)/Syndrome(s)"]:
-        pathogens = row["Pathogen(s)/Syndrome(s)"].split(",")
-        for pathogen in pathogens:
-            pathogen_name = pathogen.strip()
-            pathogen_obj, _ = Pathogen.objects.get_or_create(
-                name=pathogen_name,
-                used_in="indicatorsets",
-                defaults={
-                    "display_name": pathogen_name,
-                    "used_in": "indicatorsets",
-                },
-            )
-            pathogen_ids.append(pathogen_obj.id)
-    row["Pathogen(s)/Syndrome(s)"] = ",".join(map(str, pathogen_ids))
-
-
-def process_available_geographies(row) -> None:
-    available_geographies = []
-    available_geographies_ids = []
-    try:
-        if row["Geographic Granularity - Delphi"]:
-            available_geographies = row["Geographic Granularity - Delphi"].split(",")
-    except KeyError:
-        if row["Geographic Levels"]:
-            available_geographies = row["Geographic Levels"].split(",")
-    for geography in available_geographies:
-        geography_name = geography.strip()
-        default_params = {"used_in": "indicatorsets"}
-        result = get_geographic_mapping_by_name(geography_name)
-        if result:
-            geography_name, mapping = result
-            default_params.update(mapping)
-        else:
-            max_display_order_number = Geography.objects.filter(
-                used_in="indicatorsets"
-            ).aggregate(Max("display_order_number"))["display_order_number__max"]
-            default_params["display_order_number"] = max_display_order_number + 1
-        geography_obj, _ = Geography.objects.get_or_create(
-            name=geography_name,
-            used_in="indicatorsets",
-            defaults=default_params,
-        )
-        available_geographies_ids.append(geography_obj.id)
-    row["Geographic Levels"] = ",".join(map(str, available_geographies_ids))
-    if "Geographic Granularity - Delphi" in row:
-        row["Geographic Granularity - Delphi"] = row["Geographic Levels"]
-
-
-def fix_boolean_fields(row) -> None:
-    fields = [
-        "Include in indicator app",
-    ]
-
-    for field in fields:
-        value = row.get(field)
-        if value == "TRUE":
-            row[field] = True
-        elif value == "FALSE":
-            row[field] = False
-        elif value == "":
-            row[field] = False
-    return row
+USED_IN = "indicatorsets"
+KINDS = {kind for kind, _ in KIND_CHOICES}
+PROVIDER_GROUP_BY_KIND = {"us_states": "us_states", "non_delphi": "individual"}
 
 
 def strip_all_string_values(row) -> None:
     for key, value in row.items():
-        # Check if the value is a string and not None
         if isinstance(value, str):
             row[key] = value.strip()
 
 
-def process_data_use_terms(row) -> None:
-    if not row["Data Use Terms"]:
-        row["Data Use Terms"] = "None found"
+def original_data_provider_id(name: str) -> int | None:
+    if not name:
+        return None
+    provider, _ = OriginalDataProvider.objects.get_or_create(name=name)
+    return provider.id
 
 
-def process_original_data_provider(row) -> None:
-    original_data_provider_name = row["Original Data Provider"]
-    original_data_provider_obj, _ = OriginalDataProvider.objects.get_or_create(
-        name=original_data_provider_name
-    )
-    row["Original Data Provider"] = original_data_provider_obj.id
+class IndicatorSetResource(CustomModelResource):
+    required_columns = ("show_in_epiportal", "kind")
 
-class IndicatorSetBaseResource(CustomModelResource):
-    import_source_types: tuple[str, ...] = ()
-
-    def get_import_deletion_queryset(self):
-        queryset = IndicatorSet.objects.all()
-        if self.import_source_types:
-            queryset = queryset.filter(source_type__in=self.import_source_types)
-        return queryset
-
-    def after_import(self, dataset, result, **kwargs):
-        if not kwargs.get("dry_run", False):
-            self.get_import_deletion_queryset().exclude(
-                pk__in=self.imported_rows_pks
-            ).delete()
-
-    def skip_row(self, instance, original, row, import_validation_errors=None):
-        if "Include in indicator app" not in row:
-            return False
-
-        if not row["Include in indicator app"]:
-            indicator_sets = self.get_import_deletion_queryset().filter(
-                name=row["Indicator Set name* "],
-                original_data_provider=row["Original Data Provider"],
-            )
-            for indicator_set in indicator_sets:
-                with transaction.atomic():
-                    indicators = Indicator.objects.filter(indicator_set=indicator_set)
-                    ExpressViewIndicator.objects.filter(indicator__in=indicators).delete()
-                    indicators.delete()
-                    indicator_set.delete()
-            return True
-        return False
-
-
-class IndicatorSetResource(IndicatorSetBaseResource):
-    import_source_types = ("covidcast", "other_endpoint")
-
-    name = Field(attribute="name", column_name="Indicator Set name* ")
-    short_name = Field(attribute="short_name", column_name="Indicator Set Short Name")
-    description = Field(
-        attribute="description", column_name="Indicator Set Description*"
-    )
-    maintainer_name = Field(
-        attribute="maintainer_name", column_name="Maintainer/\nKey Contact *"
-    )
+    name = Field(attribute="name", column_name="indicator_set")
+    short_name = Field(attribute="short_name", column_name="short_name")
+    description = Field(attribute="description", column_name="description")
+    kind = Field(attribute="kind", column_name="kind")
+    maintainer_name = Field(attribute="maintainer_name", column_name="maintainer")
     maintainer_email = Field(
-        attribute="maintainer_email", column_name="Email of maintainer/\nkey contact *"
+        attribute="maintainer_email", column_name="email_of_maintainer"
     )
-    organization = Field(attribute="organization", column_name="Organization")
     original_data_provider = Field(
         attribute="original_data_provider",
-        column_name="Original Data Provider",
+        column_name="original_data_provider",
         widget=ForeignKeyWidget(OriginalDataProvider),
     )
-    epidata_endpoint = Field(
-        attribute="epidata_endpoint",
-        column_name="Endpoint",
-    )
-    language = Field(attribute="language", column_name="Language (likely English) ")
-    version_number = Field(
-        attribute="version_number", column_name="Version Number \n(if applicable) "
-    )
+    epidata_endpoint = Field(attribute="epidata_endpoint", column_name="v4_endpoint")
+    language = Field(attribute="language", column_name="language")
     origin_datasource = Field(
-        attribute="origin_datasource",
-        column_name="Source dataset from which data was derived (for aggregates or processed data) ",
+        attribute="origin_datasource", column_name="source_dataset"
     )
     pathogens = Field(
         attribute="pathogens",
-        column_name="Pathogen(s)/Syndrome(s)",
+        column_name="pathogen",
         widget=ManyToManyWidget(Pathogen),
     )
-    data_type = Field(attribute="data_type", column_name="Type(s) of Data*")
+    data_type = Field(attribute="data_type", column_name="types_of_data")
     geographic_scope = Field(
         attribute="geographic_scope",
-        column_name="Geographic Coverage",
+        column_name="geographic_scope",
         widget=ForeignKeyWidget(GeographicScope),
     )
     geographic_levels = Field(
         attribute="geographic_levels",
-        column_name="Geographic Granularity - Delphi",
+        column_name="geographic_levels",
         widget=ManyToManyWidget(Geography),
     )
     preprocessing_description = Field(
-        attribute="preprocessing_description",
-        column_name="Pre-processing",
-    )
-    temporal_scope_start = Field(
-        attribute="temporal_scope_start", column_name="Temporal Scope Start"
-    )
-    temporal_scope_end = Field(
-        attribute="temporal_scope_end", column_name="Temporal Scope End"
+        attribute="preprocessing_description", column_name="pre_processing"
     )
     temporal_granularity = Field(
-        attribute="temporal_granularity", column_name="Temporal Granularity"
+        attribute="temporal_granularity", column_name="temporal_granularity"
     )
+    temporal_scope_start = Field(
+        attribute="temporal_scope_start", column_name="temporal_scope_start"
+    )
+    temporal_scope_end = Field(
+        attribute="temporal_scope_end", column_name="temporal_scope_end"
+    )
+    ongoing = Field(attribute="ongoing", column_name="ongoing")
     reporting_cadence = Field(
-        attribute="reporting_cadence", column_name="Reporting Cadence"
+        attribute="reporting_cadence", column_name="reporting_cadence"
     )
-    reporting_lag = Field(
-        attribute="reporting_lag", column_name="Reporting Lag (nominal)"
-    )
-    demographic_scope = Field(attribute="demographic_scope", column_name="Population")
+    reporting_lag = Field(attribute="reporting_lag", column_name="reporting_lag")
     revision_cadence = Field(
-        attribute="revision_cadence", column_name="Revision Cadence"
+        attribute="revision_cadence", column_name="revision_cadence"
     )
+    demographic_scope = Field(attribute="demographic_scope", column_name="population")
     demographic_granularity = Field(
-        attribute="demographic_granularity", column_name="Population Stratifiers"
-    )
-    censoring = Field(attribute="censoring", column_name="Censoring")
-    missingness = Field(attribute="missingness", column_name="Missingness")
-    dua_required = Field(attribute="dua_required", column_name="DUA Required?")
-    license = Field(attribute="license", column_name="Data Use Terms")
-    dataset_location = Field(
-        attribute="dataset_location", column_name="Dataset Location"
-    )
-    documentation_link = Field(
-        attribute="documentation_link", column_name="Link to documentation"
+        attribute="demographic_granularity", column_name="population_stratifiers"
     )
     severity_pyramid_rungs = Field(
         attribute="severity_pyramid_rungs",
-        column_name="Surveillance Categories",
+        column_name="surveillance_categories",
         widget=ManyToManyWidget(SeverityPyramidRung),
+    )
+    censoring = Field(attribute="censoring", column_name="censoring")
+    missingness = Field(attribute="missingness", column_name="missingness")
+    dua_required = Field(attribute="dua_required", column_name="dua_required")
+    license = Field(attribute="license", column_name="data_use_terms")
+    dataset_location = Field(
+        attribute="dataset_location", column_name="dataset_location"
+    )
+    documentation_link = Field(
+        attribute="documentation_link", column_name="documentation_link"
     )
 
     class Meta:
         model = IndicatorSet
-        import_id_fields = ("name", "original_data_provider")
+        import_id_fields = ("name",)
         skip_unchanged = True
-        report_skipped = False
+        report_skipped = True
         fields = (
             "name",
             "short_name",
             "description",
+            "kind",
             "maintainer_name",
             "maintainer_email",
-            "organization",
+            "original_data_provider",
+            "epidata_endpoint",
             "language",
-            "version_number",
             "origin_datasource",
             "pathogens",
-            "original_data_provider",
             "data_type",
             "geographic_scope",
             "geographic_levels",
             "preprocessing_description",
+            "temporal_granularity",
             "temporal_scope_start",
             "temporal_scope_end",
-            "temporal_granularity",
+            "ongoing",
             "reporting_cadence",
             "reporting_lag",
-            "demographic_scope",
             "revision_cadence",
+            "demographic_scope",
             "demographic_granularity",
+            "severity_pyramid_rungs",
             "censoring",
             "missingness",
             "dua_required",
             "license",
             "dataset_location",
             "documentation_link",
-            "severity_pyramid_rungs",
-            "epidata_endpoint",
         )
 
-    def get_instance(self, instance_loader, row):
-        name = row.get("Indicator Set name* ")
+    def __init__(self, **kwargs):
+        super().__init__(**kwargs)
+        self.warnings: list[str] = []
 
-        # Try to match by (name, source)
-        if name:
-            try:
-                return self._meta.model.objects.get(name=name)
-            except self._meta.model.DoesNotExist:
-                pass
-
-        return None
+    def before_import(self, dataset, **kwargs):
+        super().before_import(dataset, **kwargs)
+        strip_column(dataset, "indicator_set")
+        self.warnings = [
+            f"Duplicate indicator set rows differ: {key}"
+            for key in drop_duplicate_rows(dataset, "indicator_set")
+        ]
 
     def before_import_row(self, row, **kwargs):
         strip_all_string_values(row)
-        fix_boolean_fields(row)
-        process_geographic_scope(row)
-        process_severity_pyramid_rungs(row)
-        process_pathogens(row)
-        process_available_geographies(row)
-        process_data_use_terms(row)
-        process_original_data_provider(row)
+        if row.get("indicator_set") and is_unrecognised_bool(
+            row.get("show_in_epiportal")
+        ):
+            self.warnings.append(
+                f"Unrecognised show_in_epiportal value "
+                f"{row.get('show_in_epiportal')!r} (hidden) for indicator set: "
+                f"{row['indicator_set']}"
+            )
+        for column in ("show_in_epiportal", "ongoing", "dua_required"):
+            row[column] = parse_bool(row.get(column))
+        for column in ("temporal_scope_start", "temporal_scope_end"):
+            row[column] = normalize_sheet_date(row.get(column))
+        row["pathogen"] = pathogen_ids(row.get("pathogen"), USED_IN)
+        row["geographic_levels"] = geography_ids(row.get("geographic_levels"), USED_IN)
+        row["surveillance_categories"] = severity_pyramid_rung_ids(
+            row.get("surveillance_categories"), USED_IN
+        )
+        row["geographic_scope"] = geographic_scope_id(
+            row.get("geographic_scope"), USED_IN
+        )
+        row["original_data_provider"] = original_data_provider_id(
+            row.get("original_data_provider")
+        )
+        if not row.get("data_use_terms"):
+            row["data_use_terms"] = "None found"
+
+    def is_excluded(self, row) -> bool:
+        if not row.get("indicator_set") or not row.get("show_in_epiportal"):
+            return True
+        if row.get("kind") not in KINDS:
+            warning = (
+                f"Unknown kind {row.get('kind')!r} for indicator set: "
+                f"{row['indicator_set']}"
+            )
+            # Called more than once per row; set names are unique after dedupe.
+            if warning not in self.warnings:
+                self.warnings.append(warning)
+            return True
+        return False
 
     def after_save_instance(self, instance, row, **kwargs):
-        instance.source_type = (
-            "covidcast"
-            if instance.epidata_endpoint == "covidcast"
-            else "other_endpoint"
-        )
-        instance.save()
-        if instance.original_data_provider and instance.original_data_provider.name.split(" ")[0] == "US":
-            instance.original_data_provider.group = "us_government"
-            instance.original_data_provider.save()
-
-
-class NonDelphiIndicatorSetResource(IndicatorSetBaseResource):
-    import_source_types = ("non_delphi",)
-
-    name = Field(attribute="name", column_name="Indicator Set name* ")
-    short_name = Field(attribute="short_name", column_name="Indicator Set Short Name")
-    description = Field(
-        attribute="description", column_name="Indicator Set Description*"
-    )
-    maintainer_name = Field(
-        attribute="maintainer_name", column_name="Insight Net Center"
-    )
-    maintainer_email = Field(attribute="maintainer_email", column_name="Contact Email")
-    organization = Field(attribute="organization", column_name="Organization")
-    original_data_provider = Field(
-        attribute="original_data_provider",
-        column_name="Original Data Provider",
-        widget=ForeignKeyWidget(OriginalDataProvider),
-    )
-    epidata_endpoint = Field(
-        attribute="epidata_endpoint",
-        column_name="Endpoint",
-    )
-    language = Field(attribute="language", column_name="Language (likely English) ")
-    version_number = Field(
-        attribute="version_number", column_name="Version Number \n(if applicable) "
-    )
-    origin_datasource = Field(
-        attribute="origin_datasource",
-        column_name="Source dataset from which data was derived (for aggregates or processed data) ",
-    )
-    pathogens = Field(
-        attribute="pathogens",
-        column_name="Pathogen(s)/Syndrome(s)",
-        widget=ManyToManyWidget(Pathogen),
-    )
-    data_type = Field(attribute="data_type", column_name="Type(s) of Data*")
-    geographic_scope = Field(
-        attribute="geographic_scope",
-        column_name="Geographic Coverage",
-        widget=ForeignKeyWidget(GeographicScope),
-    )
-    geographic_levels = Field(
-        attribute="geographic_levels",
-        column_name="Geographic Levels",
-        widget=ManyToManyWidget(Geography),
-    )
-    preprocessing_description = Field(
-        attribute="preprocessing_description",
-        column_name="Pre-processing",
-    )
-    temporal_scope_start = Field(
-        attribute="temporal_scope_start", column_name="Temporal Scope Start"
-    )
-    temporal_scope_end = Field(
-        attribute="temporal_scope_end", column_name="Temporal Scope End"
-    )
-    temporal_granularity = Field(
-        attribute="temporal_granularity", column_name="Temporal Granularity"
-    )
-    reporting_cadence = Field(
-        attribute="reporting_cadence", column_name="Reporting Cadence"
-    )
-    reporting_lag = Field(
-        attribute="reporting_lag", column_name="Reporting Lag (nominal)"
-    )
-    demographic_scope = Field(attribute="demographic_scope", column_name="Population")
-    revision_cadence = Field(
-        attribute="revision_cadence", column_name="Revision Cadence"
-    )
-    demographic_granularity = Field(
-        attribute="demographic_granularity", column_name="Population Stratifiers"
-    )
-    censoring = Field(attribute="censoring", column_name="Censoring")
-    missingness = Field(attribute="missingness", column_name="Missingness")
-    dua_required = Field(attribute="dua_required", column_name="DUA Required?")
-    license = Field(attribute="license", column_name="Data Use Terms")
-    dataset_location = Field(
-        attribute="dataset_location", column_name="Dataset Location"
-    )
-    documentation_link = Field(
-        attribute="documentation_link", column_name="Link to documentation"
-    )
-    severity_pyramid_rungs = Field(
-        attribute="severity_pyramid_rungs",
-        column_name="Surveillance Categories",
-        widget=ManyToManyWidget(SeverityPyramidRung),
-    )
-
-    class Meta:
-        model = NonDelphiIndicatorSet
-        import_id_fields = ("name", "original_data_provider")
-        skip_unchanged = True
-        report_skipped = False
-        fields = (
-            "name",
-            "short_name",
-            "description",
-            "maintainer_name",
-            "maintainer_email",
-            "organization",
-            "language",
-            "version_number",
-            "origin_datasource",
-            "pathogens",
-            "original_data_provider",
-            "data_type",
-            "geographic_scope",
-            "geographic_levels",
-            "preprocessing_description",
-            "temporal_scope_start",
-            "temporal_scope_end",
-            "temporal_granularity",
-            "reporting_cadence",
-            "reporting_lag",
-            "demographic_scope",
-            "revision_cadence",
-            "demographic_granularity",
-            "censoring",
-            "missingness",
-            "dua_required",
-            "license",
-            "dataset_location",
-            "documentation_link",
-            "severity_pyramid_rungs",
-            "epidata_endpoint",
-        )
-
-    def before_import_row(self, row, **kwargs):
-        strip_all_string_values(row)
-        fix_boolean_fields(row)
-        process_geographic_scope(row)
-        process_severity_pyramid_rungs(row)
-        process_pathogens(row)
-        process_available_geographies(row)
-        process_data_use_terms(row)
-        process_original_data_provider(row)
-
-    def after_save_instance(self, instance, row, **kwargs):
-        instance.source_type = "non_delphi"
-        instance.save()
-        if instance.original_data_provider:
-            instance.original_data_provider.group = "individual"
-            instance.original_data_provider.save()
-
-
-class USStateIndicatorSetResource(IndicatorSetBaseResource):
-    import_source_types = ("us_state",)
-
-    name = Field(attribute="name", column_name="Indicator Set Name")
-    state = Field(attribute="state", column_name="State")
-    description = Field(
-        attribute="description", column_name="Indicator Set Description*"
-    )
-    pathogens = Field(
-        attribute="pathogens",
-        column_name="Pathogen(s)/Syndrome(s)",
-        widget=ManyToManyWidget(Pathogen),
-    )
-    geographic_scope = Field(
-        attribute="geographic_scope",
-        column_name="Geographic Coverage",
-        widget=ForeignKeyWidget(GeographicScope),
-    )
-    geographic_levels = Field(
-        attribute="geographic_levels",
-        column_name="Geographic Levels",
-        widget=ManyToManyWidget(Geography),
-    )
-    temporal_scope_start = Field(
-        attribute="temporal_scope_start", column_name="Temporal Scope Start"
-    )
-    temporal_scope_end = Field(
-        attribute="temporal_scope_end", column_name="Temporal Scope End"
-    )
-    temporal_granularity = Field(
-        attribute="temporal_granularity", column_name="Temporal Granularity"
-    )
-    reporting_cadence = Field(
-        attribute="reporting_cadence", column_name="Reporting Cadence"
-    )
-    reporting_lag = Field(
-        attribute="reporting_lag", column_name="Reporting Lag (nominal)"
-    )
-    revision_cadence = Field(
-        attribute="revision_cadence", column_name="Revision Cadence"
-    )
-    demographic_scope = Field(attribute="demographic_scope", column_name="Population")
-    demographic_granularity = Field(
-        attribute="demographic_granularity", column_name="Population Stratifiers"
-    )
-    original_data_provider = Field(
-        attribute="original_data_provider",
-        column_name="Original Data Provider",
-        widget=ForeignKeyWidget(OriginalDataProvider),
-    )
-    preprocessing_description = Field(
-        attribute="preprocessing_description",
-        column_name="Pre-processing",
-    )
-    censoring = Field(attribute="censoring", column_name="Censoring")
-    missingness = Field(attribute="missingness", column_name="Missingness")
-    documentation_link = Field(
-        attribute="documentation_link", column_name="Link to documentation"
-    )
-    license = Field(attribute="license", column_name="Data Use Terms")
-    severity_pyramid_rungs = Field(
-        attribute="severity_pyramid_rungs",
-        column_name="Surveillance Categories",
-        widget=ManyToManyWidget(SeverityPyramidRung),
-    )
-
-    class Meta:
-        model = USStateIndicatorSet
-        import_id_fields = ("name", "state", "original_data_provider")
-        skip_unchanged = True
-        report_skipped = False
-        fields = (
-            "name",
-            "state",
-            "description",
-            "pathogens",
-            "geographic_scope",
-            "geographic_levels",
-            "temporal_scope_start",
-            "temporal_scope_end",
-            "temporal_granularity",
-            "reporting_cadence",
-            "reporting_lag",
-            "revision_cadence",
-            "demographic_scope",
-            "demographic_granularity",
-            "censoring",
-            "missingness",
-            "original_data_provider",
-            "preprocessing_description",
-            "documentation_link",
-            "severity_pyramid_rungs",
-            "license",
-        )
-
-    def get_instance(self, instance_loader, row):
-        name = row.get("Indicator Set Name")
-
-        # Try to match by (name, source)
-        if name:
-            try:
-                return self._meta.model.objects.get(name=name)
-            except self._meta.model.DoesNotExist:
-                pass
-
-        return None
-
-    def before_import_row(self, row, **kwargs):
-        strip_all_string_values(row)
-        fix_boolean_fields(row)
-        process_geographic_scope(row)
-        process_pathogens(row)
-        process_available_geographies(row)
-        process_severity_pyramid_rungs(row)
-        process_data_use_terms(row)
-        process_original_data_provider(row)
-
-    def after_save_instance(self, instance, row, **kwargs):
-        instance.source_type = "us_state"
-        instance.save()
-        if instance.original_data_provider:
-            instance.original_data_provider.group = "us_states"
-            instance.original_data_provider.save()
+        provider = instance.original_data_provider
+        if provider is None:
+            return
+        group = PROVIDER_GROUP_BY_KIND.get(instance.kind)
+        if instance.kind == "delphi" and provider.name.startswith("US "):
+            group = "us_government"
+        if group and provider.group != group:
+            provider.group = group
+            provider.save(update_fields=["group"])
 
 
 class ColumnDescriptionResource(resources.ModelResource):

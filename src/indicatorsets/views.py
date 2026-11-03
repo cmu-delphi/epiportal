@@ -74,44 +74,23 @@ def get_related_indicators(queryset, indicator_set_ids: list):
     indicators_data = queryset.filter(indicator_set__id__in=indicator_set_ids).values(
         "id",
         "display_name",
-        "member_name",
-        "member_short_name",
         "name",
         "indicator_set__id",
         "indicator_set__name",
         "indicator_set__short_name",
         "indicator_set__epidata_endpoint",
+        "indicator_set__kind",
         "source__name",
         "time_type",
         "description",
-        "member_description",
-        "description",
         "indicator_set__dua_required",
-        "source_type",
     )
 
     for item in indicators_data:
-        display_name = item["display_name"]
-        if not display_name:
-            if item["member_name"]:
-                display_name = item["member_name"]
-            else:
-                display_name = item["name"]
-
-        member_description = (
-            item["member_description"]
-            if item["member_description"]
-            else item["description"]
-        )
-
         related_indicators.append(
             {
                 "id": item["id"],
-                "display_name": display_name,
-                "member_name": item["member_name"] if item["member_name"] else "",
-                "member_short_name": (
-                    item["member_short_name"] if item["member_short_name"] else ""
-                ),
+                "display_name": item["display_name"] or item["name"],
                 "name": item["name"] if item["name"] else "",
                 "indicator_set": item["indicator_set__id"],
                 "indicator_set_name": item["indicator_set__name"],
@@ -128,14 +107,8 @@ def get_related_indicators(queryset, indicator_set_ids: list):
                 "source": item["source__name"] if item["source__name"] else "",
                 "time_type": item["time_type"] if item["time_type"] else "",
                 "description": item["description"] if item["description"] else "",
-                "member_description": member_description,
-                "description": item["description"] if item["description"] else "",
-                "restricted": (
-                    item["indicator_set__dua_required"]
-                    if item["indicator_set__dua_required"]
-                    else ""
-                ),
-                "source_type": item["source_type"],
+                "restricted": item["indicator_set__dua_required"],
+                "kind": item["indicator_set__kind"],
             }
         )
     return related_indicators
@@ -264,11 +237,9 @@ class IndicatorSetListView(ListView):
                     "description": indicator_set.description,
                     "maintainer_name": indicator_set.maintainer_name,
                     "maintainer_email": indicator_set.maintainer_email,
-                    "organization": indicator_set.organization,
                     "original_data_provider": indicator_set.original_data_provider.name if indicator_set.original_data_provider else "",
                     "epidata_endpoint": indicator_set.epidata_endpoint,
                     "language": indicator_set.language,
-                    "version_number": indicator_set.version_number,
                     "origin_datasource": indicator_set.origin_datasource,
                     "pathogens": [
                         {
@@ -293,7 +264,11 @@ class IndicatorSetListView(ListView):
                     ],
                     "preprocessing_description": indicator_set.preprocessing_description,
                     "temporal_scope_start": indicator_set.temporal_scope_start,
-                    "temporal_scope_end": indicator_set.temporal_scope_end,
+                    "temporal_scope_end": (
+                        "Ongoing"
+                        if indicator_set.ongoing
+                        else indicator_set.temporal_scope_end
+                    ),
                     "temporal_granularity": indicator_set.temporal_granularity,
                     "reporting_cadence": indicator_set.reporting_cadence,
                     "reporting_lag": indicator_set.reporting_lag,
@@ -309,12 +284,11 @@ class IndicatorSetListView(ListView):
                     ],
                     "censoring": indicator_set.censoring,
                     "missingness": indicator_set.missingness,
-                    "dua_required": indicator_set.dua_required,
+                    "dua_required": "Yes" if indicator_set.dua_required else "No",
                     "license": indicator_set.license,
                     "dataset_location": indicator_set.dataset_location,
                     "documentation_link": indicator_set.documentation_link,
-                    "source_type": indicator_set.source_type,
-                    "state": indicator_set.state,
+                    "kind": indicator_set.kind,
                     "is_top_priority": indicator_set.is_top_priority,
                     "delphi_hosted": "Yes" if indicator_set.delphi_hosted else "No",
                 }
@@ -351,9 +325,9 @@ class IndicatorSetListView(ListView):
             ).annotate(
                 is_top_priority=Case(
                     When(
-                        temporal_scope_end="Ongoing",
-                        dua_required__in=["No", "Unknown", "Sensor-dependent", ""],
-                        source_type__in=["covidcast", "other_endpoint"],
+                        ongoing=True,
+                        dua_required=False,
+                        kind="delphi",
                         then=Value(1),
                     ),
                     default=Value(0),
@@ -365,9 +339,7 @@ class IndicatorSetListView(ListView):
                     output_field=IntegerField(),
                 ),
                 delphi_hosted=Case(
-                    When(
-                        source_type__in=["covidcast", "other_endpoint"], then=Value(1)
-                    ),
+                    When(kind="delphi", then=Value(1)),
                     default=Value(0),
                     output_field=IntegerField(),
                 ),

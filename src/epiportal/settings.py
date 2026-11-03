@@ -42,19 +42,15 @@ EPIDATA_URL = os.environ.get("EPIDATA_URL", "https://api.delphi.cmu.edu/epidata/
 EPIDATA_V5_URL = os.environ.get("EPIDATA_V5_URL", "https://delphi.cmu.edu/epidata/v5/").rstrip("/") + "/"
 EPIDATA_API_KEY = os.environ.get("EPIDATA_API_KEY", "")
 
+NEW_SHEET = "https://docs.google.com/spreadsheets/d/1cT6Aijqw_eyXSdGsCiCdNNhWX3SHQ_5u_ec-8vCp1J0/export?format=csv&gid="
+
 SPREADSHEET_URLS = {
-    "source_subdivisions": "https://docs.google.com/spreadsheets/d/1zb7ItJzY5oq1n-2xtvnPBiJu2L3AqmCKubrLkKJZVHs/export?format=csv&gid=0",
-    "other_endpoint_source_subdivisions": "https://docs.google.com/spreadsheets/d/1zb7ItJzY5oq1n-2xtvnPBiJu2L3AqmCKubrLkKJZVHs/export?format=csv&gid=214580132",
-    "indicator_sets": "https://docs.google.com/spreadsheets/d/1zb7ItJzY5oq1n-2xtvnPBiJu2L3AqmCKubrLkKJZVHs/export?format=csv&gid=1266808975",
-    "non_delphi_indicator_sets": "https://docs.google.com/spreadsheets/d/1zb7ItJzY5oq1n-2xtvnPBiJu2L3AqmCKubrLkKJZVHs/export?format=csv&gid=1266477926",
-    "indicators": "https://docs.google.com/spreadsheets/d/1zb7ItJzY5oq1n-2xtvnPBiJu2L3AqmCKubrLkKJZVHs/export?format=csv&gid=329338228",
-    "other_endpoint_indicators": "https://docs.google.com/spreadsheets/d/1zb7ItJzY5oq1n-2xtvnPBiJu2L3AqmCKubrLkKJZVHs/export?format=csv&gid=1364181703",
-    "non_delphi_indicators": "https://docs.google.com/spreadsheets/d/1zb7ItJzY5oq1n-2xtvnPBiJu2L3AqmCKubrLkKJZVHs/export?format=csv&gid=493612863",
-    "us_state_indicator_sets": "https://docs.google.com/spreadsheets/d/1zb7ItJzY5oq1n-2xtvnPBiJu2L3AqmCKubrLkKJZVHs/export?format=csv&gid=1635370101",
-    "us_state_indicators": "https://docs.google.com/spreadsheets/d/1zb7ItJzY5oq1n-2xtvnPBiJu2L3AqmCKubrLkKJZVHs/export?format=csv&gid=527384770",
+    "sources": NEW_SHEET + "0",
+    "indicator_sets": NEW_SHEET + "2068365133",
+    "indicators": NEW_SHEET + "968826094",
     "column_descriptions": "https://docs.google.com/spreadsheets/d/10BxyiLN7l9PWQuWbDeVmtzte-G9YNSuj2PzjDIy_OEc/export?format=csv&gid=1361858243#gid=1361858243",
     "filter_descriptions": "https://docs.google.com/spreadsheets/d/10BxyiLN7l9PWQuWbDeVmtzte-G9YNSuj2PzjDIy_OEc/export?format=csv&gid=502883488#gid=502883488",
-    "express_view_indicators": "https://docs.google.com/spreadsheets/d/1zb7ItJzY5oq1n-2xtvnPBiJu2L3AqmCKubrLkKJZVHs/export?format=csv&gid=1759850611#gid=1759850611",
+    "express_view_indicators": NEW_SHEET + "27791590",
 }
 
 ENVIRONMENT = os.environ.get("SENTRY_ENVIRONMENT", "development")

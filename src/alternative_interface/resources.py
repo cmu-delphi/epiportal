@@ -1,7 +1,7 @@
-from import_export import resources
 from import_export.fields import Field
 from import_export.results import RowResult
 from import_export.widgets import ForeignKeyWidget
+from base.resources import CustomModelResource
 from indicators.models import Indicator
 
 from alternative_interface.models import ExpressViewIndicator
@@ -24,7 +24,9 @@ def process_indicator(row):
         row["Indicator Name"] = None
 
 
-class ExpressViewIndicatorResource(resources.ModelResource):
+class ExpressViewIndicatorResource(CustomModelResource):
+    required_columns = ("Menu Item", "Indicator Source", "Indicator Name")
+
     menu_item = Field(attribute="menu_item", column_name="Menu Item")
     indicator = Field(
         attribute="indicator",
@@ -47,11 +49,28 @@ class ExpressViewIndicatorResource(resources.ModelResource):
     def before_import_row(self, row, **kwargs):
         if not row.get("Menu Item") or not row.get("Indicator Name"):
             return
+        source_name = row.get("Indicator Source")
+        indicator_name = row.get("Indicator Name")
         process_indicator(row)
+        # Rows with an empty source are placeholders and stay quiet.
+        if source_name and row["Indicator Name"] is None:
+            self.warnings.append(
+                f"Skipped dashboard row {row.get('Menu Item')!r}: indicator "
+                f"{source_name}/{indicator_name} not found"
+            )
 
-    def skip_row(self, instance, original, row, import_validation_errors=None):
-        if not row.get("Menu Item") or not row.get("Indicator Name"):
-            return True
+    def __init__(self, **kwargs):
+        super().__init__(**kwargs)
+        self.warnings: list[str] = []
+
+    def before_import(self, dataset, **kwargs):
+        super().before_import(dataset, **kwargs)
+        self.warnings = []
+
+    def is_excluded(self, row) -> bool:
+        # before_import_row has swapped the indicator name for its id, or for
+        # None when no such indicator exists.
+        return not row.get("Menu Item") or not row.get("Indicator Name")
 
     def import_row(self, row, instance_loader, **kwargs):
         import_result = super().import_row(row, instance_loader, **kwargs)
@@ -65,7 +84,16 @@ class ExpressViewIndicatorResource(resources.ModelResource):
                     [err.error for err in import_result.errors], row
                 )
             )
+            errors = [str(err.error) for err in import_result.errors]
+            if import_result.validation_error is not None:
+                errors.append(str(import_result.validation_error))
+            self.warnings.append(
+                "Skipped dashboard row {!r}: {}".format(
+                    row.get("Menu Item"), "; ".join(errors)
+                )
+            )
             import_result.errors = []
+            import_result.validation_error = None
             import_result.import_type = RowResult.IMPORT_TYPE_SKIP
         return import_result
 
