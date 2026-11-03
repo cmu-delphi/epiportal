@@ -55,8 +55,8 @@
         <!-- End Google Tag Manager (noscript) -->
 
         <div class="d-flex w-100 vh-100">
-            <!-- Sidebar (Blue Band) -->
-            <div class="d-flex flex-column align-items-center justify-content-center py-3" style="width: 50px; min-width: 50px; background-color: #012970; z-index: 1040;">
+            <!-- Sidebar (Red Band) -->
+            <div class="d-flex flex-column align-items-center justify-content-center py-3" style="width: 50px; min-width: 50px; background-color: var(--epi-accent); z-index: 1040;">
                 <!-- Filter Toggle Button (Global) -->
                 <button class="btn btn-link text-white p-2" id="global-filter-toggle" title="Toggle Filters">
                     <i class="fas fa-filter fa-lg"></i>
@@ -64,13 +64,13 @@
             </div>
 
             <!-- Main Content Area -->
-            <div class="flex-grow-1 d-flex flex-column h-100" style="overflow: hidden; background-color: #f6f9ff;">
+            <div class="flex-grow-1 d-flex flex-column h-100" style="overflow: hidden; background-color: #fff;">
                 <!-- Top Header for Title -->
                 <div class="bg-white border-bottom px-4 py-3 d-flex align-items-center shadow-sm" style="flex-shrink: 0; min-height: 74px;">
                     <a href="https://delphi.cmu.edu/" target="_blank">
                         <img src="{% static 'img/CMU-wordmark.svg' %}" alt="Carnegie Mellon University" height="70" width="200" class="me-3">
                     </a>
-                    <span style="font-size: 1.25rem; font-weight: 600; color: #012970;">Delphi EpiPortal : One Stop Shop for Real Time Infectious Disease Indicators</span>
+                    <span style="font-size: 1.25rem; font-weight: 600; color: var(--epi-text);">Delphi EpiPortal : One Stop Shop for Real Time Infectious Disease Indicators</span>
                 </div>
 
                 {% include "banners.html" %}
