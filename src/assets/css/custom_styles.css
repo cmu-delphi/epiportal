@@ -423,7 +423,10 @@ tr:not(.odd-row) > .dtfc-fixed-end {
 }
 
 /* Indicator set name in the table: opens the details panel. */
+/* inline-block so a name that wraps is one solid hover area, with no gaps
+   between its lines that would flicker the description popover. */
 .indicator-set-name-link {
+    display: inline-block;
     color: inherit;
     text-decoration: underline;
     text-decoration-color: rgba(0, 0, 0, 0.35);
