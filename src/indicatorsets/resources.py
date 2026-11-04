@@ -227,7 +227,7 @@ class ColumnDescriptionResource(resources.ModelResource):
     name = Field(attribute="name", column_name="Field Name")
     description = Field(
         attribute="description",
-        column_name="Hover over the indicator's name to see a brief description",
+        column_name="Column Description",
     )
 
     class Meta:

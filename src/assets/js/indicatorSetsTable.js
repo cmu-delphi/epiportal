@@ -83,7 +83,12 @@ var table = new DataTable("#indicatorSetsTable", {
                     return label;
                 }
                 // Opens the indicator set's metadata panel (indicatorSetPanel.js).
-                return `<a href="#" role="button" class="indicator-set-name-link" title="Show indicator set details">${escapeAttr(label)}</a>`;
+                // The description shows in a popover on hover (see initNameLinkPopovers).
+                var description = (row.description || "").trim();
+                var popoverAttrs = description
+                    ? ` data-mdb-content="${escapeAttr(description)}"`
+                    : ' title="Show indicator set details"';
+                return `<a href="#" role="button" class="indicator-set-name-link"${popoverAttrs}>${escapeAttr(label)}</a>`;
             }
         },  // Name
         {
@@ -260,22 +265,69 @@ function escapeAttr(str) {
         .replace(/>/g, "&gt;");
 }
 
-function initIndicatorPopovers(childContainer) {
-    if (!childContainer || typeof mdb === "undefined") {
-        return;
+/* Indicator set descriptions in a popover on the set name. The table has no
+ * paging, so popovers are created on first hover rather than for every row up
+ * front, and shown and hidden by hand so the first hover already shows one.
+ * MDB loads after this script (at the end of index.html), so `mdb` is only
+ * looked up inside the handlers, never at bind time.
+ *
+ * Hiding waits a moment so small cursor slips off the link, or moving onto the
+ * popover itself, don't close it. Animation is off because MDB's hide finishes
+ * after the fade and then disposes the popover unconditionally, which would
+ * kill a popover re-shown during that fade. */
+function initNameLinkPopovers() {
+    var selector = ".indicator-set-name-link[data-mdb-content]";
+    var popoverClass = "indicator-set-name-popover";
+    var hideDelayMs = 200;
+    var activeLink = null;
+    var hideTimer = null;
+
+    function cancelHide() {
+        clearTimeout(hideTimer);
+        hideTimer = null;
     }
-    $(childContainer).find("[data-mdb-popover-init]").each(function () {
-        const existing = mdb.Popover.getInstance(this);
-        if (existing) {
-            existing.dispose();
+    function hideNow() {
+        cancelHide();
+        if (activeLink && typeof mdb !== "undefined") {
+            mdb.Popover.getInstance(activeLink)?.hide();
         }
-        new mdb.Popover(this, {
+        activeLink = null;
+    }
+    function scheduleHide() {
+        cancelHide();
+        hideTimer = setTimeout(hideNow, hideDelayMs);
+    }
+    function show(link) {
+        cancelHide();
+        if (typeof mdb === "undefined" || link === activeLink) {
+            return;
+        }
+        hideNow();
+        mdb.Popover.getOrCreateInstance(link, {
             container: "body",
-            trigger: "hover",
-            delay: { show: 0, hide: 100 },
-        });
-    });
+            placement: "bottom",
+            trigger: "manual",
+            animation: false,
+            customClass: popoverClass,
+        }).show();
+        activeLink = link;
+    }
+
+    $("#indicatorSetsTable tbody")
+        .on("mouseenter focusin", selector, function () {
+            show(this);
+        })
+        .on("mouseleave focusout", selector, scheduleHide)
+        .on("click", selector, hideNow);
+    // Keep the popover open while the pointer is over it.
+    $(document)
+        .on("mouseenter", "." + popoverClass, cancelHide)
+        .on("mouseleave", "." + popoverClass, scheduleHide);
+    // A redraw can remove the hovered row, which would strand its popover.
+    table.on("preDraw", hideNow);
 }
+
+initNameLinkPopovers();
 
 function format(rowData, relatedIndicators) {
     if (!relatedIndicators) {
@@ -294,7 +346,7 @@ function format(rowData, relatedIndicators) {
     var disabled, restricted, sourceType;
 
     if (indicators.length > 0) {
-        var data = `<p style="width: 40%;">${rowData.description}</p>`;
+        var data = "";
         var tableMarkup =
             '<table class="table" cellpadding="5" cellspacing="0" border="0" style="padding-left:50px;">' +
             "<thead>" +
@@ -329,7 +381,7 @@ function format(rowData, relatedIndicators) {
             tableMarkup +=
                 "<tr>" +
                 `<td><input ${disabled} title="${checkboxTitle}" type="checkbox" name="selectedIndicator" onclick="addSelectedIndicator(this)" data-indicator-displayname='${indicator.display_name}' data-endpoint="${indicator.endpoint}" data-datasource="${indicator.source}" data-indicator="${indicator.name}" data-time-type="${indicator.time_type}" data-indicator-set="${indicator.indicator_set_name}" data-indicator-set-short-name="${indicator.indicator_set_short_name}" ${checked}></td>` +
-                `<td><span tabindex="0" data-mdb-container="body" data-mdb-popover-init data-mdb-trigger="hover" data-mdb-placement="right" data-mdb-content="${escapeAttr(indicator.description)}">${indicator.display_name}</span></td>` +
+                `<td>${indicator.display_name}</td>` +
                 `<td>${indicator.name}</td>` +
                 `<td>${indicator.description}</td>` +
                 "</tr>";
