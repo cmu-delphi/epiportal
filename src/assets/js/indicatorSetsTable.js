@@ -86,7 +86,7 @@ var table = new DataTable("#indicatorSetsTable", {
                 // The description shows in a popover on hover (see initNameLinkPopovers).
                 var description = (row.description || "").trim();
                 var popoverAttrs = description
-                    ? ` data-mdb-content="${escapeAttr(description)}"`
+                    ? ` data-mdb-content="${escapeAttr(description)}. \nFor more information, click on the indicator set name."`
                     : ' title="Show indicator set details"';
                 return `<a href="#" role="button" class="indicator-set-name-link"${popoverAttrs}>${escapeAttr(label)}</a>`;
             }
