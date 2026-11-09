@@ -1,8 +1,11 @@
 from django.db import models
 
+from base.models import NaturalKeyModel
+
 
 # Create your models here.
-class IndicatorType(models.Model):
+class IndicatorType(NaturalKeyModel):
+    NATURAL_KEY = ("name",)
 
     name: models.CharField = models.CharField(
         verbose_name="Name", max_length=255, unique=True
@@ -26,7 +29,8 @@ class IndicatorType(models.Model):
         return self.display_name if self.display_name else self.name
 
 
-class FormatType(models.Model):
+class FormatType(NaturalKeyModel):
+    NATURAL_KEY = ("name",)
 
     name: models.CharField = models.CharField(
         verbose_name="Name", max_length=255, unique=True
@@ -50,7 +54,9 @@ class FormatType(models.Model):
         return self.display_name if self.display_name else self.name
 
 
-class Category(models.Model):
+class Category(NaturalKeyModel):
+    NATURAL_KEY = ("name",)
+
     name: models.CharField = models.CharField(
         verbose_name="Name", max_length=255, unique=True
     )

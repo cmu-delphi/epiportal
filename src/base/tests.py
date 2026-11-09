@@ -4,7 +4,10 @@ from tablib import Dataset
 from unittest.mock import MagicMock, patch
 
 import requests
+from django.apps import apps
+from django.conf import settings
 from django.contrib.messages.storage.fallback import FallbackStorage
+from django.core.management import call_command
 from django.http import HttpResponseForbidden
 from django.test import RequestFactory, TestCase, override_settings
 
@@ -12,6 +15,7 @@ from base.models import (
     GeographicScope,
     Geography,
     GeographyUnit,
+    NaturalKeyModel,
     Pathogen,
     SeverityPyramidRung,
 )
@@ -36,6 +40,49 @@ class PathogenModelTests(TestCase):
         Pathogen.objects.create(name="covid", used_in="indicators")
         with self.assertRaises(Exception):
             Pathogen.objects.create(name="covid", used_in="indicators")
+
+
+
+class FixtureLoadingTests(TestCase):
+    """Container start-up runs `loaddata ./fixtures/*.json` on every boot, on
+    top of rows the metadata sheet import created by name at whatever pk was
+    free. Loading must update those rows, not collide with them."""
+
+    def setUp(self):
+        self.paths = sorted(
+            str(p) for p in (settings.BASE_DIR / "fixtures").glob("*.json")
+        )
+        self.fixtures = {}
+        for path in self.paths:
+            with open(path) as f:
+                for obj in json.load(f):
+                    self.fixtures.setdefault(obj["model"].lower(), []).append(obj)
+
+    def test_lookup_fixtures_carry_no_pks(self):
+        for label, objects in self.fixtures.items():
+            if issubclass(apps.get_model(label), NaturalKeyModel):
+                self.assertFalse(any("pk" in o for o in objects), label)
+
+    def test_loads_over_imported_rows_and_is_repeatable(self):
+        imported = {}
+        for i, (label, objects) in enumerate(self.fixtures.items()):
+            model = apps.get_model(label)
+            if issubclass(model, NaturalKeyModel):
+                imported[label] = model.objects.create(
+                    pk=9000 + i, **objects[0]["fields"]
+                ).pk
+
+        call_command("loaddata", *self.paths, verbosity=0)
+        call_command("loaddata", *self.paths, verbosity=0)
+
+        for label, objects in self.fixtures.items():
+            model = apps.get_model(label)
+            self.assertEqual(model.objects.count(), len(objects), label)
+        for label, pk in imported.items():
+            self.assertTrue(apps.get_model(label).objects.filter(pk=pk).exists())
+        # Units point at the geography by name, wherever its row ended up.
+        nation = GeographyUnit.objects.get(geo_id="US")
+        self.assertEqual(nation.geo_level.natural_key(), ("nation", "indicatorsets"))
 
 
 class GeographicMappingTests(TestCase):

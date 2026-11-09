@@ -1,7 +1,6 @@
 [
     {
         "model": "base.Geography",
-        "pk": 1,
         "fields": {
             "name": "nation",
             "display_name": "National",
@@ -12,7 +11,6 @@
     },
     {
         "model": "base.Geography",
-        "pk": 2,
         "fields": {
             "name": "hhs",
             "display_name": "U.S. HHS Region",
@@ -23,7 +21,6 @@
     },
     {
         "model": "base.Geography",
-        "pk": 3,
         "fields": {
             "name": "census-region",
             "display_name": "U.S. Census Region",
@@ -34,7 +31,6 @@
     },
     {
         "model": "base.Geography",
-        "pk": 4,
         "fields": {
             "name": "region",
             "display_name": "Other Subnational Region",
@@ -45,7 +41,6 @@
     },
     {
         "model": "base.Geography",
-        "pk": 5,
         "fields": {
             "name": "state",
             "display_name": "State/ADM 1",
@@ -56,7 +51,6 @@
     },
     {
         "model": "base.Geography",
-        "pk": 6,
         "fields": {
             "name": "county",
             "display_name": "County/ADM 2",
@@ -67,7 +61,6 @@
     },
     {
         "model": "base.Geography",
-        "pk": 7,
         "fields": {
             "name": "city",
             "display_name": "Municipality/ADM 3",
@@ -78,7 +71,6 @@
     },
     {
         "model": "base.Geography",
-        "pk": 14,
         "fields": {
             "name": "hsa_nci",
             "display_name": "Health Service Area (HSA-NCI)",
@@ -89,7 +81,6 @@
     },
     {
         "model": "base.Geography",
-        "pk": 8,
         "fields": {
             "name": "hrr",
             "display_name": "Hospital Referral Region (HRR)",
@@ -100,7 +91,6 @@
     },
     {
         "model": "base.Geography",
-        "pk": 9,
         "fields": {
             "name": "msa",
             "display_name": "Metropolitan Statistical Area (MSA)",
@@ -111,7 +101,6 @@
     },
     {
         "model": "base.Geography",
-        "pk": 10,
         "fields": {
             "name": "dma",
             "display_name": "Designated Market Area (DMA)",
@@ -122,7 +111,6 @@
     },
     {
         "model": "base.Geography",
-        "pk": 11,
         "fields": {
             "name": "facility",
             "display_name": "Facility",
@@ -133,7 +121,6 @@
     },
     {
         "model": "base.Geography",
-        "pk": 12,
         "fields": {
             "name": "FluSurv-Net site",
             "display_name": "FluSurv-Net site (see documentation)",
@@ -144,7 +131,6 @@
     },
     {
         "model": "base.Geography",
-        "pk": 13,
         "fields": {
             "name": "N/A",
             "display_name": "N/A",
@@ -155,7 +141,6 @@
     },
     {
         "model": "base.Geography",
-        "pk": 100,
         "fields": {
             "name": "us-territory",
             "display_name": "US Territory",
@@ -166,7 +151,6 @@
     },
     {
         "model": "base.Geography",
-        "pk": 101,
         "fields": {
             "name": "us-city",
             "display_name": "US City",
@@ -177,7 +161,6 @@
     },
     {
         "model": "base.Geography",
-        "pk": 102,
         "fields": {
             "name": "ny_minus_jfk",
             "display_name": "NY (minus NYC)",

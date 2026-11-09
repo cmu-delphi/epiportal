@@ -1,7 +1,6 @@
 [
     {
         "model": "base.severitypyramidrung",
-        "pk": 1,
         "fields": {
             "name": "Entire Population",
             "display_name": "Entire Population",
@@ -11,7 +10,6 @@
     },
     {
         "model": "base.severitypyramidrung",
-        "pk": 2,
         "fields": {
             "name": "Vaccinated",
             "display_name": "Vaccinated",
@@ -21,7 +19,6 @@
     },
     {
         "model": "base.severitypyramidrung",
-        "pk": 3,
         "fields": {
             "name": "Infected",
             "display_name": "Infected",
@@ -31,7 +28,6 @@
     },
     {
         "model": "base.severitypyramidrung",
-        "pk": 4,
         "fields": {
             "name": "Tested",
             "display_name": "Tested",
@@ -41,7 +37,6 @@
     },
     {
         "model": "base.severitypyramidrung",
-        "pk": 5,
         "fields": {
             "name": "Ascertained (Case)",
             "display_name": "Ascertained (Case)",
@@ -51,7 +46,6 @@
     },
     {
         "model": "base.severitypyramidrung",
-        "pk": 6,
         "fields": {
             "name": "Symptomatic",
             "display_name": "Symptomatic",
@@ -61,7 +55,6 @@
     },
     {
         "model": "base.severitypyramidrung",
-        "pk": 7,
         "fields": {
             "name": "Outpatient / ED",
             "display_name": "Outpatient / ED",
@@ -71,7 +64,6 @@
     },
     {
         "model": "base.severitypyramidrung",
-        "pk": 8,
         "fields": {
             "name": "Hospitalized",
             "display_name": "Hospitalized",
@@ -81,7 +73,6 @@
     },
     {
         "model": "base.severitypyramidrung",
-        "pk": 9,
         "fields": {
             "name": "ICU",
             "display_name": "ICU",
@@ -91,7 +82,6 @@
     },
     {
         "model": "base.severitypyramidrung",
-        "pk": 10,
         "fields": {
             "name": "Deceased",
             "display_name": "Deceased",
