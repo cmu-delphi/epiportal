@@ -1,77 +1,66 @@
 [
     {
         "model": "indicators.IndicatorType",
-        "pk": 1,
         "fields": {
             "name": "Public Behavior"
         }
     },
     {
         "model": "indicators.IndicatorType",
-        "pk": 2,
         "fields": {
             "name": "Inpatient insurance claims"
         }
     },
     {
         "model": "indicators.IndicatorType",
-        "pk": 3,
         "fields": {
             "name": "Outpatient insurance claims"
         }
     },
     {
         "model": "indicators.IndicatorType",
-        "pk": 4,
         "fields": {
             "name": "Testing"
         }
     },
     {
         "model": "indicators.IndicatorType",
-        "pk": 5,
         "fields": {
             "name": "Vaccines"
         }
     },
     {
         "model": "indicators.IndicatorType",
-        "pk": 6,
         "fields": {
             "name": "Self-reported (survey)"
         }
     },
     {
         "model": "indicators.IndicatorType",
-        "pk": 7,
         "fields": {
             "name": "Cases"
         }
     },
     {
         "model": "indicators.IndicatorType",
-        "pk": 8,
         "fields": {
             "name": "Deaths"
         }
     },
     {
         "model": "indicators.IndicatorType",
-        "pk": 9,
         "fields": {
             "name": "Prescription/pharmacy"
         }
     },
     {
         "model": "indicators.IndicatorType",
-        "pk": 10,
         "fields": {
             "name": "EMR"
         }
     },
     {
         "model": "indicators.IndicatorType",
-        "pk": 11,
         "fields": {
             "name": "Health department-sourced information"
         }

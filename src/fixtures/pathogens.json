@@ -1,7 +1,6 @@
 [
     {
         "model": "base.pathogen",
-        "pk": 1,
         "fields": {
             "name": "COVID-19",
             "display_name": "COVID-19",
@@ -11,7 +10,6 @@
     },
     {
         "model": "base.pathogen",
-        "pk": 2,
         "fields": {
             "name": "Ebola",
             "display_name": "Ebola",
@@ -21,7 +19,6 @@
     },
     {
         "model": "base.pathogen",
-        "pk": 3,
         "fields": {
             "name": "Dengue",
             "display_name": "Dengue",
@@ -31,7 +28,6 @@
     },
     {
         "model": "base.pathogen",
-        "pk": 4,
         "fields": {
             "name": "H5N1",
             "display_name": "H5N1",
@@ -41,7 +37,6 @@
     },
     {
         "model": "base.pathogen",
-        "pk": 5,
         "fields": {
             "name": "HIV",
             "display_name": "HIV",
@@ -51,7 +46,6 @@
     },
     {
         "model": "base.pathogen",
-        "pk": 6,
         "fields": {
             "name": "HIV 1",
             "display_name": "HIV 1",
@@ -61,7 +55,6 @@
     },
     {
         "model": "base.pathogen",
-        "pk": 7,
         "fields": {
             "name": "HIV 2",
             "display_name": "HIV 2",
@@ -71,7 +64,6 @@
     },
     {
         "model": "base.pathogen",
-        "pk": 8,
         "fields": {
             "name": "Human Orthopneumovirus",
             "display_name": "Human Orthopneumovirus",
@@ -81,7 +73,6 @@
     },
     {
         "model": "base.pathogen",
-        "pk": 9,
         "fields": {
             "name": "ILI",
             "display_name": "ILI",
@@ -91,7 +82,6 @@
     },
     {
         "model": "base.pathogen",
-        "pk": 10,
         "fields": {
             "name": "Influenza",
             "display_name": "Influenza",
@@ -101,7 +91,6 @@
     },
     {
         "model": "base.pathogen",
-        "pk": 11,
         "fields": {
             "name": "Measles",
             "display_name": "Measles",
@@ -111,7 +100,6 @@
     },
     {
         "model": "base.pathogen",
-        "pk": 12,
         "fields": {
             "name": "Mpox",
             "display_name": "Mpox",
@@ -121,7 +109,6 @@
     },
     {
         "model": "base.pathogen",
-        "pk": 13,
         "fields": {
             "name": "Mumps",
             "display_name": "Mumps",
@@ -131,7 +118,6 @@
     },
     {
         "model": "base.pathogen",
-        "pk": 14,
         "fields": {
             "name": "Norovirus",
             "display_name": "Norovirus",
@@ -141,7 +127,6 @@
     },
     {
         "model": "base.pathogen",
-        "pk": 15,
         "fields": {
             "name": "Plasmodium",
             "display_name": "Plasmodium",
@@ -151,7 +136,6 @@
     },
     {
         "model": "base.pathogen",
-        "pk": 16,
         "fields": {
             "name": "Pneumonia",
             "display_name": "Pneumonia",
@@ -161,7 +145,6 @@
     },
     {
         "model": "base.pathogen",
-        "pk": 17,
         "fields": {
             "name": "RSV",
             "display_name": "RSV",
@@ -171,7 +154,6 @@
     },
     {
         "model": "base.pathogen",
-        "pk": 18,
         "fields": {
             "name": "Tuberculosis",
             "display_name": "Tuberculosis",
@@ -181,7 +163,6 @@
     },
     {
         "model": "base.pathogen",
-        "pk": 19,
         "fields": {
             "name": "Zika",
             "display_name": "Zika",
@@ -191,7 +172,6 @@
     },
     {
         "model": "base.pathogen",
-        "pk": 20,
         "fields": {
             "name": "Pathogen Independent",
             "display_name": "Pathogen Independent",
