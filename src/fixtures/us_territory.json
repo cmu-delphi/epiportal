@@ -7,7 +7,7 @@
             "name": "American Samoa",
             "display_name": "American Samoa",
             "level": 100,
-            "geo_level": 100
+            "geo_level": ["us-territory", "indicators"]
         }
     },
     {
@@ -18,7 +18,7 @@
             "name": "Mariana Islands",
             "display_name": "Mariana Islands",
             "level": 100,
-            "geo_level": 100
+            "geo_level": ["us-territory", "indicators"]
         }
     },
     {
@@ -29,7 +29,7 @@
             "name": "Guam",
             "display_name": "Guam",
             "level": 100,
-            "geo_level": 100
+            "geo_level": ["us-territory", "indicators"]
         }
     },
     {
@@ -40,7 +40,7 @@
             "name": "Puerto Rico",
             "display_name": "Puerto Rico",
             "level": 100,
-            "geo_level": 100
+            "geo_level": ["us-territory", "indicators"]
         }
     },
     {
@@ -50,7 +50,7 @@
             "name": "Virgin Islands",
             "display_name": "Virgin Islands",
             "level": 100,
-            "geo_level": 100
+            "geo_level": ["us-territory", "indicators"]
         },
         "pk": 4946
     }

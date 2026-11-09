@@ -32,7 +32,6 @@ function addSelectedIndicator(element) {
             indicator_set: element.dataset.indicatorSet,
             display_name: element.dataset.indicatorDisplayname,
             indicator_set_short_name: element.dataset.indicatorSetShortName,
-            member_short_name: element.dataset.memberShortName,
         });
         updateSelectedIndicators(
             element.dataset.datasource,

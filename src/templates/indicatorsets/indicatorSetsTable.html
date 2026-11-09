@@ -3,15 +3,7 @@
 {% load static %}
 {% load dict_get %}
 {% load split_filter %}
-<!-- Data Table -->
-<link
-    rel="stylesheet"
-    href="https://cdn.datatables.net/v/dt/dt-2.1.8/b-3.2.0/b-colvis-3.2.0/cr-2.0.4/fc-5.0.4/fh-4.0.1/kt-2.12.1/r-3.0.3/rg-1.5.1/rr-1.5.0/sc-2.4.3/sp-2.3.3/sl-2.1.0/datatables.min.css"
-/>
-<link
-    rel="stylesheet"
-    href="https://cdn.datatables.net/plug-ins/1.10.13/features/mark.js/datatables.mark.min.css"
-/>
+<!-- DataTables and mark.js stylesheets are loaded once, in index.html. -->
 <div class="table-responsive table-container h-100">
     <table
         id="indicatorSetsTable"
@@ -43,7 +35,7 @@
                     <br />
                     Syndrome(s)
                 </th>
-                <th class="min-w-300 text-center">
+                <th class="text-center">
                     Geographic Levels
                     <a
                         tabindex="0"
@@ -59,23 +51,7 @@
                         <i class="far fa-circle-question"></i>
                     </a>
                 </th>
-                <th class="min-w-120 text-center">
-                    Temporal Scope Start
-                    <a
-                        tabindex="0"
-                        type="button"
-                        class="info-button filter-description-popover"
-                        data-mdb-container="body"
-                        data-mdb-ripple-init
-                        data-mdb-popover-init
-                        data-mdb-trigger="hover"
-                        data-mdb-placement="right"
-                        data-mdb-content="{{ columns_descriptions|dict_get:'temporal_scope_start' }}"
-                    >
-                        <i class="far fa-circle-question"></i>
-                    </a>
-                </th>
-                <th class="min-w-120 text-center">
+                <th class="text-center">
                     Temporal Scope End
                     <a
                         tabindex="0"
@@ -103,70 +79,6 @@
                         data-mdb-trigger="hover"
                         data-mdb-placement="right"
                         data-mdb-content="{{ columns_descriptions|dict_get:'temporal_granularity' }}"
-                    >
-                        <i class="far fa-circle-question"></i>
-                    </a>
-                </th>
-                <th class="text-center">
-                    Reporting Cadence
-                    <a
-                        tabindex="0"
-                        type="button"
-                        class="info-button filter-description-popover"
-                        data-mdb-container="body"
-                        data-mdb-ripple-init
-                        data-mdb-popover-init
-                        data-mdb-trigger="hover"
-                        data-mdb-placement="right"
-                        data-mdb-content="{{ columns_descriptions|dict_get:'reporting_cadence' }}"
-                    >
-                        <i class="far fa-circle-question"></i>
-                    </a>
-                </th>
-                <th class="text-center">
-                    Reporting Lag(nominal)
-                    <a
-                        tabindex="0"
-                        type="button"
-                        class="info-button filter-description-popover"
-                        data-mdb-container="body"
-                        data-mdb-ripple-init
-                        data-mdb-popover-init
-                        data-mdb-trigger="hover"
-                        data-mdb-placement="right"
-                        data-mdb-content="{{ columns_descriptions|dict_get:'reporting_lag' }}"
-                    >
-                        <i class="far fa-circle-question"></i>
-                    </a>
-                </th>
-                <th class="text-center">
-                    Revision Cadence
-                    <a
-                        tabindex="0"
-                        type="button"
-                        class="info-button filter-description-popover"
-                        data-mdb-container="body"
-                        data-mdb-ripple-init
-                        data-mdb-popover-init
-                        data-mdb-trigger="hover"
-                        data-mdb-placement="right"
-                        data-mdb-content="{{ columns_descriptions|dict_get:'revision_cadence' }}"
-                    >
-                        <i class="far fa-circle-question"></i>
-                    </a>
-                </th>
-                <th class="text-center">
-                    Population Stratifiers
-                    <a
-                        tabindex="0"
-                        type="button"
-                        class="info-button filter-description-popover"
-                        data-mdb-container="body"
-                        data-mdb-ripple-init
-                        data-mdb-popover-init
-                        data-mdb-trigger="hover"
-                        data-mdb-placement="right"
-                        data-mdb-content="{{ columns_descriptions|dict_get:'population_stratifiers' }}"
                     >
                         <i class="far fa-circle-question"></i>
                     </a>
@@ -203,7 +115,6 @@
                         <i class="far fa-circle-question"></i>
                     </a>
                 </th>
-                <th class="text-center">Hosted by Delphi?</th>
             </tr>
         </thead>
         <tbody>
@@ -234,6 +145,21 @@
         >Show selected indicators</a
     >
 </div>
+<!-- Indicator set details, opened by clicking a set's name; filled by indicatorSetPanel.js -->
+<dialog id="indicatorSetPanel" class="indicator-set-panel" aria-labelledby="indicatorSetPanelTitle">
+    <header class="indicator-set-panel-header">
+        <div class="indicator-set-panel-heading">
+            <div class="indicator-set-panel-provider"></div>
+            <h2 class="indicator-set-panel-title" id="indicatorSetPanelTitle"></h2>
+            <div class="indicator-set-panel-tags"></div>
+        </div>
+        <button type="button" class="indicator-set-panel-close" aria-label="Close">
+            <i class="fas fa-xmark" aria-hidden="true"></i>
+        </button>
+    </header>
+    <div class="indicator-set-panel-body"></div>
+    <footer class="indicator-set-panel-footer"></footer>
+</dialog>
 <script>
     window.relatedIndicators = null;
     window.numOfTimeseries = 0;
@@ -242,6 +168,7 @@
 <script src="https://cdn.jsdelivr.net/g/mark.js(jquery.mark.min.js),datatables.mark.js"></script>
 <script src="{% static 'js/indicatorSetsSelection.js' %}"></script>
 <script src="{% static 'js/indicatorSetsTable.js' %}"></script>
+<script src="{% static 'js/indicatorSetPanel.js' %}"></script>
 <script src="{% static 'js/pluralize_word.js' %}"></script>
 <script>
     var relatedIndicators = null;
@@ -267,7 +194,6 @@
                     relatedIndicators,
                 ),
             ).show();
-            initIndicatorPopovers(row.child());
         }
     });
 
@@ -288,7 +214,6 @@
                                     relatedIndicators,
                                 ),
                             ).show();
-                            initIndicatorPopovers(this.child());
                         }
                     });
                 }

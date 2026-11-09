@@ -9,7 +9,7 @@ class ExpressViewIndicator(models.Model):
     indicator = models.ForeignKey(
         "indicators.Indicator",
         verbose_name="Indicator",
-        on_delete=models.PROTECT,
+        on_delete=models.CASCADE,
     )
     display_name = models.CharField(
         verbose_name="Display Name",

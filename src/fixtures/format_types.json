@@ -1,7 +1,6 @@
 [
     {
         "model": "indicators.formattype",
-        "pk": 1,
         "fields": {
             "name": "raw",
             "display_name": "Raw"
@@ -9,7 +8,6 @@
     },
     {
         "model": "indicators.formattype",
-        "pk": 2,
         "fields": {
             "name": "percent",
             "display_name": "Percent"
@@ -17,7 +15,6 @@
     },
     {
         "model": "indicators.formattype",
-        "pk": 3,
         "fields": {
             "name": "fraction",
             "display_name": "Fraction"
@@ -25,7 +22,6 @@
     },
     {
         "model": "indicators.formattype",
-        "pk": 4,
         "fields": {
             "name": "count",
             "display_name": "Count"
@@ -33,7 +29,6 @@
     },
     {
         "model": "indicators.formattype",
-        "pk": 5,
         "fields": {
             "name": "per100k",
             "display_name": "Per 100K"

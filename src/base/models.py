@@ -7,15 +7,33 @@ USED_IN_CHOICES = (
     ("indicatorsets", "Indicator Sets"),
 )
 
-SOURCE_TYPES = [
-    ("covidcast", "Covidcast"),
-    ("other_endpoint", "Other Endpoint"),
-    ("non_delphi", "Non Delphi"),
-    ("us_state", "US State"),
-]
+
+class NaturalKeyManager(models.Manager):
+    def get_by_natural_key(self, *values):
+        return self.get(**dict(zip(self.model.NATURAL_KEY, values)))
 
 
-class Pathogen(models.Model):
+class NaturalKeyModel(models.Model):
+    """A lookup table whose rows are identified by NATURAL_KEY (the fields of its
+    unique constraint), not by pk. The metadata sheet import creates such rows
+    by name at whatever pk is free, so their fixtures carry no pks: loaddata
+    then updates the row with the same natural key instead of colliding with
+    it on the unique constraint. Other fixtures refer to these rows by natural
+    key too, e.g. "geo_level": ["state", "indicatorsets"]."""
+
+    NATURAL_KEY: tuple[str, ...] = ("name",)
+
+    objects = NaturalKeyManager()
+
+    class Meta:
+        abstract = True
+
+    def natural_key(self):
+        return tuple(getattr(self, field) for field in self.NATURAL_KEY)
+
+
+class Pathogen(NaturalKeyModel):
+    NATURAL_KEY = ("name", "used_in")
 
     name: models.CharField = models.CharField(verbose_name="Name", max_length=255)
     display_name: models.CharField = models.CharField(
@@ -51,7 +69,8 @@ class Pathogen(models.Model):
         return self.display_name if self.display_name else self.name
 
 
-class GeographicScope(models.Model):
+class GeographicScope(NaturalKeyModel):
+    NATURAL_KEY = ("name", "used_in")
 
     name: models.CharField = models.CharField(verbose_name="Name", max_length=255)
 
@@ -85,7 +104,8 @@ class GeographicScope(models.Model):
         return self.name
 
 
-class Geography(models.Model):
+class Geography(NaturalKeyModel):
+    NATURAL_KEY = ("name", "used_in")
 
     name: models.CharField = models.CharField(verbose_name="Name", max_length=255)
     display_name: models.CharField = models.CharField(
@@ -122,7 +142,8 @@ class Geography(models.Model):
         return self.display_name if self.display_name else self.name
 
 
-class SeverityPyramidRung(models.Model):
+class SeverityPyramidRung(NaturalKeyModel):
+    NATURAL_KEY = ("name", "used_in")
 
     name: models.CharField = models.CharField(verbose_name="Name", max_length=255)
     display_name: models.CharField = models.CharField(

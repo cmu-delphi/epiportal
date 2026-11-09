@@ -4,7 +4,10 @@ from tablib import Dataset
 from unittest.mock import MagicMock, patch
 
 import requests
+from django.apps import apps
+from django.conf import settings
 from django.contrib.messages.storage.fallback import FallbackStorage
+from django.core.management import call_command
 from django.http import HttpResponseForbidden
 from django.test import RequestFactory, TestCase, override_settings
 
@@ -12,6 +15,7 @@ from base.models import (
     GeographicScope,
     Geography,
     GeographyUnit,
+    NaturalKeyModel,
     Pathogen,
     SeverityPyramidRung,
 )
@@ -36,6 +40,49 @@ class PathogenModelTests(TestCase):
         Pathogen.objects.create(name="covid", used_in="indicators")
         with self.assertRaises(Exception):
             Pathogen.objects.create(name="covid", used_in="indicators")
+
+
+
+class FixtureLoadingTests(TestCase):
+    """Container start-up runs `loaddata ./fixtures/*.json` on every boot, on
+    top of rows the metadata sheet import created by name at whatever pk was
+    free. Loading must update those rows, not collide with them."""
+
+    def setUp(self):
+        self.paths = sorted(
+            str(p) for p in (settings.BASE_DIR / "fixtures").glob("*.json")
+        )
+        self.fixtures = {}
+        for path in self.paths:
+            with open(path) as f:
+                for obj in json.load(f):
+                    self.fixtures.setdefault(obj["model"].lower(), []).append(obj)
+
+    def test_lookup_fixtures_carry_no_pks(self):
+        for label, objects in self.fixtures.items():
+            if issubclass(apps.get_model(label), NaturalKeyModel):
+                self.assertFalse(any("pk" in o for o in objects), label)
+
+    def test_loads_over_imported_rows_and_is_repeatable(self):
+        imported = {}
+        for i, (label, objects) in enumerate(self.fixtures.items()):
+            model = apps.get_model(label)
+            if issubclass(model, NaturalKeyModel):
+                imported[label] = model.objects.create(
+                    pk=9000 + i, **objects[0]["fields"]
+                ).pk
+
+        call_command("loaddata", *self.paths, verbosity=0)
+        call_command("loaddata", *self.paths, verbosity=0)
+
+        for label, objects in self.fixtures.items():
+            model = apps.get_model(label)
+            self.assertEqual(model.objects.count(), len(objects), label)
+        for label, pk in imported.items():
+            self.assertTrue(apps.get_model(label).objects.filter(pk=pk).exists())
+        # Units point at the geography by name, wherever its row ended up.
+        nation = GeographyUnit.objects.get(geo_id="US")
+        self.assertEqual(nation.geo_level.natural_key(), ("nation", "indicatorsets"))
 
 
 class GeographicMappingTests(TestCase):
@@ -76,10 +123,106 @@ class CustomModelResourceTests(TestCase):
         self.assertTrue(Pathogen.objects.filter(name="keep").exists())
         self.assertFalse(Pathogen.objects.filter(name="remove").exists())
 
+    def test_after_import_records_deleted_count(self):
+        Pathogen.objects.create(name="keep", used_in="indicators")
+        Pathogen.objects.create(name="remove", used_in="indicators")
+
+        resource = PathogenResource()
+        dataset = Dataset(headers=["name", "used_in"])
+        dataset.append(["keep", "indicators"])
+
+        resource.import_data(dataset, dry_run=False)
+
+        self.assertEqual(resource.deleted_count, 1)
+
     def test_imported_rows_pks_reset_per_import_instance(self):
         resource = PathogenResource()
-        resource.before_import(None, dry_run=True)
+        resource.before_import(Dataset(headers=["name", "used_in"]), dry_run=True)
         self.assertEqual(resource.imported_rows_pks, [])
+
+    def test_missing_field_column_aborts_import_and_keeps_rows(self):
+        Pathogen.objects.create(name="keep", used_in="indicators")
+        dataset = Dataset(headers=["name"])
+        dataset.append(["new"])
+
+        result = PathogenResource().import_data(dataset, dry_run=False)
+
+        self.assertTrue(result.has_errors())
+        self.assertIn("'used_in'", str(result.base_errors[0].error))
+        self.assertEqual(
+            list(Pathogen.objects.values_list("name", flat=True)), ["keep"]
+        )
+
+    def test_missing_required_column_aborts_import(self):
+        Pathogen.objects.create(name="keep", used_in="indicators")
+        dataset = Dataset(headers=["name", "used_in"])
+        dataset.append(["new", "indicators"])
+
+        result = HidingPathogenResource().import_data(dataset, dry_run=False)
+
+        self.assertTrue(result.has_errors())
+        self.assertIn("'hide'", str(result.base_errors[0].error))
+        self.assertEqual(
+            list(Pathogen.objects.values_list("name", flat=True)), ["keep"]
+        )
+
+    def test_error_names_every_missing_column(self):
+        result = HidingPathogenResource().import_data(
+            Dataset(headers=["other"]), dry_run=False
+        )
+        message = str(result.base_errors[0].error)
+        for column in ("'name'", "'used_in'", "'hide'"):
+            self.assertIn(column, message)
+
+    def test_is_excluded_defaults_to_false(self):
+        self.assertIs(PathogenResource().is_excluded({"name": "any"}), False)
+
+
+class HidingPathogenResource(PathogenResource):
+    required_columns = ("hide",)
+
+    class Meta(PathogenResource.Meta):
+        skip_unchanged = True
+
+    def is_excluded(self, row) -> bool:
+        return row.get("hide") == "yes"
+
+
+def hiding_dataset(*rows: tuple[str, str]) -> Dataset:
+    dataset = Dataset(headers=["name", "used_in", "hide"])
+    for name, hide in rows:
+        dataset.append([name, "indicators", hide])
+    return dataset
+
+
+class CustomModelResourceExclusionTests(TestCase):
+    def test_excluded_row_is_skipped_and_its_existing_object_deleted(self):
+        Pathogen.objects.create(name="hidden", used_in="indicators")
+
+        result = HidingPathogenResource().import_data(
+            hiding_dataset(("hidden", "yes")), dry_run=False, raise_errors=True
+        )
+
+        self.assertEqual(result.totals["skip"], 1)
+        self.assertFalse(Pathogen.objects.filter(name="hidden").exists())
+
+    def test_excluded_new_row_is_not_created(self):
+        HidingPathogenResource().import_data(
+            hiding_dataset(("hidden", "yes")), dry_run=False, raise_errors=True
+        )
+        self.assertFalse(Pathogen.objects.exists())
+
+    def test_unchanged_row_is_skipped_but_kept(self):
+        pathogen = Pathogen.objects.create(name="same", used_in="indicators")
+
+        result = HidingPathogenResource().import_data(
+            hiding_dataset(("same", "")), dry_run=False, raise_errors=True
+        )
+
+        self.assertEqual(result.totals["skip"], 1)
+        self.assertEqual(
+            list(Pathogen.objects.values_list("pk", flat=True)), [pathogen.pk]
+        )
 
 
 class EpidataProxyViewTests(TestCase):

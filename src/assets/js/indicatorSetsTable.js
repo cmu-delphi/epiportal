@@ -75,15 +75,21 @@ var table = new DataTable("#indicatorSetsTable", {
             data: null,
             defaultContent: ''
         },  // dt-control column
-        { 
+        {
             data: null,
             render: function (data, type, row) {
-                if (row.geographic_scope != 'United States' && !row.name.includes(row.geographic_scope)) {
-                    return `${row.name} ${row.geographic_scope}`
-                } else {
-                    return row.name
+                var label = indicatorSetLabel(row);
+                if (type !== "display") {
+                    return label;
                 }
-            } 
+                // Opens the indicator set's metadata panel (indicatorSetPanel.js).
+                // The description shows in a popover on hover (see initNameLinkPopovers).
+                var description = (row.description || "").trim();
+                var popoverAttrs = description
+                    ? ` data-mdb-content="${escapeAttr(description)}. \nFor more information, click on the indicator set name."`
+                    : ' title="Show indicator set details"';
+                return `<a href="#" role="button" class="indicator-set-name-link"${popoverAttrs}>${escapeAttr(label)}</a>`;
+            }
         },  // Name
         {
             data: "pathogens",
@@ -105,7 +111,6 @@ var table = new DataTable("#indicatorSetsTable", {
                 }
             }
         }, // Geographic Levels
-        { data: "temporal_scope_start" },  // Temporal Scope Start
         { data: "temporal_scope_end" },  // Temporal Scope End
         {
             data: "temporal_granularity",
@@ -117,10 +122,6 @@ var table = new DataTable("#indicatorSetsTable", {
                 }
             }
         }, // Temporal Granularity
-        { data: "reporting_cadence" },  // Reporting Cadence
-        { data: "reporting_lag" },  // Reporting Lag
-        { data: "revision_cadence" }, // Revision Cadence
-        { data: "demographic_granularity" }, // Population Stratifiers
         {
             data: "severity_pyramid_rungs",
             render: function (data, type, row) {
@@ -132,7 +133,6 @@ var table = new DataTable("#indicatorSetsTable", {
             }
         }, // Surveillance Categories
         { data: "original_data_provider" }, // Original Data Provider
-        { data: "delphi_hosted" }, // Hosted by Delphi?
     ],
     fixedHeader: true,
     paging: false,
@@ -143,6 +143,9 @@ var table = new DataTable("#indicatorSetsTable", {
         left: 3,
     },
     ordering: false,
+    // DataTables' own width calculation sizes columns wider than the container,
+    // which forces a horizontal scrollbar; the browser's table layout fits them.
+    autoWidth: false,
     mark: true,
     language: {
         emptyTable: "No indicators match your specified filters.  Try relaxing some filters, or clear all filters and try again.",
@@ -196,23 +199,62 @@ var table = new DataTable("#indicatorSetsTable", {
     },
 });
 
+var lastColumnsWidth = null;
+
+/* With autoWidth off, DataTables pins every column's width and min-width
+ * (on the <col>s of both the header and body tables) to what they were at
+ * the first draw and never recomputes them. When the container then changes
+ * width the body reflows but the separate header table does not, so the
+ * column borders drift apart, or the pinned widths force a horizontal
+ * scrollbar. Unpin them and let DataTables re-measure. */
+function fitColumnsToContainer() {
+    var wrapper = document.getElementById("indicatorSetsTable_wrapper");
+    var container = wrapper?.closest(".table-container");
+    if (!container || container.clientWidth === lastColumnsWidth) {
+        return;
+    }
+    lastColumnsWidth = container.clientWidth;
+    wrapper.querySelectorAll("col").forEach(function (col) {
+        col.style.width = "";
+        col.style.minWidth = "";
+    });
+    table.columns.adjust();
+}
+
+function fitToContainer() {
+    fitColumnsToContainer();
+    fitTableToContainer();
+}
+
 table.on("init", function () {
+    lastColumnsWidth = document
+        .getElementById("indicatorSetsTable_wrapper")
+        ?.closest(".table-container")?.clientWidth ?? null;
     fitTableToContainer();
     // Refit whenever the space changes: the window or filter panel resizes the
     // container, and the rows around the body grow as the stats line loads and
     // the selection toolbar wraps. The body's own row is left out, since the
     // fit itself resizes it.
     if (typeof ResizeObserver === "function") {
-        var observer = new ResizeObserver(fitTableToContainer);
+        var observer = new ResizeObserver(fitToContainer);
         var wrapper = document.getElementById("indicatorSetsTable_wrapper");
         observer.observe(wrapper.closest(".table-container"));
         wrapper.querySelectorAll(".dt-layout-row:not(.dt-layout-table)").forEach(function (row) {
             observer.observe(row);
         });
     } else {
-        window.addEventListener("resize", fitTableToContainer);
+        window.addEventListener("resize", fitToContainer);
     }
 });
+
+// The set's name as the table shows it: sets outside the United States get
+// their geographic scope appended unless the name already mentions it.
+function indicatorSetLabel(row) {
+    if (row.geographic_scope && row.geographic_scope != 'United States' && !row.name.includes(row.geographic_scope)) {
+        return `${row.name} ${row.geographic_scope}`;
+    }
+    return row.name;
+}
 
 function escapeAttr(str) {
     return String(str ?? "")
@@ -223,49 +265,69 @@ function escapeAttr(str) {
         .replace(/>/g, "&gt;");
 }
 
-function initIndicatorPopovers(childContainer) {
-    if (!childContainer || typeof mdb === "undefined") {
-        return;
+/* Indicator set descriptions in a popover on the set name. The table has no
+ * paging, so popovers are created on first hover rather than for every row up
+ * front, and shown and hidden by hand so the first hover already shows one.
+ * MDB loads after this script (at the end of index.html), so `mdb` is only
+ * looked up inside the handlers, never at bind time.
+ *
+ * Hiding waits a moment so small cursor slips off the link, or moving onto the
+ * popover itself, don't close it. Animation is off because MDB's hide finishes
+ * after the fade and then disposes the popover unconditionally, which would
+ * kill a popover re-shown during that fade. */
+function initNameLinkPopovers() {
+    var selector = ".indicator-set-name-link[data-mdb-content]";
+    var popoverClass = "indicator-set-name-popover";
+    var hideDelayMs = 200;
+    var activeLink = null;
+    var hideTimer = null;
+
+    function cancelHide() {
+        clearTimeout(hideTimer);
+        hideTimer = null;
     }
-    $(childContainer).find("[data-mdb-popover-init]").each(function () {
-        const existing = mdb.Popover.getInstance(this);
-        if (existing) {
-            existing.dispose();
+    function hideNow() {
+        cancelHide();
+        if (activeLink && typeof mdb !== "undefined") {
+            mdb.Popover.getInstance(activeLink)?.hide();
         }
-        new mdb.Popover(this, {
+        activeLink = null;
+    }
+    function scheduleHide() {
+        cancelHide();
+        hideTimer = setTimeout(hideNow, hideDelayMs);
+    }
+    function show(link) {
+        cancelHide();
+        if (typeof mdb === "undefined" || link === activeLink) {
+            return;
+        }
+        hideNow();
+        mdb.Popover.getOrCreateInstance(link, {
             container: "body",
-            trigger: "hover",
-            delay: { show: 0, hide: 100 },
-        });
-    });
-}
-
-function buildIndicatorSetMetadata(rowData) {
-    var fields = [
-        { label: "Population", value: rowData.demographic_scope },
-        { label: "Pre-processing", value: rowData.preprocessing_description },
-        { label: "Censoring", value: rowData.censoring },
-        { label: "Missingness", value: rowData.missingness },
-        { label: "DUA required?", value: rowData.dua_required },
-        { label: "Data Use Terms", value: rowData.license },
-        {
-            label: "Documentation",
-            value: rowData.documentation_link
-                ? `<a href="${rowData.documentation_link}" target="_blank">View documentation</a>`
-                : "",
-        },
-    ].filter((field) => field.value);
-
-    if (fields.length === 0) {
-        return "";
+            placement: "bottom",
+            trigger: "manual",
+            animation: false,
+            customClass: popoverClass,
+        }).show();
+        activeLink = link;
     }
 
-    var rows = fields
-        .map((field) => `<div style="font-weight:600;">${field.label}</div><div>${field.value}</div>`)
-        .join("");
-
-    return `<div style="display:grid;grid-template-columns:120px 1fr;gap:4px 12px;margin-bottom:12px;">${rows}</div>`;
+    $("#indicatorSetsTable tbody")
+        .on("mouseenter focusin", selector, function () {
+            show(this);
+        })
+        .on("mouseleave focusout", selector, scheduleHide)
+        .on("click", selector, hideNow);
+    // Keep the popover open while the pointer is over it.
+    $(document)
+        .on("mouseenter", "." + popoverClass, cancelHide)
+        .on("mouseleave", "." + popoverClass, scheduleHide);
+    // A redraw can remove the hovered row, which would strand its popover.
+    table.on("preDraw", hideNow);
 }
+
+initNameLinkPopovers();
 
 function format(rowData, relatedIndicators) {
     if (!relatedIndicators) {
@@ -284,7 +346,7 @@ function format(rowData, relatedIndicators) {
     var disabled, restricted, sourceType;
 
     if (indicators.length > 0) {
-        var data = `<p style="width: 40%;">${rowData.description}</p>` + buildIndicatorSetMetadata(rowData);
+        var data = "";
         var tableMarkup =
             '<table class="table" cellpadding="5" cellspacing="0" border="0" style="padding-left:50px;">' +
             "<thead>" +
@@ -292,7 +354,6 @@ function format(rowData, relatedIndicators) {
             "<th>Indicator Name</th>" +
             "<th>Indicator API Name</th>" +
             "<th>Indicator Description</th>" +
-            "<th></th>" +
             "</thead>" +
             "<tbody>";
         indicators.forEach((indicator) => {
@@ -305,8 +366,8 @@ function format(rowData, relatedIndicators) {
             checked = checked ? "checked" : "";
             const enabledEndpoints = ["covidcast", "fluview", "nidss_flu", "nidss_dengue", "flusurv", "pophive", "nwss"];
             disabled = enabledEndpoints.includes(indicator.endpoint) ? "" : "disabled";
-            sourceType = indicator.source_type;
-            var restricted = indicator.restricted != "No";
+            sourceType = indicator.kind;
+            var restricted = indicator.restricted === true;
             if (disabled === "disabled") {
                 checkboxTitle =
                     "Visualization functionality for this endpoint is coming soon.";
@@ -319,21 +380,20 @@ function format(rowData, relatedIndicators) {
             
             tableMarkup +=
                 "<tr>" +
-                `<td><input ${disabled} title="${checkboxTitle}" type="checkbox" name="selectedIndicator" onclick="addSelectedIndicator(this)" data-indicator-displayname='${indicator.display_name}' data-endpoint="${indicator.endpoint}" data-datasource="${indicator.source}" data-indicator="${indicator.name}" data-time-type="${indicator.time_type}" data-indicator-set="${indicator.indicator_set_name}" data-indicator-set-short-name="${indicator.indicator_set_short_name}" data-member-short-name="${indicator.member_short_name}" ${checked}></td>` +
-                `<td><span tabindex="0" data-mdb-container="body" data-mdb-popover-init data-mdb-trigger="hover" data-mdb-placement="right" data-mdb-content="${escapeAttr(indicator.description)}">${indicator.display_name}</span></td>` +
-                `<td>${indicator.member_name}</td>` +
-                `<td>${indicator.member_description}</td>` +
-                '<td style="width: 60%"></td>' +
+                `<td><input ${disabled} title="${checkboxTitle}" type="checkbox" name="selectedIndicator" onclick="addSelectedIndicator(this)" data-indicator-displayname='${indicator.display_name}' data-endpoint="${indicator.endpoint}" data-datasource="${indicator.source}" data-indicator="${indicator.name}" data-time-type="${indicator.time_type}" data-indicator-set="${indicator.indicator_set_name}" data-indicator-set-short-name="${indicator.indicator_set_short_name}" ${checked}></td>` +
+                `<td>${indicator.display_name}</td>` +
+                `<td>${indicator.name}</td>` +
+                `<td>${indicator.description}</td>` +
                 "</tr>";
         });
         tableMarkup += "</tbody></table>";
         if (disabled === "disabled" || restricted) {
-            if (sourceType === "non_delphi" && sourceType != "us_state") {
+            if (sourceType === "non_delphi") {
                 data +=
                     `<div class="alert alert-warning" data-mdb-alert-init role="alert">` +
                     `   <div>This indicator set is not available via Delphi.  It is included here for general discoverability only, and may or may not be available from the Original Data Provider.</div>` +
                     "</div>";
-            } else if (sourceType === "us_state") {
+            } else if (sourceType === "us_states") {
                 data +=
                     `<div class="alert alert-warning" data-mdb-alert-init role="alert">` +
                     `   <div>This indicator set is not hosted by Delphi and is listed here for discoverability.  It can be found on the website listed under "Documentation".</div>` +
@@ -349,7 +409,7 @@ function format(rowData, relatedIndicators) {
 
         data += tableMarkup;
     } else {
-        data = buildIndicatorSetMetadata(rowData) + "<p>No available indicators yet.</p>";
+        data = "<p>No available indicators yet.</p>";
     }
     return data;
 }

@@ -7,7 +7,7 @@
             "name": "Boston",
             "display_name": "HHS Region 1",
             "level": 2,
-            "geo_level": 2
+            "geo_level": ["hhs", "indicatorsets"]
         }
     },
     {
@@ -18,7 +18,7 @@
             "name": "New York",
             "display_name": "HHS Region 2",
             "level": 2,
-            "geo_level": 2
+            "geo_level": ["hhs", "indicatorsets"]
         }
     },
     {
@@ -29,7 +29,7 @@
             "name": "Philadelphia",
             "display_name": "HHS Region 3",
             "level": 2,
-            "geo_level": 2
+            "geo_level": ["hhs", "indicatorsets"]
         }
     },
     {
@@ -40,7 +40,7 @@
             "name": "Atlanta",
             "display_name": "HHS Region 4",
             "level": 2,
-            "geo_level": 2
+            "geo_level": ["hhs", "indicatorsets"]
         }
     },
     {
@@ -51,7 +51,7 @@
             "name": "Chicago",
             "display_name": "HHS Region 5",
             "level": 2,
-            "geo_level": 2
+            "geo_level": ["hhs", "indicatorsets"]
         }
     },
     {
@@ -62,7 +62,7 @@
             "name": "Dallas",
             "display_name": "HHS Region 6",
             "level": 2,
-            "geo_level": 2
+            "geo_level": ["hhs", "indicatorsets"]
         }
     },
     {
@@ -73,7 +73,7 @@
             "name": "Kansas City",
             "display_name": "HHS Region 7",
             "level": 2,
-            "geo_level": 2
+            "geo_level": ["hhs", "indicatorsets"]
         }
     },
     {
@@ -84,7 +84,7 @@
             "name": "Denver",
             "display_name": "HHS Region 8",
             "level": 2,
-            "geo_level": 2
+            "geo_level": ["hhs", "indicatorsets"]
         }
     },
     {
@@ -95,7 +95,7 @@
             "name": "San Francisco",
             "display_name": "HHS Region 9",
             "level": 2,
-            "geo_level": 2
+            "geo_level": ["hhs", "indicatorsets"]
         }
     },
     {
@@ -106,7 +106,7 @@
             "name": "Seattle",
             "display_name": "HHS Region 10",
             "level": 2,
-            "geo_level": 2
+            "geo_level": ["hhs", "indicatorsets"]
         }
     }
 ]

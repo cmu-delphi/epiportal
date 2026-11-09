@@ -1,28 +1,24 @@
 [
     {
         "model": "indicators.Category",
-        "pk": 1,
         "fields": {
             "name": "public"
         }
     },
     {
         "model": "indicators.Category",
-        "pk": 2,
         "fields": {
             "name": "early"
         }
     },
     {
         "model": "indicators.Category",
-        "pk": 3,
         "fields": {
             "name": "cases_testing"
         }
     },
     {
         "model": "indicators.Category",
-        "pk": 4,
         "fields": {
             "name": "late"
         }

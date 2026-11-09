@@ -1,7 +1,6 @@
 [
     {
         "model": "base.geographicscope",
-        "pk": 1,
         "fields": {
             "name": "United States",
             "used_in": "indicatorsets",
@@ -10,7 +9,6 @@
     },
     {
         "model": "base.geographicscope",
-        "pk": 2,
         "fields": {
             "name": "Europe and Central Asia",
             "used_in": "indicatorsets",
@@ -19,7 +17,6 @@
     },
     {
         "model": "base.geographicscope",
-        "pk": 3,
         "fields": {
             "name": "North and South America",
             "used_in": "indicatorsets",
@@ -28,7 +25,6 @@
     },
     {
         "model": "base.geographicscope",
-        "pk": 4,
         "fields": {
             "name": "South Korea",
             "used_in": "indicatorsets",
@@ -37,7 +33,6 @@
     },
     {
         "model": "base.geographicscope",
-        "pk": 5,
         "fields": {
             "name": "Taiwan",
             "used_in": "indicatorsets",
@@ -46,7 +41,6 @@
     },
     {
         "model": "base.geographicscope",
-        "pk": 6,
         "fields": {
             "name": "Worldwide",
             "used_in": "indicatorsets",

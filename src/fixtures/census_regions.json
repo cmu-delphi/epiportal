@@ -6,7 +6,7 @@
             "name": "Census Region 1",
             "display_name": "Census Region 1",
             "level": 3,
-            "geo_level": 3
+            "geo_level": ["census-region", "indicatorsets"]
         },
         "pk": 4947
     },
@@ -17,7 +17,7 @@
             "name": "Census Region 2",
             "display_name": "Census Region 2",
             "level": 3,
-            "geo_level": 3
+            "geo_level": ["census-region", "indicatorsets"]
         },
         "pk": 4948
     },
@@ -28,7 +28,7 @@
             "name": "Census Region 3",
             "display_name": "Census Region 3",
             "level": 3,
-            "geo_level": 3
+            "geo_level": ["census-region", "indicatorsets"]
         },
         "pk": 4949
     },
@@ -39,7 +39,7 @@
             "name": "Census Region 4",
             "display_name": "Census Region 4",
             "level": 3,
-            "geo_level": 3
+            "geo_level": ["census-region", "indicatorsets"]
         },
         "pk": 4950
     },
@@ -50,7 +50,7 @@
             "name": "Census Region 5",
             "display_name": "Census Region 5",
             "level": 3,
-            "geo_level": 3
+            "geo_level": ["census-region", "indicatorsets"]
         },
         "pk": 4951
     },
@@ -61,7 +61,7 @@
             "name": "Census Region 6",
             "display_name": "Census Region 6",
             "level": 3,
-            "geo_level": 3
+            "geo_level": ["census-region", "indicatorsets"]
         },
         "pk": 4952
     },
@@ -72,7 +72,7 @@
             "name": "Census Region 7",
             "display_name": "Census Region 7",
             "level": 3,
-            "geo_level": 3
+            "geo_level": ["census-region", "indicatorsets"]
         },
         "pk": 4953
     },
@@ -83,7 +83,7 @@
             "name": "Census Region 8",
             "display_name": "Census Region 8",
             "level": 3,
-            "geo_level": 3
+            "geo_level": ["census-region", "indicatorsets"]
         },
         "pk": 4954
     },
@@ -94,7 +94,7 @@
             "name": "Census Region 9",
             "display_name": "Census Region 9",
             "level": 3,
-            "geo_level": 3
+            "geo_level": ["census-region", "indicatorsets"]
         },
         "pk": 4955
     }

@@ -1,10 +1,11 @@
 from django.db import models
 
-from base.models import SOURCE_TYPES
+from base.models import NaturalKeyModel
 
 
 # Create your models here.
-class IndicatorType(models.Model):
+class IndicatorType(NaturalKeyModel):
+    NATURAL_KEY = ("name",)
 
     name: models.CharField = models.CharField(
         verbose_name="Name", max_length=255, unique=True
@@ -28,7 +29,8 @@ class IndicatorType(models.Model):
         return self.display_name if self.display_name else self.name
 
 
-class FormatType(models.Model):
+class FormatType(NaturalKeyModel):
+    NATURAL_KEY = ("name",)
 
     name: models.CharField = models.CharField(
         verbose_name="Name", max_length=255, unique=True
@@ -52,7 +54,9 @@ class FormatType(models.Model):
         return self.display_name if self.display_name else self.name
 
 
-class Category(models.Model):
+class Category(NaturalKeyModel):
+    NATURAL_KEY = ("name",)
+
     name: models.CharField = models.CharField(
         verbose_name="Name", max_length=255, unique=True
     )
@@ -75,50 +79,6 @@ class Category(models.Model):
         return self.display_name if self.display_name else self.name
 
 
-class IndicatorGeography(models.Model):
-
-    geography: models.ForeignKey = models.ForeignKey(
-        "base.Geography",
-        verbose_name="Geography",
-        on_delete=models.CASCADE,
-        related_name="indicator_geographies",
-    )
-
-    indicator: models.ForeignKey = models.ForeignKey(
-        "indicators.Indicator",
-        verbose_name="Indicator",
-        on_delete=models.CASCADE,
-        related_name="indicator_geographies",
-    )
-    aggregated_by_delphi: models.BooleanField = models.BooleanField(
-        verbose_name="Aggregated by Delphi",
-        default=False,
-        help_text="Indicates if the geography is aggregated by Delphi",
-    )
-
-    class Meta:
-        verbose_name = "Indicator Geography"
-        verbose_name_plural = "Indicator Geographies"
-        ordering = ["geography"]
-        indexes = [
-            models.Index(fields=["geography"], name="indicator_geography_idx"),
-        ]
-        constraints = [
-            models.UniqueConstraint(
-                fields=["geography", "indicator"],
-                name="unique_indicator_geography",
-            )
-        ]
-
-    @property
-    def display_name(self):
-        return (
-            f"{self.geography.display_name} (by Delphi)"
-            if self.aggregated_by_delphi
-            else self.geography.display_name
-        )
-
-
 class Indicator(models.Model):
 
     name: models.CharField = models.CharField(verbose_name="Name", max_length=255)
@@ -130,15 +90,6 @@ class Indicator(models.Model):
     )
     short_description: models.TextField = models.TextField(
         verbose_name="Short Description", blank=True
-    )
-    member_name: models.CharField = models.CharField(
-        verbose_name="Member Name", max_length=255, blank=True
-    )
-    member_short_name: models.CharField = models.CharField(
-        verbose_name="Member Short Name", max_length=255, blank=True
-    )
-    member_description: models.TextField = models.TextField(
-        verbose_name="Member Description", blank=True
     )
     pathogens: models.ManyToManyField = models.ManyToManyField(
         "base.Pathogen",
@@ -263,6 +214,11 @@ class Indicator(models.Model):
         blank=True,
         help_text="Note about the temporal scope end date",
     )
+    ongoing: models.BooleanField = models.BooleanField(
+        verbose_name="Ongoing",
+        default=False,
+        help_text="Indicates if the indicator is still being updated",
+    )
     is_smoothed: models.BooleanField = models.BooleanField(
         verbose_name="Is Smoothed",
         default=False,
@@ -335,30 +291,6 @@ class Indicator(models.Model):
         blank=True,
         help_text="Restrictions on the use of the indicator",
     )
-    last_updated: models.DateField = models.DateField(
-        verbose_name="Last Updated",
-        blank=True,
-        null=True,
-        help_text="Date when the indicator was last updated",
-    )
-    from_date: models.DateField = models.DateField(
-        verbose_name="From Date",
-        blank=True,
-        null=True,
-        help_text="Date when the indicator was created",
-    )
-    to_date: models.DateField = models.DateField(
-        verbose_name="To Date",
-        blank=True,
-        null=True,
-        help_text="Date when the indicator was deleted",
-    )
-    indicator_availability_days: models.IntegerField = models.IntegerField(
-        verbose_name="Indicator Availability Days",
-        blank=True,
-        null=True,
-        help_text="Number of days the indicator is available",
-    )
     indicator_set: models.ForeignKey = models.ForeignKey(
         "indicatorsets.IndicatorSet",
         verbose_name="Indicator Set",
@@ -366,22 +298,6 @@ class Indicator(models.Model):
         related_name="indicators",
         null=True,
         blank=True,
-    )
-
-    source_type: models.CharField = models.CharField(
-        verbose_name="Source Type",
-        max_length=255,
-        choices=SOURCE_TYPES,
-        default="covidcast",
-        help_text="Type of source for the indicator",
-        blank=True,
-        null=True,
-    )
-
-    use_in_express_interface: models.BooleanField = models.BooleanField(
-        verbose_name="Use in Express Interface",
-        default=False,
-        help_text="Indicates if the indicator is used in the Express Interface",
     )
 
     class Meta:
@@ -415,33 +331,4 @@ class Indicator(models.Model):
 
     @property
     def get_display_name(self):
-        if self.display_name:
-            return self.display_name
-        if self.member_name:
-            return self.member_name
-        else:
-            return self.name
-
-
-class OtherEndpointIndicator(Indicator):
-
-    class Meta:
-        proxy = True
-        verbose_name = "Other Endpoint Indicator"
-        verbose_name_plural = "Other Endpoint Indicators"
-
-
-class NonDelphiIndicator(Indicator):
-
-    class Meta:
-        proxy = True
-        verbose_name = "Non-Delphi Indicator"
-        verbose_name_plural = "Non-Delphi Indicators"
-
-
-class USStateIndicator(Indicator):
-
-    class Meta:
-        proxy = True
-        verbose_name = "US State Indicator"
-        verbose_name_plural = "US State Indicators"
+        return self.display_name or self.name

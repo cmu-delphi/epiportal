@@ -7,7 +7,7 @@
             "name": "United States",
             "display_name": "United States",
             "level": 1,
-            "geo_level": 1
+            "geo_level": ["nation", "indicatorsets"]
         }
     }
 ]

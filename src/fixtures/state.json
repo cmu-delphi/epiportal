@@ -7,7 +7,7 @@
             "name": "Alabama",
             "display_name": "Alabama",
             "level": 5,
-            "geo_level": 5
+            "geo_level": ["state", "indicatorsets"]
         }
     },
     {
@@ -18,7 +18,7 @@
             "name": "Alaska",
             "display_name": "Alaska",
             "level": 5,
-            "geo_level": 5
+            "geo_level": ["state", "indicatorsets"]
         }
     },
     {
@@ -29,7 +29,7 @@
             "name": "Arizona",
             "display_name": "Arizona",
             "level": 5,
-            "geo_level": 5
+            "geo_level": ["state", "indicatorsets"]
         }
     },
     {
@@ -40,7 +40,7 @@
             "name": "Arkansas",
             "display_name": "Arkansas",
             "level": 5,
-            "geo_level": 5
+            "geo_level": ["state", "indicatorsets"]
         }
     },
     {
@@ -51,7 +51,7 @@
             "name": "California",
             "display_name": "California",
             "level": 5,
-            "geo_level": 5
+            "geo_level": ["state", "indicatorsets"]
         }
     },
     {
@@ -62,7 +62,7 @@
             "name": "Colorado",
             "display_name": "Colorado",
             "level": 5,
-            "geo_level": 5
+            "geo_level": ["state", "indicatorsets"]
         }
     },
     {
@@ -73,7 +73,7 @@
             "name": "Connecticut",
             "display_name": "Connecticut",
             "level": 5,
-            "geo_level": 5
+            "geo_level": ["state", "indicatorsets"]
         }
     },
     {
@@ -84,7 +84,7 @@
             "name": "Delaware",
             "display_name": "Delaware",
             "level": 5,
-            "geo_level": 5
+            "geo_level": ["state", "indicatorsets"]
         }
     },
     {
@@ -95,7 +95,7 @@
             "name": "District of Columbia",
             "display_name": "District of Columbia",
             "level": 5,
-            "geo_level": 5
+            "geo_level": ["state", "indicatorsets"]
         }
     },
     {
@@ -106,7 +106,7 @@
             "name": "Florida",
             "display_name": "Florida",
             "level": 5,
-            "geo_level": 5
+            "geo_level": ["state", "indicatorsets"]
         }
     },
     {
@@ -117,7 +117,7 @@
             "name": "Georgia",
             "display_name": "Georgia",
             "level": 5,
-            "geo_level": 5
+            "geo_level": ["state", "indicatorsets"]
         }
     },
     {
@@ -128,7 +128,7 @@
             "name": "Hawaii",
             "display_name": "Hawaii",
             "level": 5,
-            "geo_level": 5
+            "geo_level": ["state", "indicatorsets"]
         }
     },
     {
@@ -139,7 +139,7 @@
             "name": "Idaho",
             "display_name": "Idaho",
             "level": 5,
-            "geo_level": 5
+            "geo_level": ["state", "indicatorsets"]
         }
     },
     {
@@ -150,7 +150,7 @@
             "name": "Illinois",
             "display_name": "Illinois",
             "level": 5,
-            "geo_level": 5
+            "geo_level": ["state", "indicatorsets"]
         }
     },
     {
@@ -161,7 +161,7 @@
             "name": "Indiana",
             "display_name": "Indiana",
             "level": 5,
-            "geo_level": 5
+            "geo_level": ["state", "indicatorsets"]
         }
     },
     {
@@ -172,7 +172,7 @@
             "name": "Iowa",
             "display_name": "Iowa",
             "level": 5,
-            "geo_level": 5
+            "geo_level": ["state", "indicatorsets"]
         }
     },
     {
@@ -183,7 +183,7 @@
             "name": "Kansas",
             "display_name": "Kansas",
             "level": 5,
-            "geo_level": 5
+            "geo_level": ["state", "indicatorsets"]
         }
     },
     {
@@ -194,7 +194,7 @@
             "name": "Kentucky",
             "display_name": "Kentucky",
             "level": 5,
-            "geo_level": 5
+            "geo_level": ["state", "indicatorsets"]
         }
     },
     {
@@ -205,7 +205,7 @@
             "name": "Louisiana",
             "display_name": "Louisiana",
             "level": 5,
-            "geo_level": 5
+            "geo_level": ["state", "indicatorsets"]
         }
     },
     {
@@ -216,7 +216,7 @@
             "name": "Maine",
             "display_name": "Maine",
             "level": 5,
-            "geo_level": 5
+            "geo_level": ["state", "indicatorsets"]
         }
     },
     {
@@ -227,7 +227,7 @@
             "name": "Maryland",
             "display_name": "Maryland",
             "level": 5,
-            "geo_level": 5
+            "geo_level": ["state", "indicatorsets"]
         }
     },
     {
@@ -238,7 +238,7 @@
             "name": "Massachusetts",
             "display_name": "Massachusetts",
             "level": 5,
-            "geo_level": 5
+            "geo_level": ["state", "indicatorsets"]
         }
     },
     {
@@ -249,7 +249,7 @@
             "name": "Michigan",
             "display_name": "Michigan",
             "level": 5,
-            "geo_level": 5
+            "geo_level": ["state", "indicatorsets"]
         }
     },
     {
@@ -260,7 +260,7 @@
             "name": "Minnesota",
             "display_name": "Minnesota",
             "level": 5,
-            "geo_level": 5
+            "geo_level": ["state", "indicatorsets"]
         }
     },
     {
@@ -271,7 +271,7 @@
             "name": "Mississippi",
             "display_name": "Mississippi",
             "level": 5,
-            "geo_level": 5
+            "geo_level": ["state", "indicatorsets"]
         }
     },
     {
@@ -282,7 +282,7 @@
             "name": "Missouri",
             "display_name": "Missouri",
             "level": 5,
-            "geo_level": 5
+            "geo_level": ["state", "indicatorsets"]
         }
     },
     {
@@ -293,7 +293,7 @@
             "name": "Montana",
             "display_name": "Montana",
             "level": 5,
-            "geo_level": 5
+            "geo_level": ["state", "indicatorsets"]
         }
     },
     {
@@ -304,7 +304,7 @@
             "name": "Nebraska",
             "display_name": "Nebraska",
             "level": 5,
-            "geo_level": 5
+            "geo_level": ["state", "indicatorsets"]
         }
     },
     {
@@ -315,7 +315,7 @@
             "name": "Nevada",
             "display_name": "Nevada",
             "level": 5,
-            "geo_level": 5
+            "geo_level": ["state", "indicatorsets"]
         }
     },
     {
@@ -326,7 +326,7 @@
             "name": "New Hampshire",
             "display_name": "New Hampshire",
             "level": 5,
-            "geo_level": 5
+            "geo_level": ["state", "indicatorsets"]
         }
     },
     {
@@ -337,7 +337,7 @@
             "name": "New Jersey",
             "display_name": "New Jersey",
             "level": 5,
-            "geo_level": 5
+            "geo_level": ["state", "indicatorsets"]
         }
     },
     {
@@ -348,7 +348,7 @@
             "name": "New Mexico",
             "display_name": "New Mexico",
             "level": 5,
-            "geo_level": 5
+            "geo_level": ["state", "indicatorsets"]
         }
     },
     {
@@ -359,7 +359,7 @@
             "name": "New York",
             "display_name": "New York",
             "level": 5,
-            "geo_level": 5
+            "geo_level": ["state", "indicatorsets"]
         }
     },
     {
@@ -370,7 +370,7 @@
             "name": "North Carolina",
             "display_name": "North Carolina",
             "level": 5,
-            "geo_level": 5
+            "geo_level": ["state", "indicatorsets"]
         }
     },
     {
@@ -381,7 +381,7 @@
             "name": "North Dakota",
             "display_name": "North Dakota",
             "level": 5,
-            "geo_level": 5
+            "geo_level": ["state", "indicatorsets"]
         }
     },
     {
@@ -392,7 +392,7 @@
             "name": "Ohio",
             "display_name": "Ohio",
             "level": 5,
-            "geo_level": 5
+            "geo_level": ["state", "indicatorsets"]
         }
     },
     {
@@ -403,7 +403,7 @@
             "name": "Oklahoma",
             "display_name": "Oklahoma",
             "level": 5,
-            "geo_level": 5
+            "geo_level": ["state", "indicatorsets"]
         }
     },
     {
@@ -414,7 +414,7 @@
             "name": "Oregon",
             "display_name": "Oregon",
             "level": 5,
-            "geo_level": 5
+            "geo_level": ["state", "indicatorsets"]
         }
     },
     {
@@ -425,7 +425,7 @@
             "name": "Pennsylvania",
             "display_name": "Pennsylvania",
             "level": 5,
-            "geo_level": 5
+            "geo_level": ["state", "indicatorsets"]
         }
     },
     {
@@ -436,7 +436,7 @@
             "name": "Rhode Island",
             "display_name": "Rhode Island",
             "level": 5,
-            "geo_level": 5
+            "geo_level": ["state", "indicatorsets"]
         }
     },
     {
@@ -447,7 +447,7 @@
             "name": "South Carolina",
             "display_name": "South Carolina",
             "level": 5,
-            "geo_level": 5
+            "geo_level": ["state", "indicatorsets"]
         }
     },
     {
@@ -458,7 +458,7 @@
             "name": "South Dakota",
             "display_name": "South Dakota",
             "level": 5,
-            "geo_level": 5
+            "geo_level": ["state", "indicatorsets"]
         }
     },
     {
@@ -469,7 +469,7 @@
             "name": "Tennessee",
             "display_name": "Tennessee",
             "level": 5,
-            "geo_level": 5
+            "geo_level": ["state", "indicatorsets"]
         }
     },
     {
@@ -480,7 +480,7 @@
             "name": "Texas",
             "display_name": "Texas",
             "level": 5,
-            "geo_level": 5
+            "geo_level": ["state", "indicatorsets"]
         }
     },
     {
@@ -491,7 +491,7 @@
             "name": "Utah",
             "display_name": "Utah",
             "level": 5,
-            "geo_level": 5
+            "geo_level": ["state", "indicatorsets"]
         }
     },
     {
@@ -502,7 +502,7 @@
             "name": "Vermont",
             "display_name": "Vermont",
             "level": 5,
-            "geo_level": 5
+            "geo_level": ["state", "indicatorsets"]
         }
     },
     {
@@ -513,7 +513,7 @@
             "name": "Virginia",
             "display_name": "Virginia",
             "level": 5,
-            "geo_level": 5
+            "geo_level": ["state", "indicatorsets"]
         }
     },
     {
@@ -524,7 +524,7 @@
             "name": "Washington",
             "display_name": "Washington",
             "level": 5,
-            "geo_level": 5
+            "geo_level": ["state", "indicatorsets"]
         }
     },
     {
@@ -535,7 +535,7 @@
             "name": "West Virginia",
             "display_name": "West Virginia",
             "level": 5,
-            "geo_level": 5
+            "geo_level": ["state", "indicatorsets"]
         }
     },
     {
@@ -546,7 +546,7 @@
             "name": "Wisconsin",
             "display_name": "Wisconsin",
             "level": 5,
-            "geo_level": 5
+            "geo_level": ["state", "indicatorsets"]
         }
     },
     {
@@ -557,7 +557,7 @@
             "name": "Wyoming",
             "display_name": "Wyoming",
             "level": 5,
-            "geo_level": 5
+            "geo_level": ["state", "indicatorsets"]
         }
     },
     {
@@ -568,7 +568,7 @@
             "name": "Puerto Rico",
             "display_name": "Puerto Rico",
             "level": 5,
-            "geo_level": 5
+            "geo_level": ["state", "indicatorsets"]
         }
     },
     {
@@ -579,7 +579,7 @@
             "name": "Virgin Islands",
             "display_name": "Virgin Islands",
             "level": 5,
-            "geo_level": 5
+            "geo_level": ["state", "indicatorsets"]
         }
     },
     {
@@ -590,7 +590,7 @@
             "name": "Guam",
             "display_name": "Guam",
             "level": 5,
-            "geo_level": 5
+            "geo_level": ["state", "indicatorsets"]
         }
     },
     {
@@ -601,7 +601,7 @@
             "name": "American Samoa",
             "display_name": "American Samoa",
             "level": 5,
-            "geo_level": 5
+            "geo_level": ["state", "indicatorsets"]
         }
     },
     {
@@ -612,7 +612,7 @@
             "name": "Northern Mariana Islands",
             "display_name": "Northern Mariana Islands",
             "level": 5,
-            "geo_level": 5
+            "geo_level": ["state", "indicatorsets"]
         }
     }
 ]
