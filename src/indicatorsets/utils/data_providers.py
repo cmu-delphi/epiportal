@@ -58,7 +58,7 @@ def get_grouped_original_data_provider_choices():
         ),
         "groups": [
             {
-                "label": "U.S. Government",
+                "label": "U.S. Federal Government",
                 "providers": sort_data_providers(
                     [p for p in provider_list if p.group == "us_government"]
                 ),
