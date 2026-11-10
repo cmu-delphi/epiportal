@@ -115,8 +115,12 @@ var table = new DataTable("#indicatorSetsTable", {
         {
             data: "temporal_granularity",
             render: function (data, type, row) {
+                var temporalGranularityBadges = [];
                 if (data) {
-                    return `<span class="badge badge-pill-outline">${data}</span>`;
+                    for (const granularity of data.split(',')) {
+                        temporalGranularityBadges.push(`<span class="badge badge-pill-outline">${granularity}</span>`);
+                    }
+                    return temporalGranularityBadges.join('');
                 } else {
                     return '';
                 }
