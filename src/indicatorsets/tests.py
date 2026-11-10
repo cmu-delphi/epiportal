@@ -4632,7 +4632,14 @@ class FillMethodPageContextTests(TestCase):
         response = self.client.get(reverse("indicatorsets"))
         self.assertEqual(
             json.loads(response.context["v5_data_sources"]),
-            sorted(MIGRATED_DATASOURCES),
+            sorted({*MIGRATED_DATASOURCES, "sleepcycle"}),
+        )
+
+    def test_page_exposes_the_covidcast_endpoints(self):
+        response = self.client.get(reverse("indicatorsets"))
+        self.assertEqual(
+            json.loads(response.context["covidcast_endpoints"]),
+            ["covidcast", "sleepcycle"],
         )
 
     def test_page_exposes_the_v5_native_endpoints(self):

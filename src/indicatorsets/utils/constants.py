@@ -36,3 +36,18 @@ LEGACY_FILL_METHODS = {"fill_ave": "ave", "fill_zero": "zero"}
 # Endpoints that are v5-native: they have no v4 equivalent to fall back to, so
 # they are not in MIGRATED_DATASOURCES yet every request for them is a v5 one.
 V5_NATIVE_ENDPOINTS = ("nwss", "pophive")
+
+# Covidcast-shaped sources that exist only on v5 ({"portal name": "v5 name"}):
+# keyed on signal/geo_type/geo_value/reference_time like a migrated covidcast
+# source, so they take the covidcast code paths, but never fall back to v4.
+# The portal name is both the indicators' data_source and their indicator
+# set's endpoint. Adding one here is all a new such source needs.
+V5_ONLY_DATASOURCES = {
+    "sleepcycle": "sleepcycle",
+}
+
+# Endpoints served by the covidcast code paths and the main Location(s) list.
+COVIDCAST_ENDPOINTS = ("covidcast", *V5_ONLY_DATASOURCES)
+
+# Covidcast geo_types only v5 has, so a geo of one cannot fall back to v4.
+V5_ONLY_GEO_TYPES = frozenset({"census_division"})

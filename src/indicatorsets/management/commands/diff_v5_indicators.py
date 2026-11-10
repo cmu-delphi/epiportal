@@ -18,7 +18,11 @@ from django.core.management.base import BaseCommand, CommandError
 from django.utils import timezone
 
 from indicators.models import Indicator
-from indicatorsets.utils.constants import MIGRATED_DATASOURCES, V5_NATIVE_ENDPOINTS
+from indicatorsets.utils.constants import (
+    MIGRATED_DATASOURCES,
+    V5_NATIVE_ENDPOINTS,
+    V5_ONLY_DATASOURCES,
+)
 from indicatorsets.utils.epidata import get_v5_metadata
 from indicatorsets.utils.v5_diff import diff_catalogue, find_unresolvable_sources
 
@@ -61,7 +65,7 @@ def source_map():
         .values_list("indicator_set__epidata_endpoint", "source__name")
         .distinct()
     }
-    return {**MIGRATED_DATASOURCES, **native}
+    return {**MIGRATED_DATASOURCES, **V5_ONLY_DATASOURCES, **native}
 
 
 def v4_only_summary(diffs, unmapped_portal, portal):

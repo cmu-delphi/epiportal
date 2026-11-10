@@ -364,7 +364,10 @@ function format(rowData, relatedIndicators) {
             ).length;
             var checkboxTitle = "";
             checked = checked ? "checked" : "";
-            const enabledEndpoints = ["covidcast", "fluview", "nidss_flu", "nidss_dengue", "flusurv", "pophive", "nwss"];
+            const enabledEndpoints = [
+                ...(typeof covidcastEndpoints !== "undefined" ? covidcastEndpoints : ["covidcast"]),
+                "fluview", "nidss_flu", "nidss_dengue", "flusurv", "pophive", "nwss",
+            ];
             disabled = enabledEndpoints.includes(indicator.endpoint) ? "" : "disabled";
             sourceType = indicator.kind;
             var restricted = indicator.restricted === true;

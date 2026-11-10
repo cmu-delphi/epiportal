@@ -7,6 +7,7 @@ outside nation and HHS are just the ``geo_id``; pophive (Cosmos) takes
 the sewersheds of the picked counties.
 """
 
+from indicatorsets.utils.epidata import get_v5_source, is_covidcast_indicator
 from indicatorsets.utils.nwss import nwss_county_sewersheds
 
 # Levels whose units fluview has a region for.
@@ -25,6 +26,12 @@ FLUVIEW_LOCATION_LEVELS = frozenset(
 FLUVIEW_ONLY_LEVELS = frozenset(
     {"census-region", "us-city", "us-territory", "ny_minus_jfk"}
 )
+
+
+# Fluview-only levels that covidcast-shaped sources have on v5. Our
+# "census-region" units (cen1..cen9) are the nine census divisions, which v5
+# calls census_division 1..9.
+V5_COVIDCAST_EXTRA_LEVELS = frozenset({"census-region"})
 
 
 # Levels pophive has data for, and the "states" among them it has none for.
@@ -48,6 +55,42 @@ def to_fluview_region(location_id):
     if level == "hhs":
         return f"hhs{geo_id}"
     return geo_id
+
+
+def to_covidcast_geo(location_id, on_v5=False):
+    """Return the ``(geo_type, geo_value)`` to query for a main-dropdown location,
+    or ``None`` when a covidcast-shaped source has no such level.
+
+    ``state:PA`` -> ``("state", "pa")``; other levels keep their ``geo_id``.
+    Census divisions exist only for signals served from v5 (``on_v5``):
+    ``census-region:cen3`` -> ``("census_division", "3")``.
+    """
+    if not location_id or ":" not in location_id:
+        return None
+    level, geo_id = location_id.split(":", 1)
+    if not geo_id:
+        return None
+    if level == "census-region":
+        if on_v5 and geo_id.lower().startswith("cen"):
+            return "census_division", geo_id[len("cen") :]
+        return None
+    if level in FLUVIEW_ONLY_LEVELS:
+        return None
+    return level, geo_id.lower() if level in ("nation", "state") else geo_id
+
+
+def group_covidcast_geos(covidcast_geos, on_v5=False):
+    """Bucket the covidcast share into ``{geo_type: [geo_value]}`` to query.
+
+    Levels the source does not have are dropped (see ``to_covidcast_geo``).
+    """
+    grouped = {}
+    for geos in (covidcast_geos or {}).values():
+        for geo in geos:
+            pair = to_covidcast_geo(geo.get("id"), on_v5)
+            if pair:
+                grouped.setdefault(pair[0], []).append(pair[1])
+    return grouped
 
 
 def to_pophive_location(location_id):
@@ -175,6 +218,16 @@ def use_main_locations(data):
     endpoints = {
         indicator.get("_endpoint") for indicator in data.get("indicators") or []
     }
+    if isinstance(data.get("covidCastGeographicValues"), dict) and any(
+        is_covidcast_indicator(indicator) and get_v5_source(indicator)
+        for indicator in data.get("indicators") or []
+    ):
+        # Signals served from v5 have census divisions; the covidcast paths
+        # drop them again for every v4 one.
+        for level in V5_COVIDCAST_EXTRA_LEVELS:
+            geos = data["covidCastGeographicValues"].get(level)
+            if geos:
+                covidcast_share[level] = geos
     if "fluview" not in endpoints:
         fluview_share = []
     pophive_share = (

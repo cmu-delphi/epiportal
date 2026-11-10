@@ -135,18 +135,19 @@ class IndicatorHandler {
 
     nwssSources = ['CDC_Biobot', 'CDC_Verily', 'State_Territory', 'WastewaterSCAN'];
 
-    // Covidcast, fluview, pophive (Cosmos) and nwss take their locations from
-    // the main Location(s) dropdown.
+    // Covidcast (and the v5-only sources sharing its paths), fluview,
+    // pophive (Cosmos) and nwss take their locations from the main
+    // Location(s) dropdown.
     usesMainLocations() {
         return this.indicators.some((indicator) =>
-            ["covidcast", "fluview", "pophive", "nwss"].includes(indicator["_endpoint"])
+            MAIN_LOCATION_ENDPOINTS.includes(indicator["_endpoint"])
         );
     }
 
     getCovidcastIndicators() {
         var covidcastIndicators = [];
         this.indicators.forEach((indicator) => {
-            if (indicator["_endpoint"] === "covidcast") {
+            if (COVIDCAST_ENDPOINTS.includes(indicator["_endpoint"])) {
                 covidcastIndicators.push(indicator);
             }
         });

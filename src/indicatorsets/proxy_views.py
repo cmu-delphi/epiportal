@@ -8,6 +8,7 @@ from django.http import HttpResponse, HttpResponseBadRequest, HttpResponseForbid
 from indicatorsets.utils.constants import (
     MIGRATED_DATASOURCES,
     V5_NATIVE_ENDPOINTS,
+    V5_ONLY_DATASOURCES,
 )
 from indicatorsets.utils.helpers import normalize_fill_method
 
@@ -17,7 +18,9 @@ FILENAME_SANITIZE_RE = re.compile(r"[^A-Za-z0-9_.-]")
 
 # The v5-native endpoints, plus any covidcast source whose exports now route to
 # v5 -- derived so migrating a source does not silently 400 its downloads.
-VIZ_SOURCES = V5_NATIVE_ENDPOINTS + tuple(sorted(set(MIGRATED_DATASOURCES.values())))
+VIZ_SOURCES = V5_NATIVE_ENDPOINTS + tuple(
+    sorted({*MIGRATED_DATASOURCES.values(), *V5_ONLY_DATASOURCES.values()})
+)
 
 
 def download_viz_export(request):
