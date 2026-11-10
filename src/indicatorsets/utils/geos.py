@@ -8,9 +8,16 @@ from delphi_utils import get_structured_logger
 
 from indicatorsets.utils.caching import safe_cache_get, safe_cache_set
 from indicatorsets.utils.constants import DEFAULT_FILL_METHOD
-from indicatorsets.utils.epidata import epidata_auth, group_v5_indicators_by_source
-from indicatorsets.utils.helpers import is_filled_fill_method, list_to_dict
-from indicatorsets.utils.locations import FLUVIEW_ONLY_LEVELS
+from indicatorsets.utils.epidata import (
+    can_fall_back_to_v4,
+    epidata_auth,
+    get_v5_metadata,
+    get_v5_source,
+    group_v5_indicators_by_source,
+    is_covidcast_indicator,
+)
+from indicatorsets.utils.helpers import list_to_dict
+from indicatorsets.utils.locations import to_covidcast_geo
 
 logger = get_structured_logger("indicatorsets.utils")
 
@@ -47,6 +54,28 @@ def get_indicators_based_on_geo_epidata_v5(geos):
                 logger.exception("Error getting geo coverage", extra={"geos": geos})
                 continue
     return indicators
+
+
+# v5 geo_types whose main-dropdown level is spelled differently.
+V5_GEO_TYPE_LEVELS = {"census_division": "census-region"}
+
+
+def v5_location_levels(indicators):
+    """Main-dropdown levels the covidcast signals served from v5 have.
+
+    v5 cannot list a source's geo values, only its geo_types (in the cached
+    metadata), so the Location(s) list offers every unit at those levels and
+    the per-location coverage check says which picks have no data.
+    """
+    metadata = get_v5_metadata()
+    levels = set()
+    for indicator in indicators:
+        v5_source = is_covidcast_indicator(indicator) and get_v5_source(indicator)
+        if not v5_source:
+            continue
+        for geo_type in metadata.get(v5_source, {}).get("geo_types", []):
+            levels.add(V5_GEO_TYPE_LEVELS.get(geo_type, geo_type))
+    return levels
 
 
 def _fetch_rows(url, params, auth=None):
@@ -141,7 +170,7 @@ def get_covidcast_geo_coverage(geo, indicators, fill_method=DEFAULT_FILL_METHOD)
     least one non-null value on either API -- a signal that exists for the geo
     with only null values is not covered. For a filled ``fill_method`` a
     migrated signal never falls back to v4, which cannot fill, so only v5's
-    values count for it.
+    values count for it; nor does a v5-only source, which v4 does not have.
 
     ``geo`` is a ``"geo_type:geo_value"`` id. Returns one dict per covidcast
     indicator with its ``data_source`` and ``indicator`` plus ``covered``
@@ -149,30 +178,19 @@ def get_covidcast_geo_coverage(geo, indicators, fill_method=DEFAULT_FILL_METHOD)
     no ``time_type``, so the answer is unknown) and ``route`` (``"v5"``,
     ``"v4"`` or ``None``).
     """
-    geo_type, geo_value = geo.split(":", 1)
-    if geo_type in FLUVIEW_ONLY_LEVELS:
-        # Fluview-only places (cities, territories, census divisions) have no
-        # covidcast data; answer without asking Epidata.
-        return [
-            {
-                "data_source": indicator["data_source"],
-                "indicator": indicator["indicator"],
-                "covered": False,
-                "route": None,
-            }
-            for indicator in indicators
-            if indicator.get("_endpoint") == "covidcast"
-        ]
-    # Both APIs store geo values lowercase; the picker spells states upper.
-    geo_value = geo_value.lower()
     covidcast_indicators = [
-        indicator
-        for indicator in indicators
-        if indicator.get("_endpoint") == "covidcast"
+        indicator for indicator in indicators if is_covidcast_indicator(indicator)
     ]
 
     def key(indicator):
         return indicator["data_source"], indicator["indicator"]
+
+    def api_geo(indicator, on_v5):
+        # Both APIs store geo values lowercase; the picker spells states upper.
+        # ``None`` for a level the API has no data at (cities, territories,
+        # and census divisions on v4): no data, no request.
+        pair = to_covidcast_geo(geo, on_v5)
+        return (pair[0], pair[1].lower()) if pair else None
 
     migrated = set()
     on_v5 = set()
@@ -181,6 +199,10 @@ def get_covidcast_geo_coverage(geo, indicators, fill_method=DEFAULT_FILL_METHOD)
     for v5_source, source_indicators in group_v5_indicators_by_source(
         covidcast_indicators
     ).items():
+        v5_geo = api_geo(source_indicators[0], on_v5=True)
+        if v5_geo is None:
+            continue
+        geo_type, geo_value = v5_geo
         signals = _get_v5_signals_with_values(
             v5_source, source_indicators, geo_type, geo_value, fill_method
         )
@@ -197,7 +219,10 @@ def get_covidcast_geo_coverage(geo, indicators, fill_method=DEFAULT_FILL_METHOD)
     for indicator in covidcast_indicators:
         if key(indicator) in on_v5:
             continue
-        if key(indicator) in migrated and is_filled_fill_method(fill_method):
+        v5_geo = api_geo(indicator, on_v5=True) if key(indicator) in migrated else None
+        if v5_geo and not can_fall_back_to_v4(indicator, v5_geo[0], fill_method):
+            continue
+        if api_geo(indicator, on_v5=False) is None:
             continue
         if not indicator.get("time_type"):
             v4_unknown.add(key(indicator))
@@ -206,6 +231,7 @@ def get_covidcast_geo_coverage(geo, indicators, fill_method=DEFAULT_FILL_METHOD)
             (indicator["data_source"], indicator["time_type"]), []
         ).append(indicator)
     for (data_source, time_type), group in v4_groups.items():
+        geo_type, geo_value = api_geo(group[0], on_v5=False)
         signals = _get_v4_signals_with_values(
             data_source, time_type, group, geo_type, geo_value
         )
