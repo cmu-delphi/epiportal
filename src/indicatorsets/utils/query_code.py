@@ -8,6 +8,7 @@ from indicatorsets.utils.epidata import (
     split_v4_v5_indicators,
 )
 from indicatorsets.utils.helpers import get_epiweek
+from indicatorsets.utils.locations import group_covidcast_geos
 
 
 def _python_snapshot_call(variable, args):
@@ -160,15 +161,10 @@ def generate_query_code_covidcast(
             [indicator["indicator"] for indicator in v4_indicators]
         )
     time_type = v4_indicators[0].get("time_type") if v4_indicators else None
-    for geo_type, values in covidcast_geos.items():
-        geo_values = [
-            (
-                value["id"].split(":")[1].lower()
-                if value["geoType"] in ["nation", "state"]
-                else value["id"].split(":")[1]
-            )
-            for value in values
-        ]
+    # Census divisions only exist on v5, so v4 gets its own, smaller grouping.
+    v4_geos = group_covidcast_geos(covidcast_geos)
+    geos = group_covidcast_geos(covidcast_geos, on_v5=bool(v5_indicators))
+    for geo_type, geo_values in geos.items():
         v5_python_blocks, v5_r_blocks = generate_v5_covidcast_snippets(
             v5_indicators,
             v5_source,
@@ -181,14 +177,14 @@ def generate_query_code_covidcast(
         )
         python_code_blocks.extend(v5_python_blocks)
         r_code_blocks.extend(v5_r_blocks)
-        if not v4_indicators:
+        if not v4_indicators or geo_type not in v4_geos:
             continue
         v4_python_block, v4_r_block = generate_v4_covidcast_snippet(
             data_source,
             indicators_str,
             time_type,
             geo_type,
-            geo_values,
+            v4_geos[geo_type],
             start_date,
             end_date,
         )

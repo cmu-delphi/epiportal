@@ -17,11 +17,14 @@ from indicatorsets.utils.epidata import (
     epidata_auth,
     get_time_values,
     get_v5_source,
+    can_fall_back_to_v4,
+    is_covidcast_indicator,
     split_geos_by_v5_values,
     split_v4_v5_indicators,
 )
 from indicatorsets.utils.exceptions import InvalidApiKeyError
-from indicatorsets.utils.helpers import get_epiweek, is_filled_fill_method
+from indicatorsets.utils.helpers import get_epiweek
+from indicatorsets.utils.locations import group_covidcast_geos
 
 logger = get_structured_logger("indicatorsets.utils")
 
@@ -147,18 +150,12 @@ def preview_covidcast_data(
     """
     preview_data = []
     for indicator in indicators:
-        if indicator["_endpoint"] != "covidcast":
+        if not is_covidcast_indicator(indicator):
             continue
         v5_source = get_v5_source(indicator)
-        for geo_type, values in covidcast_geos.items():
-            geo_value_list = [
-                (
-                    value["id"].split(":")[1].lower()
-                    if value["geoType"] in ["nation", "state"]
-                    else value["id"].split(":")[1]
-                )
-                for value in values
-            ]
+        for geo_type, geo_value_list in group_covidcast_geos(
+            covidcast_geos, on_v5=bool(v5_source)
+        ).items():
             name = indicator.get("display_name") or indicator["indicator"]
             label = f"{name} ({geo_type})"
             if not v5_source:
@@ -214,9 +211,7 @@ def preview_covidcast_data(
             fallback_label = (
                 f"{name} ({geo_type}: {', '.join(v4_geos)})" if v5_geos else label
             )
-            if is_filled_fill_method(fill_method):
-                # v4 has no fill_method, so it can only serve the unfilled
-                # series -- not what the user picked.
+            if not can_fall_back_to_v4(indicator, geo_type, fill_method):
                 preview_data.append({"message": f"No data found for {fallback_label}."})
                 continue
             logger.warning(

@@ -107,9 +107,14 @@ var currentMode = "epivis";
 const V5_DATA_SOURCES = typeof v5DataSources !== "undefined" ? v5DataSources : [];
 const V5_ENDPOINTS = typeof v5Endpoints !== "undefined" ? v5Endpoints : [];
 
+// covidcast plus the v5-only sources that share its code paths, from the
+// server so they stay in step with V5_ONLY_DATASOURCES.
+const COVIDCAST_ENDPOINTS =
+    typeof covidcastEndpoints !== "undefined" ? covidcastEndpoints : ["covidcast"];
+
 // Endpoints whose locations come from the main Location(s) dropdown rather
 // than a dropdown of their own.
-const MAIN_LOCATION_ENDPOINTS = ["covidcast", "fluview", "pophive", "nwss"];
+const MAIN_LOCATION_ENDPOINTS = [...COVIDCAST_ENDPOINTS, "fluview", "pophive", "nwss"];
 
 // Preselected in the main Location(s) dropdown when nothing else is.
 const DEFAULT_LOCATION_ID = "nation:US";
@@ -227,8 +232,8 @@ let coverageCheckGeneration = 0;
 async function checkGeoCoverage(geoValue) {
     const generation = coverageCheckGeneration;
     const notCoveredIndicators = [];
-    const covidcastIndicators = checkedIndicatorMembers.filter(
-        (indicator) => indicator["_endpoint"] === "covidcast"
+    const covidcastIndicators = checkedIndicatorMembers.filter((indicator) =>
+        COVIDCAST_ENDPOINTS.includes(indicator["_endpoint"])
     );
     if (covidcastIndicators.length === 0) {
         return notCoveredIndicators;

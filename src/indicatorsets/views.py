@@ -18,8 +18,18 @@ from indicatorsets.filters import IndicatorSetFilter
 from indicatorsets.forms import IndicatorSetFilterForm
 from indicatorsets.models import ColumnDescription, FilterDescription, IndicatorSet
 from indicatorsets.utils.caching import safe_cache_get, safe_cache_set
-from indicatorsets.utils.constants import MIGRATED_DATASOURCES, V5_NATIVE_ENDPOINTS
-from indicatorsets.utils.epidata import epidata_auth
+from indicatorsets.utils.constants import (
+    COVIDCAST_ENDPOINTS,
+    MIGRATED_DATASOURCES,
+    V5_NATIVE_ENDPOINTS,
+    V5_ONLY_DATASOURCES,
+)
+from indicatorsets.utils.epidata import (
+    epidata_auth,
+    get_v5_source,
+    is_covidcast_indicator,
+)
+from indicatorsets.utils.geos import v5_location_levels
 from indicatorsets.utils.locations import (
     FLUVIEW_LOCATION_LEVELS,
     POPHIVE_LOCATION_LEVELS,
@@ -363,8 +373,13 @@ class IndicatorSetListView(ListView):
         # The fill_method picker only applies to sources served from Epidata
         # v5, so the page needs to know which those are. Rendered from the
         # same mapping the backend routes on, rather than copied into JS.
-        context["v5_data_sources"] = json.dumps(sorted(MIGRATED_DATASOURCES))
+        context["v5_data_sources"] = json.dumps(
+            sorted({*MIGRATED_DATASOURCES, *V5_ONLY_DATASOURCES})
+        )
         context["v5_endpoints"] = json.dumps(list(V5_NATIVE_ENDPOINTS))
+        # Endpoints whose locations come from the main Location(s) list the
+        # same way covidcast's do.
+        context["covidcast_endpoints"] = json.dumps(list(COVIDCAST_ENDPOINTS))
         return context
 
 
@@ -385,7 +400,7 @@ def epivis(request):
         log_form_stats(request, data, "epivis")
         log_form_data(request, data, "epivis")
         for indicator in indicators:
-            if indicator["_endpoint"] == "covidcast":
+            if is_covidcast_indicator(indicator):
                 datasets.extend(
                     generate_covidcast_dataset_epivis(indicator, covidcast_geos)
                 )
@@ -642,7 +657,7 @@ def create_query_code(request):
             indicators_str = ",".join(
                 [indicator["indicator"] for indicator in indicators]
             )
-            if indicators[0].get("_endpoint") == "covidcast":
+            if is_covidcast_indicator(indicators[0]):
                 python_code_block, r_code_block = generate_query_code_covidcast(
                     indicators,
                     covidcast_geos,
@@ -708,6 +723,15 @@ def get_available_geos(request):
         include_nwss_places = any(
             indicator.get("_endpoint") == "nwss" for indicator in indicators
         )
+        # Covidcast signals v5 serves are listed from v5, which cannot list
+        # geo values: every unit at the levels v5 says their source has. Only
+        # the rest still ask v4 which geos it has.
+        v5_levels = v5_location_levels(indicators)
+        indicators = [
+            indicator
+            for indicator in indicators
+            if not (is_covidcast_indicator(indicator) and get_v5_source(indicator))
+        ]
         grouped_indicators = group_by_property(indicators, "data_source")
         for data_source, indicators in grouped_indicators.items():
             indicators_str = ",".join(
@@ -734,6 +758,8 @@ def get_available_geos(request):
         geo_levels = set([el.split(":")[0] for el in unique_values])
         geo_unit_ids = set([geo_value.split(":")[1] for geo_value in unique_values])
         units_query = Q(geo_level__name__in=geo_levels, geo_id__in=geo_unit_ids)
+        if v5_levels:
+            units_query |= Q(geo_level__name__in=v5_levels)
         if include_fluview_places:
             units_query |= Q(geo_level__name__in=FLUVIEW_LOCATION_LEVELS)
         if include_pophive_places:

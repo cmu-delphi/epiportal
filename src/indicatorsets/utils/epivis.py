@@ -1,7 +1,9 @@
 """Builders for EpiVis dataset payloads, one per Epidata endpoint."""
 
 from indicatorsets.utils.constants import FLUVIEW_INDICATORS_MAPPING
+from indicatorsets.utils.epidata import get_v5_source
 from indicatorsets.utils.helpers import generate_random_color
+from indicatorsets.utils.locations import to_covidcast_geo
 
 
 def generate_epivis_custom_title(indicator, geo_value, extra_keys=None):
@@ -12,21 +14,25 @@ def generate_epivis_custom_title(indicator, geo_value, extra_keys=None):
 
 
 def generate_covidcast_dataset_epivis(indicator, covidcast_geos):
+    """Build EpiVis datasets for a covidcast-shaped indicator.
+
+    v5-only sources go out as ``covidcast`` too: EpiVis's covidcast importer
+    reads a ``data_source`` from v5 whenever v5's metadata lists the signal.
+    Census divisions only exist there, so they are sent only for such signals.
+    """
     datasets = []
-    for geo_type in covidcast_geos.keys():
-        for geo in covidcast_geos[geo_type]:
-            if geo["id"] not in indicator.get("notCoveredGeos", []):
-                geo_value = (
-                    geo["id"].split(":")[1].lower()
-                    if geo["geoType"] in ["nation", "state"]
-                    else geo["id"].split(":")[1]
-                )
+    on_v5 = bool(get_v5_source(indicator))
+    for geos in covidcast_geos.values():
+        for geo in geos:
+            pair = to_covidcast_geo(geo["id"], on_v5)
+            if pair and geo["id"] not in indicator.get("notCoveredGeos", []):
+                geo_type, geo_value = pair
                 datasets.append(
                     {
                         "color": generate_random_color(),
                         "title": "value",
                         "params": {
-                            "_endpoint": indicator["_endpoint"],
+                            "_endpoint": "covidcast",
                             "data_source": indicator["data_source"],
                             "signal": indicator["indicator"],
                             "time_type": indicator["time_type"],

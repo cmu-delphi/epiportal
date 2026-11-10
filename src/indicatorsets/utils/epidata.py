@@ -6,11 +6,14 @@ from delphi_utils import get_structured_logger
 
 from indicatorsets.utils.caching import safe_cache_get, safe_cache_set
 from indicatorsets.utils.constants import (
+    COVIDCAST_ENDPOINTS,
     INVALID_API_KEY_MESSAGE,
     MIGRATED_DATASOURCES,
+    V5_ONLY_DATASOURCES,
+    V5_ONLY_GEO_TYPES,
 )
 from indicatorsets.utils.exceptions import InvalidApiKeyError
-from indicatorsets.utils.helpers import get_epiweek
+from indicatorsets.utils.helpers import get_epiweek, is_filled_fill_method
 
 logger = get_structured_logger("indicatorsets.utils")
 
@@ -90,12 +93,42 @@ def get_v5_source(indicator):
     name mapping; the v5 metadata confirms the signal actually exists there.
     Anything unknown falls back to v4. Returning the name rather than a boolean
     keeps callers from reaching for the v4 name when they build v5 requests.
+    A v5-only source has nothing on v4 to fall back to, so it is routed to v5
+    without consulting the metadata.
     """
+    v5_only_source = V5_ONLY_DATASOURCES.get(indicator["data_source"])
+    if v5_only_source:
+        return v5_only_source
     v5_source = MIGRATED_DATASOURCES.get(indicator["data_source"])
     if not v5_source:
         return None
     signals = get_v5_metadata().get(v5_source, {}).get("signals", [])
     return v5_source if indicator["indicator"] in signals else None
+
+
+def is_covidcast_indicator(indicator):
+    """Whether ``indicator`` takes the covidcast code paths (v4 covidcast or a
+    covidcast-shaped v5-only source)."""
+    return indicator.get("_endpoint") in COVIDCAST_ENDPOINTS
+
+
+def is_v5_only(indicator):
+    """Whether ``indicator`` exists only on v5, so must never fall back to v4."""
+    return indicator.get("data_source") in V5_ONLY_DATASOURCES
+
+
+def can_fall_back_to_v4(indicator, geo_type, fill_method):
+    """Whether geos v5 has no values for may be served from v4 instead.
+
+    Not for a v5-only source or a geo_type only v5 has (census divisions),
+    which v4 cannot answer; nor for a filled ``fill_method``, since v4 cannot
+    fill and would serve the unfilled series instead of the one picked.
+    """
+    return not (
+        is_v5_only(indicator)
+        or geo_type in V5_ONLY_GEO_TYPES
+        or is_filled_fill_method(fill_method)
+    )
 
 
 def split_v4_v5_indicators(indicators):
