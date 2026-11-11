@@ -3,6 +3,7 @@ import json
 import os
 import re
 import tempfile
+from datetime import date
 from io import StringIO
 from pathlib import Path
 from unittest import skipUnless
@@ -11,6 +12,7 @@ from urllib.parse import parse_qs, urlparse
 
 import redis
 import requests
+from epiweeks import Week
 from django.conf import settings
 from django.core.cache import cache
 from django.core.management import call_command
@@ -56,6 +58,13 @@ from indicatorsets.utils import (
 )
 from indicatorsets.proxy_views import VIZ_SOURCES
 from indicatorsets.utils.constants import MIGRATED_DATASOURCES
+from indicatorsets.utils.geos import (
+    InvalidDateWindowError,
+    parse_date_window,
+    v4_covidcast_time_values,
+    v4_epiweeks,
+    v5_reference_times,
+)
 from indicatorsets.utils.helpers import normalize_fill_method
 from indicatorsets.utils.caching import safe_cache_get, safe_cache_set
 from indicatorsets.utils.epidata import (
@@ -6475,3 +6484,60 @@ class NwssCountyMappingEndpointRemovedTests(TestCase):
 
         with self.assertRaises(NoReverseMatch):
             reverse("get_nwss_county_mapping")
+
+
+class CoverageDateWindowTests(TestCase):
+    """The modal's Start/End dates, in each API's spelling, for coverage checks.
+
+    Plot mode sends no dates, which means the whole series: EpiVis always
+    plots all of it.
+    """
+
+    def test_no_dates_means_all_time(self):
+        for start, end in (("", ""), (None, None), ("  ", " ")):
+            with self.subTest(start=start, end=end):
+                self.assertIsNone(parse_date_window(start, end))
+
+    def test_parses_iso_dates(self):
+        window = parse_date_window("2024-01-01", "2024-03-31")
+        self.assertEqual(window.start, date(2024, 1, 1))
+        self.assertEqual(window.end, date(2024, 3, 31))
+
+    def test_a_single_day_is_a_window(self):
+        window = parse_date_window("2024-01-01", "2024-01-01")
+        self.assertEqual(window.start, window.end)
+
+    def test_rejects_half_open_malformed_and_reversed_windows(self):
+        for start, end in (
+            ("2024-01-01", ""),
+            ("", "2024-01-01"),
+            ("01/01/2024", "2024-03-31"),
+            ("2024-02-30", "2024-03-31"),
+            ("2024-03-31", "2024-01-01"),
+        ):
+            with self.subTest(start=start, end=end):
+                with self.assertRaises(InvalidDateWindowError):
+                    parse_date_window(start, end)
+
+    def test_v5_reference_times(self):
+        window = parse_date_window("2024-01-01", "2024-03-31")
+        self.assertEqual(v5_reference_times(window), "2024-01-01:2024-03-31")
+        self.assertIsNone(v5_reference_times(None))
+
+    def test_v4_covidcast_time_values_follow_the_time_type(self):
+        window = parse_date_window("2024-01-01", "2024-03-31")
+        self.assertEqual(
+            v4_covidcast_time_values(window, "day"), "2024-01-01--2024-03-31"
+        )
+        # 2024-01-01 is in epiweek 202401, 2024-03-31 starts 202414.
+        self.assertEqual(v4_covidcast_time_values(window, "week"), "202401-202414")
+        self.assertEqual(v4_covidcast_time_values(None, "day"), "*")
+        self.assertEqual(v4_covidcast_time_values(None, "week"), "*")
+
+    def test_v4_epiweeks(self):
+        window = parse_date_window("2023-12-31", "2024-01-06")
+        self.assertEqual(v4_epiweeks(window), "202401-202401")
+
+    def test_v4_epiweeks_for_all_time_run_from_fluview_start_to_now(self):
+        now = Week.fromdate(date.today())
+        self.assertEqual(v4_epiweeks(None), f"199740-{now.year}{now.week:02d}")

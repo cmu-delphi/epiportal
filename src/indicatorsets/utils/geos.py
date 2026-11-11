@@ -1,10 +1,13 @@
 """Geographic coverage lookups against the Epidata API."""
 
 import ast
+from dataclasses import dataclass
+from datetime import date
 
 import requests
 from django.conf import settings
 from delphi_utils import get_structured_logger
+from epiweeks import Week
 
 from indicatorsets.utils.caching import safe_cache_get, safe_cache_set
 from indicatorsets.utils.constants import DEFAULT_FILL_METHOD
@@ -16,10 +19,75 @@ from indicatorsets.utils.epidata import (
     group_v5_indicators_by_source,
     is_covidcast_indicator,
 )
-from indicatorsets.utils.helpers import list_to_dict
+from indicatorsets.utils.helpers import get_epiweek, list_to_dict
 from indicatorsets.utils.locations import to_covidcast_geo
 
 logger = get_structured_logger("indicatorsets.utils")
+
+# The first epiweek fluview has, so "all time" on its v4 endpoint.
+FLUVIEW_FIRST_EPIWEEK = "199740"
+
+
+class InvalidDateWindowError(ValueError):
+    """The Start/End dates sent with a coverage check make no window."""
+
+
+@dataclass(frozen=True)
+class DateWindow:
+    start: date
+    end: date
+
+
+def parse_date_window(start_date, end_date):
+    """Return the modal's Start/End dates as a ``DateWindow``, or ``None``.
+
+    ``None`` means all time: Plot mode hides the dates and sends none, since
+    EpiVis always plots the whole series. Otherwise both must be
+    ``YYYY-MM-DD`` with start on or before end; anything else raises
+    ``InvalidDateWindowError`` rather than guessing at a window.
+    """
+    start = (start_date or "").strip()
+    end = (end_date or "").strip()
+    if not start and not end:
+        return None
+    if not start or not end:
+        raise InvalidDateWindowError("Both start_date and end_date are required")
+    try:
+        window = DateWindow(date.fromisoformat(start), date.fromisoformat(end))
+    except ValueError as e:
+        raise InvalidDateWindowError(f"Dates must be YYYY-MM-DD: {e}") from e
+    if window.start > window.end:
+        raise InvalidDateWindowError("start_date is after end_date")
+    return window
+
+
+def v5_reference_times(window):
+    """v5 ``reference_times`` for ``window``, or ``None`` to leave it out."""
+    if window is None:
+        return None
+    return f"{window.start.isoformat()}:{window.end.isoformat()}"
+
+
+def v4_covidcast_time_values(window, time_type):
+    """v4 covidcast ``time_values`` for ``window``, spelled as exports do.
+
+    Weekly signals take an epiweek range, daily ones a date range; all time is
+    ``*``.
+    """
+    if window is None:
+        return "*"
+    start, end = window.start.isoformat(), window.end.isoformat()
+    if time_type == "week":
+        return "-".join(get_epiweek(start, end))
+    return f"{start}--{end}"
+
+
+def v4_epiweeks(window):
+    """v4 ``epiweeks`` for ``window``; all time runs from fluview's first week."""
+    if window is None:
+        now = Week.fromdate(date.today())
+        return f"{FLUVIEW_FIRST_EPIWEEK}-{now.year}{now.week:02d}"
+    return "-".join(get_epiweek(window.start.isoformat(), window.end.isoformat()))
 
 
 def get_indicators_based_on_geo_epidata(geos):
