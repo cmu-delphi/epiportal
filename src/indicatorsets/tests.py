@@ -63,6 +63,7 @@ from indicatorsets.utils.geos import (
     InvalidDateWindowError,
     get_fluview_geo_coverage,
     get_nwss_geo_coverage,
+    get_pophive_geo_coverage,
     parse_date_window,
     v4_covidcast_time_values,
     v4_epiweeks,
@@ -6632,48 +6633,157 @@ class AvailableGeosOfferPophivePlacesTests(TestCase):
         self.assertEqual(ids, ["nation:US", "state:PA"])
 
 
-class CheckPophiveGeoCoverageTests(TestCase):
-    def _check(self, geo, indicators):
-        return self.client.post(
-            reverse("check_pophive_geo_coverage"),
-            data=json.dumps({"geo": geo, "indicators": indicators}),
-            content_type="application/json",
-        )
+POPHIVE_FLU_INDICATOR = {"_endpoint": "pophive", "data_source": "pophive", "indicator": "flu_pct_ed"}
 
-    @patch("indicatorsets.views.requests.get")
-    def test_county_and_territory_are_not_covered_without_epidata(self, mock_get):
+
+@override_settings(EPIDATA_V5_URL="https://v5.test/", EPIDATA_API_KEY="key")
+class PophiveGeoCoverageTests(TestCase):
+    """Whether Cosmos (pophive) has data for a location, age group, fill
+    method and dates, asked of /viz/ the way exports ask."""
+
+    def _coverage(self, geo, indicators=(POPHIVE_INDICATOR,), age_group="all", **kwargs):
+        return {
+            e["indicator"]: e
+            for e in get_pophive_geo_coverage(geo, list(indicators), age_group, **kwargs)
+        }
+
+    @patch("indicatorsets.utils.geos.requests.get")
+    def test_places_without_cosmos_data_are_not_covered_without_asking(self, mock_get):
         for geo in ("county:42003", "state:PR", "us-city:jfk"):
             with self.subTest(geo):
-                response = self._check(geo, [POPHIVE_INDICATOR])
-                self.assertEqual(
-                    [i["indicator"] for i in response.json()["not_covered_indicators"]],
-                    ["covid_pct_ed"],
-                )
+                self.assertIs(self._coverage(geo)["covid_pct_ed"]["covered"], False)
         mock_get.assert_not_called()
 
-    def test_nation_hhs_and_state_are_covered(self):
-        for geo in ("nation:US", "hhs:3", "state:PA"):
-            with self.subTest(geo):
-                response = self._check(geo, [POPHIVE_INDICATOR])
-                self.assertEqual(response.json()["not_covered_indicators"], [])
+    @patch("indicatorsets.utils.geos.requests.get")
+    def test_asks_viz_once_with_the_age_group_fill_method_and_dates(self, mock_get):
+        mock_get.return_value = _json_response([])
+        self._coverage(
+            "state:PA",
+            [POPHIVE_INDICATOR, POPHIVE_FLU_INDICATOR],
+            age_group="65+",
+            fill_method="source",
+            window=parse_date_window("2024-01-01", "2024-03-31"),
+        )
+        mock_get.assert_called_once()
+        self.assertEqual(mock_get.call_args.args[0], "https://v5.test/viz/")
+        self.assertEqual(
+            mock_get.call_args.kwargs["params"],
+            {
+                "source": "pophive",
+                "signal": "covid_pct_ed,flu_pct_ed",
+                "geo_type": "state",
+                "geo_value": "pa",
+                "extra_keys": "age_group:65+",
+                "token": "key",
+                "fill_method": "source",
+                "reference_times": "2024-01-01:2024-03-31",
+                "format": "json",
+            },
+        )
 
-    def test_only_pophive_indicators_are_answered(self):
-        response = self._check(
-            "county:42003",
+    @patch("indicatorsets.utils.geos.requests.get")
+    def test_all_time_and_no_fill_method_leave_those_params_out(self, mock_get):
+        mock_get.return_value = _json_response([])
+        self._coverage("nation:US")
+        params = mock_get.call_args.kwargs["params"]
+        self.assertEqual((params["geo_type"], params["geo_value"]), ("nation", "us"))
+        self.assertNotIn("reference_times", params)
+        self.assertNotIn("fill_method", params)
+
+    @patch("indicatorsets.utils.geos.requests.get")
+    def test_answers_each_signal_from_its_real_values(self, mock_get):
+        mock_get.return_value = _json_response(
+            [
+                {"signal": "covid_pct_ed", "value": 0},
+                {"signal": "flu_pct_ed", "value": None},
+            ]
+        )
+        coverage = self._coverage("hhs:3", [POPHIVE_INDICATOR, POPHIVE_FLU_INDICATOR])
+        self.assertIs(coverage["covid_pct_ed"]["covered"], True)
+        self.assertIs(coverage["flu_pct_ed"]["covered"], False)
+
+    @patch("indicatorsets.utils.geos.requests.get")
+    def test_a_failed_request_is_unknown(self, mock_get):
+        mock_get.side_effect = requests.ConnectionError("down")
+        self.assertIsNone(self._coverage("state:PA")["covid_pct_ed"]["covered"])
+
+    @patch("indicatorsets.utils.geos.requests.get")
+    def test_no_age_group_means_no_answer(self, mock_get):
+        self.assertEqual(self._coverage("state:PA", age_group=""), {})
+        mock_get.assert_not_called()
+
+    @patch("indicatorsets.utils.geos.requests.get")
+    def test_only_pophive_indicators_are_answered(self, mock_get):
+        mock_get.return_value = _json_response([{"signal": "covid_pct_ed", "value": 1}])
+        coverage = self._coverage(
+            "state:PA",
             [POPHIVE_INDICATOR, {"_endpoint": "covidcast", "data_source": "src", "indicator": "sig"}],
         )
+        self.assertEqual(list(coverage), ["covid_pct_ed"])
+        self.assertEqual(mock_get.call_args.kwargs["params"]["signal"], "covid_pct_ed")
+
+
+class CheckPophiveGeoCoverageTests(TestCase):
+    URL = "check_pophive_geo_coverage"
+
+    def _post(self, body):
+        return self.client.post(
+            reverse(self.URL), data=json.dumps(body), content_type="application/json"
+        )
+
+    @patch("indicatorsets.views.get_pophive_geo_coverage")
+    def test_returns_coverage_and_passes_age_group_fill_method_and_dates(self, mock_coverage):
+        mock_coverage.return_value = [{"indicator": "covid_pct_ed", "covered": True}]
+        response = self._post(
+            {
+                "geo": "state:PA",
+                "indicators": [POPHIVE_INDICATOR],
+                "age_group": "<1",
+                "fill_method": "fill_ave",
+                "start_date": "2024-01-01",
+                "end_date": "2024-03-31",
+            }
+        )
+        self.assertEqual(response.status_code, 200)
         self.assertEqual(
-            [i["indicator"] for i in response.json()["not_covered_indicators"]],
-            ["covid_pct_ed"],
+            response.json(), {"coverage": [{"indicator": "covid_pct_ed", "covered": True}]}
+        )
+        mock_coverage.assert_called_once_with(
+            "state:PA",
+            [POPHIVE_INDICATOR],
+            "<1",
+            fill_method="ave",
+            window=parse_date_window("2024-01-01", "2024-03-31"),
         )
 
-    def test_rejects_get_and_bad_bodies(self):
-        self.assertEqual(self.client.get(reverse("check_pophive_geo_coverage")).status_code, 405)
-        response = self.client.post(
-            reverse("check_pophive_geo_coverage"), data="not json", content_type="application/json"
+    @patch("indicatorsets.views.get_pophive_geo_coverage", return_value=[])
+    def test_no_dates_mean_all_time(self, mock_coverage):
+        self._post({"geo": "state:PA", "indicators": [POPHIVE_INDICATOR], "age_group": "all"})
+        mock_coverage.assert_called_once_with(
+            "state:PA", [POPHIVE_INDICATOR], "all", fill_method="", window=None
         )
-        self.assertEqual(response.status_code, 400)
 
+    @patch("indicatorsets.views.get_pophive_geo_coverage")
+    def test_rejects_get_and_bad_bodies(self, mock_coverage):
+        self.assertEqual(self.client.get(reverse(self.URL)).status_code, 405)
+        self.assertEqual(
+            self.client.post(
+                reverse(self.URL), data="not json", content_type="application/json"
+            ).status_code,
+            400,
+        )
+        for body in (
+            {"geo": "state:PA", "indicators": "covid_pct_ed"},
+            {
+                "geo": "state:PA",
+                "indicators": [POPHIVE_INDICATOR],
+                "start_date": "2024-03-31",
+                "end_date": "2024-01-01",
+            },
+        ):
+            with self.subTest(body=body):
+                self.assertEqual(self._post(body).status_code, 400)
+        mock_coverage.assert_not_called()
 
 
 class LegacyFillMethodNamesTests(TestCase):

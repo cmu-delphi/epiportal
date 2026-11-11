@@ -26,6 +26,7 @@ from indicatorsets.utils.locations import (
     to_covidcast_geo,
     to_fluview_region,
     to_nwss_sewersheds,
+    to_pophive_location,
 )
 
 logger = get_structured_logger("indicatorsets.utils")
@@ -190,7 +191,7 @@ def _signals_with_values(rows):
 
 
 def _get_v5_signals_with_values(
-    v5_source, indicators, geo_type, geo_value, fill_method, window=None
+    v5_source, indicators, geo_type, geo_value, fill_method, window=None, extra_keys=None
 ):
     """Return the signals of ``indicators`` v5 has a real value for, or ``None``.
 
@@ -198,6 +199,7 @@ def _get_v5_signals_with_values(
     geo whenever rows exist, even when every value is null (nssp for Allegheny
     County). So this reads ``/viz/`` the way exports do, with the same
     ``fill_method``, since v5 may hold rows for one fill_method and not another.
+    ``extra_keys`` narrows the series the way exports do (``age_group:all``).
     """
     params = {
         "source": v5_source,
@@ -206,6 +208,8 @@ def _get_v5_signals_with_values(
         "geo_value": geo_value,
         "token": settings.EPIDATA_API_KEY,
     }
+    if extra_keys:
+        params["extra_keys"] = extra_keys
     if fill_method:
         params["fill_method"] = fill_method
     reference_times = v5_reference_times(window)
@@ -443,6 +447,50 @@ def get_fluview_geo_coverage(
             }
         )
     return coverage
+
+
+def get_pophive_geo_coverage(
+    geo, indicators, age_group, fill_method=DEFAULT_FILL_METHOD, window=None
+):
+    """Report, per Cosmos (pophive) indicator, whether ``geo`` has data.
+
+    Asks ``/viz/`` once, for every selected signal, the way exports do: with
+    the selected ``age_group``, ``fill_method`` and dates. Cosmos has every
+    signal at every nation, HHS and state location and for every age group,
+    so in practice the answer turns on the dates and the fill method (v5 has
+    no filled Cosmos series). Only real values count.
+
+    ``geo`` is a main-dropdown ``"geo_type:geo_value"`` id; a place Cosmos has
+    no data for (a county, a territory) is not covered and nothing is asked.
+    No ``age_group`` means no answer, since exports need one. Returns one dict
+    per pophive indicator with its ``data_source`` and ``indicator`` plus
+    ``covered`` (``True``/``False``, or ``None`` when the lookup failed).
+    """
+    pophive_indicators = [
+        indicator for indicator in indicators if indicator.get("_endpoint") == "pophive"
+    ]
+    if not pophive_indicators or not age_group:
+        return []
+    location = to_pophive_location(geo)
+    signals = set()
+    if location is not None:
+        signals = _get_v5_signals_with_values(
+            "pophive",
+            pophive_indicators,
+            location["geo_type"],
+            location["id"],
+            fill_method,
+            window,
+            extra_keys=f"age_group:{age_group}",
+        )
+    return [
+        {
+            "data_source": indicator["data_source"],
+            "indicator": indicator["indicator"],
+            "covered": None if signals is None else indicator["indicator"] in signals,
+        }
+        for indicator in pophive_indicators
+    ]
 
 
 def get_nwss_sewersheds_with_values(

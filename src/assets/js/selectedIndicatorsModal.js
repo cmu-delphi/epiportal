@@ -412,11 +412,18 @@ function recheckFluviewCoverage() {
     $("#geographic_value").select2("data").forEach(warnIfFluviewGeoNotCovered);
 }
 
+/* Asks the server, which reads /viz/ the way Export does, whether geoValue
+ * has Cosmos data for each pophive indicator with the selected age group and
+ * fill method. The age group list loads after the modal opens, so until one
+ * is selected there is nothing to check; selecting it re-checks. Resolves to
+ * the uncovered indicators; covered === null means the check itself failed,
+ * so no warning is shown. */
 async function checkPophiveGeoCoverage(geoValue) {
     const pophiveIndicators = checkedIndicatorMembers.filter(
         (indicator) => indicator["_endpoint"] === "pophive"
     );
-    if (pophiveIndicators.length === 0) {
+    const ageGroup = getSelectedPophiveAgeGroup();
+    if (pophiveIndicators.length === 0 || ageGroup.length === 0) {
         return [];
     }
     try {
@@ -426,24 +433,61 @@ async function checkPophiveGeoCoverage(geoValue) {
             dataType: "json",
             contentType: "application/json",
             headers: { "X-CSRFToken": Cookies.get("csrftoken") },
-            data: JSON.stringify({ geo: geoValue, indicators: pophiveIndicators }),
+            data: JSON.stringify({
+                geo: geoValue,
+                age_group: ageGroup[0].id,
+                fill_method: getFillMethod(),
+                indicators: pophiveIndicators.map((indicator) => ({
+                    _endpoint: indicator["_endpoint"],
+                    data_source: indicator.data_source,
+                    indicator: indicator.indicator,
+                })),
+            }),
         });
-        return result["not_covered_indicators"];
+        return pophiveIndicators.filter((indicator) =>
+            result["coverage"].some(
+                (entry) => entry.indicator === indicator.indicator && entry.covered === false
+            )
+        );
     } catch (error) {
         console.error("Error fetching Cosmos geo coverage:", error);
         return [];
     }
 }
 
+// Bumped whenever the Cosmos answer may change (age group or fill method), so
+// a check still in flight for the old choice is ignored. Its warnings are
+// tagged so they can be swapped out without touching the other alerts.
+let pophiveCoverageCheckGeneration = 0;
+
 // Cosmos (pophive) reads its locations from the main dropdown too; places it
 // has no data for (counties, territories, ...) are skipped, so say so.
 function warnIfPophiveGeoNotCovered(geo) {
+    const generation = pophiveCoverageCheckGeneration;
     checkPophiveGeoCoverage(geo.id).then((notCoveredIndicators) => {
+        if (generation !== pophiveCoverageCheckGeneration) {
+            return;
+        }
         if (notCoveredIndicators.length > 0) {
-            showNotCoveredGeoWarningMessage(notCoveredIndicators, geo);
+            showNotCoveredGeoWarningMessage(notCoveredIndicators, geo).classList.add(
+                "pophive-coverage-alert"
+            );
         }
     });
 }
+
+function recheckPophiveCoverage() {
+    pophiveCoverageCheckGeneration += 1;
+    $("#warning-alert .pophive-coverage-alert").remove();
+    if (!$("#geographic_value").hasClass("select2-hidden-accessible")) {
+        return;
+    }
+    $("#geographic_value").select2("data").forEach(warnIfPophiveGeoNotCovered);
+}
+
+// #pophiveAgeGroup is added to the modal only once Cosmos indicators are
+// selected, and selecting its default fires a change too.
+$(document).on("change", "#pophiveAgeGroup", recheckPophiveCoverage);
 
 function getSelectedNwssSources() {
     if (!$("#nwssSource").hasClass("select2-hidden-accessible")) {
@@ -557,6 +601,7 @@ $("#fillMethod").on("change", function () {
     coverageCheckGeneration += 1;
     $("#warning-alert .covidcast-coverage-alert").remove();
     recheckFluviewCoverage();
+    recheckPophiveCoverage();
     recheckNwssCoverage();
     if (!$("#geographic_value").hasClass("select2-hidden-accessible")) {
         return;

@@ -32,6 +32,7 @@ from indicatorsets.utils.geos import (
     get_fluview_geo_coverage,
     get_nwss_geo_coverage,
     get_nwss_sewersheds_with_values,
+    get_pophive_geo_coverage,
     parse_date_window,
     v5_location_levels,
 )
@@ -40,7 +41,6 @@ from indicatorsets.utils.locations import (
     POPHIVE_LOCATION_LEVELS,
     POPHIVE_STATES_WITHOUT_DATA,
     nwss_counties,
-    to_pophive_location,
     use_main_locations,
 )
 from indicatorsets.utils.sources import EPIWEEK_SOURCES
@@ -905,12 +905,13 @@ def check_fluview_geo_coverage(request):
 
 
 def check_pophive_geo_coverage(request):
-    """Tell the selected-indicators modal which pophive (Cosmos) indicators
-    have no data for one main-dropdown location.
+    """Tell the selected-indicators modal which Cosmos (pophive) indicators
+    have data for one main-dropdown location.
 
-    Expects a JSON body ``{"geo": "geo_type:geo_value", "indicators": [...]}``.
-    Pophive has every signal at every nation, HHS and state location, so the
-    answer follows from the location alone and Epidata is never asked.
+    Expects a JSON body ``{"geo": "geo_type:geo_value", "indicators": [...],
+    "age_group": "..."}``, plus optional ``fill_method`` and
+    ``start_date``/``end_date`` (no dates means all time), since exports ask
+    ``/viz/`` with all of them. See ``get_pophive_geo_coverage`` for the answer.
     """
     if request.method != "POST":
         return JsonResponse({"error": "POST required"}, status=405)
@@ -921,14 +922,19 @@ def check_pophive_geo_coverage(request):
     indicators = data.get("indicators") or []
     if not isinstance(indicators, list):
         return JsonResponse({"error": "Expected indicators"}, status=400)
-    covered = to_pophive_location(data.get("geo") or "") is not None
+    try:
+        window = parse_date_window(data.get("start_date"), data.get("end_date"))
+    except InvalidDateWindowError as e:
+        return JsonResponse({"error": str(e)}, status=400)
     return JsonResponse(
         {
-            "not_covered_indicators": [
-                indicator
-                for indicator in indicators
-                if indicator.get("_endpoint") == "pophive" and not covered
-            ]
+            "coverage": get_pophive_geo_coverage(
+                data.get("geo") or "",
+                indicators,
+                data.get("age_group") or "",
+                fill_method=normalize_fill_method(data.get("fill_method")),
+                window=window,
+            )
         }
     )
 
