@@ -216,20 +216,27 @@ def map_fluview_geo_to_v5(geo_id):
     return "state", FLUVIEW_V5_GEO_RENAMES.get(geo_value, geo_value)
 
 
+# FluSurv-Net's aggregates and New York catchment areas, which v5 files under
+# standard geo types rather than as states.
+FLUSURV_V5_GEOS = {
+    "network_all": ("nation", "us"),
+    "network_eip": ("misc", "network_eip"),
+    "network_ihsp": ("misc", "network_ihsp"),
+    "ny_albany": ("msa", "10580"),  # Albany-Schenectady-Troy, NY
+    "ny_rochester": ("msa", "40380"),  # Rochester, NY
+}
+
+
 def map_flusurv_geo_to_v5(geo_id):
     """Map one of flusurv's ``locations`` ids to a v5 ``(geo_type, geo_value)`` pair.
 
-    v5 splits flusurv's flat picker list across two geo_types. The
-    FluSurv-Net sites -- the three networks and the two New York catchment
-    areas -- become ``flusurv_site``; the participating states stay
-    ``state``. Site ids are the only ones carrying an underscore, which is
-    what separates ``NY_albany`` (a site) from ``NY`` (a state, were it ever
-    offered). The ids are otherwise unchanged from v4, just lowercased.
+    v5 files the whole FluSurv-Net network under the nation, the EIP and IHSP
+    networks under ``misc``, and the two New York catchment areas under their
+    MSA codes (see ``FLUSURV_V5_GEOS``); the participating states stay
+    ``state``. Ids are matched case-insensitively and states lowercased.
     """
     geo_value = geo_id.lower()
-    if "_" in geo_value:
-        return "flusurv_site", geo_value
-    return "state", geo_value
+    return FLUSURV_V5_GEOS.get(geo_value, ("state", geo_value))
 
 
 def group_geos_by_v5_type(geos, mapper):

@@ -1896,14 +1896,14 @@ class FlusurvGeoMappingTests(TestCase):
 
     Expectations are taken from the live v5 API rather than inferred: the
     geo_type list is flusurv's ``geo_types`` from v5 metadata, and the
-    geo_values are the distinct values v5 flusurv actually returns for each
-    of them. v5 keeps every v4 id intact but lowercases it and splits the
-    flat picker list across two geo_types -- the FluSurv-Net sites and the
-    participating states.
+    geo_values are ones v5 flusurv actually returns data for. v5 files the
+    whole network under the nation, the EIP and IHSP networks under
+    ``misc``, the two New York catchment areas under their MSA codes, and
+    the participating states under ``state``, lowercased.
     """
 
     # flusurv's geo_types in v5 metadata.
-    V5_GEO_TYPES = {"flusurv_site", "state"}
+    V5_GEO_TYPES = {"nation", "misc", "msa", "state"}
 
     # Every id the flusurv geo picker offers.
     PICKER_IDS = [
@@ -1937,25 +1937,22 @@ class FlusurvGeoMappingTests(TestCase):
                 geo_type, _ = map_flusurv_geo_to_v5(geo_id)
                 self.assertIn(geo_type, self.V5_GEO_TYPES)
 
-    def test_network_ids_map_to_the_site_geo_type_unchanged(self):
+    def test_the_whole_network_is_the_nation(self):
+        self.assertEqual(map_flusurv_geo_to_v5("network_all"), ("nation", "us"))
+
+    def test_the_eip_and_ihsp_networks_are_misc(self):
         self.assertEqual(
-            map_flusurv_geo_to_v5("network_all"), ("flusurv_site", "network_all")
+            map_flusurv_geo_to_v5("network_eip"), ("misc", "network_eip")
         )
         self.assertEqual(
-            map_flusurv_geo_to_v5("network_eip"), ("flusurv_site", "network_eip")
-        )
-        self.assertEqual(
-            map_flusurv_geo_to_v5("network_ihsp"), ("flusurv_site", "network_ihsp")
+            map_flusurv_geo_to_v5("network_ihsp"), ("misc", "network_ihsp")
         )
 
-    def test_new_york_site_ids_are_sites_rather_than_states(self):
-        """These two are FluSurv-Net catchment areas, not the state of NY."""
-        self.assertEqual(
-            map_flusurv_geo_to_v5("NY_albany"), ("flusurv_site", "ny_albany")
-        )
-        self.assertEqual(
-            map_flusurv_geo_to_v5("NY_rochester"), ("flusurv_site", "ny_rochester")
-        )
+    def test_new_york_sites_are_their_msas_rather_than_the_state(self):
+        """These two are FluSurv-Net catchment areas, not the state of NY:
+        Albany-Schenectady-Troy (10580) and Rochester (40380)."""
+        self.assertEqual(map_flusurv_geo_to_v5("NY_albany"), ("msa", "10580"))
+        self.assertEqual(map_flusurv_geo_to_v5("NY_rochester"), ("msa", "40380"))
 
     def test_state_ids_are_lowercased(self):
         self.assertEqual(map_flusurv_geo_to_v5("CA"), ("state", "ca"))
@@ -1984,7 +1981,9 @@ class EpiweekSourceGeoGroupingTests(TestCase):
         self.assertEqual(
             grouped,
             {
-                "flusurv_site": ["network_all", "ny_albany", "network_eip"],
+                "nation": ["us"],
+                "msa": ["10580"],
+                "misc": ["network_eip"],
                 "state": ["ca", "ut"],
             },
         )
@@ -4130,7 +4129,7 @@ class FlusurvV5RoutingTests(V5RoutingTestMixin, TestCase):
         )
 
     @patch("indicatorsets.utils.epidata.requests.get")
-    def test_preview_splits_sites_and_states_into_two_v5_requests(self, mock_get):
+    def test_preview_asks_v5_once_per_geo_type(self, mock_get):
         mock_get.side_effect = self._fake_flusurv_get()
 
         preview_epiweek_data(
@@ -4143,14 +4142,14 @@ class FlusurvV5RoutingTests(V5RoutingTestMixin, TestCase):
             self._indicators(),
         )
         calls = self._probe_calls(mock_get)
-        self.assertEqual(len(calls), 2)
+        self.assertEqual(len(calls), 3)
         params_by_geo_type = {
             call.kwargs["params"]["geo_type"]: call.kwargs["params"] for call in calls
         }
         self.assertEqual(
-            params_by_geo_type["flusurv_site"]["geo_value"], "network_all,ny_albany"
+            {geo_type: p["geo_value"] for geo_type, p in params_by_geo_type.items()},
+            {"nation": "us", "state": "ca", "msa": "10580"},
         )
-        self.assertEqual(params_by_geo_type["state"]["geo_value"], "ca")
         for call in calls:
             self.assertIn("/v5/viz/", call.args[0])
         for params in params_by_geo_type.values():
@@ -4209,7 +4208,7 @@ class FlusurvV5RoutingTests(V5RoutingTestMixin, TestCase):
             "csv",
             self._indicators(signals=self.SIGNALS),
         )
-        self.assertEqual(len(result), 2)
+        self.assertEqual(len(result), 3)
         for command in result:
             self.assertIn("curl -o", command)
             self.assertIn("source=flusurv", command)
@@ -4223,7 +4222,7 @@ class FlusurvV5RoutingTests(V5RoutingTestMixin, TestCase):
             for call in self._probe_calls(mock_get)
         }
         self.assertEqual(
-            geo_by_type, {"flusurv_site": "network_all,ny_albany", "state": "ca"}
+            geo_by_type, {"nation": "us", "msa": "10580", "state": "ca"}
         )
 
     @patch("indicatorsets.utils.epidata.requests.get")
@@ -4254,15 +4253,15 @@ class FlusurvV5RoutingTests(V5RoutingTestMixin, TestCase):
             "2020-01-20",
             self._indicators(signals=self.SIGNALS),
         )
-        self.assertEqual(len(python_blocks), 2)
-        self.assertEqual(len(r_blocks), 2)
+        self.assertEqual(len(python_blocks), 3)
+        self.assertEqual(len(r_blocks), 3)
         self.assertFalse(any("pub_flusurv" in block for block in python_blocks))
         self.assertIn(
-            'flusurv_flusurv_site_v5_df = epidata.epidata_snapshot(\n'
+            'flusurv_msa_v5_df = epidata.epidata_snapshot(\n'
             '    source="flusurv",\n'
             '    signals=["rate_overall", "rate_age_0"],\n'
-            '    geo_type="flusurv_site",\n'
-            '    geo_values=["network_all", "ny_albany"],\n'
+            '    geo_type="msa",\n'
+            '    geo_values=["10580"],\n'
             '    reference_time=EpiRange("2020-01-01", "2020-01-20"),\n'
             ').df()\n',
             python_blocks,
