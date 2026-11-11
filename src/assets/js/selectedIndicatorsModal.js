@@ -293,28 +293,57 @@ async function checkGeoCoverage(geoValue) {
     }
 }
 
+function isFluviewIndicator(indicator) {
+    return (
+        indicator["_endpoint"] === "fluview" ||
+        indicator["_endpoint"] === "fluview_clinical"
+    );
+}
+
+/* Asks the server, which routes each fluview indicator to v5 or v4 the way
+ * Export does, whether geoValue has data for it. Only real values count. Keeps
+ * each indicator's notCoveredGeos in step with the answer, which Plot uses to
+ * skip the location; covered === null means the check itself failed, so the
+ * location is neither warned about nor skipped. Resolves to the uncovered
+ * indicators. */
 async function checkFluviewGeoCoverage(geoValue) {
-    if (indicatorHandler.getFluviewIndicators().length === 0) {
+    const fluviewIndicators = checkedIndicatorMembers.filter(isFluviewIndicator);
+    if (fluviewIndicators.length === 0) {
         return [];
     }
     try {
         const result = await $.ajax({
             url: "check_fluview_geo_coverage/",
-            type: "GET",
-            data: {
+            type: "POST",
+            dataType: "json",
+            contentType: "application/json",
+            headers: { "X-CSRFToken": Cookies.get("csrftoken") },
+            data: JSON.stringify({
                 geo: geoValue,
-                indicators: JSON.stringify(checkedIndicatorMembers.filter((indicator) => indicator["_endpoint"] === "fluview" || indicator["_endpoint"] === "fluview_clinical")),
+                fill_method: getFillMethod(),
+                indicators: fluviewIndicators.map((indicator) => ({
+                    _endpoint: indicator["_endpoint"],
+                    data_source: indicator.data_source,
+                    indicator: indicator.indicator,
+                })),
+            }),
+        });
+        const notCovered = [];
+        fluviewIndicators.forEach((indicator) => {
+            const entry = result["coverage"].find(
+                (e) =>
+                    e.data_source === indicator.data_source &&
+                    e.indicator === indicator.indicator
+            );
+            indicator["notCoveredGeos"] = (indicator["notCoveredGeos"] || []).filter(
+                (geo) => geo !== geoValue
+            );
+            if (entry && entry.covered === false) {
+                indicator["notCoveredGeos"].push(geoValue);
+                notCovered.push(indicator);
             }
-        }); 
-        for (const checkedIndicator of checkedIndicatorMembers.filter((indicator) => indicator["_endpoint"] === "fluview" || indicator["_endpoint"] === "fluview_clinical")) {
-            if (result["not_covered_indicators"].some((indicator) => indicator.indicator === checkedIndicator.indicator)) {
-                checkedIndicator["notCoveredGeos"] = checkedIndicator["notCoveredGeos"] || [];
-                if (!checkedIndicator["notCoveredGeos"].includes(geoValue)) {
-                    checkedIndicator["notCoveredGeos"].push(geoValue);
-                }
-            }
-        }
-        return result["not_covered_indicators"];
+        });
+        return notCovered;
     } catch (error) {
         console.error("Error fetching fluview geo coverage:", error);
         return [];
@@ -355,12 +384,32 @@ function warnIfCovidcastGeoNotCovered(geo) {
 
 // Fluview reads its locations from the main dropdown too; the server maps
 // each pick to a fluview region and answers "not covered" when there is none.
+// Bumped whenever the fluview answer may change (fill method), so a check
+// still in flight for the old choice is ignored. Its warnings are tagged so
+// they can be swapped out without touching the other alerts.
+let fluviewCoverageCheckGeneration = 0;
+
 function warnIfFluviewGeoNotCovered(geo) {
+    const generation = fluviewCoverageCheckGeneration;
     checkFluviewGeoCoverage(geo.id).then((notCoveredIndicators) => {
+        if (generation !== fluviewCoverageCheckGeneration) {
+            return;
+        }
         if (notCoveredIndicators.length > 0) {
-            showNotCoveredGeoWarningMessage(notCoveredIndicators, geo);
+            showNotCoveredGeoWarningMessage(notCoveredIndicators, geo).classList.add(
+                "fluview-coverage-alert"
+            );
         }
     });
+}
+
+function recheckFluviewCoverage() {
+    fluviewCoverageCheckGeneration += 1;
+    $("#warning-alert .fluview-coverage-alert").remove();
+    if (!$("#geographic_value").hasClass("select2-hidden-accessible")) {
+        return;
+    }
+    $("#geographic_value").select2("data").forEach(warnIfFluviewGeoNotCovered);
 }
 
 async function checkPophiveGeoCoverage(geoValue) {
@@ -507,6 +556,7 @@ $("#geographic_value").on("select2:select", function (e) {
 $("#fillMethod").on("change", function () {
     coverageCheckGeneration += 1;
     $("#warning-alert .covidcast-coverage-alert").remove();
+    recheckFluviewCoverage();
     recheckNwssCoverage();
     if (!$("#geographic_value").hasClass("select2-hidden-accessible")) {
         return;

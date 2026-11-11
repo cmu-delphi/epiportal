@@ -18,9 +18,14 @@ from indicatorsets.utils.epidata import (
     get_v5_source,
     group_v5_indicators_by_source,
     is_covidcast_indicator,
+    map_fluview_geo_to_v5,
 )
 from indicatorsets.utils.helpers import get_epiweek, list_to_dict
-from indicatorsets.utils.locations import to_covidcast_geo, to_nwss_sewersheds
+from indicatorsets.utils.locations import (
+    to_covidcast_geo,
+    to_fluview_region,
+    to_nwss_sewersheds,
+)
 
 logger = get_structured_logger("indicatorsets.utils")
 
@@ -328,6 +333,94 @@ def get_covidcast_geo_coverage(
             covered, route = None, None
         else:
             covered, route = False, None
+        coverage.append(
+            {
+                "data_source": indicator["data_source"],
+                "indicator": indicator["indicator"],
+                "covered": covered,
+                "route": route,
+            }
+        )
+    return coverage
+
+
+# The v4 endpoints behind the fluview indicator sets; each is also the
+# indicators' ``data_source``.
+FLUVIEW_DATA_SOURCES = ("fluview", "fluview_clinical")
+
+
+def get_fluview_geo_coverage(
+    geo, indicators, fill_method=DEFAULT_FILL_METHOD, window=None
+):
+    """Report, per fluview indicator, whether ``geo`` has data and from where.
+
+    Routes the way exports do: a migrated signal is asked of its v5 source
+    (with ``fill_method``) and never falls back to v4, since exports do not;
+    any other goes to its v4 endpoint, one request per ``data_source``. Only
+    real values count, so a ``0`` is data and an all-null series is not.
+    ``window`` (see ``parse_date_window``) limits both APIs to the chosen
+    dates; ``None`` is all time.
+
+    ``geo`` is a main-dropdown ``"geo_type:geo_value"`` id; a place fluview
+    has no region for (a county, say) is not covered and nothing is asked.
+    Returns one dict per fluview indicator with its ``data_source`` and
+    ``indicator`` plus ``covered`` (``True``/``False``, or ``None`` when the
+    lookup failed) and ``route`` (``"v5"``, ``"v4"`` or ``None``).
+    """
+    fluview_indicators = [
+        indicator
+        for indicator in indicators
+        if indicator.get("data_source") in FLUVIEW_DATA_SOURCES
+    ]
+
+    def key(indicator):
+        return indicator["data_source"], indicator["indicator"]
+
+    answers = {}
+    region = to_fluview_region(geo)
+    if region is not None:
+        v5_geo_type, v5_geo_value = map_fluview_geo_to_v5(region)
+        for v5_source, source_indicators in group_v5_indicators_by_source(
+            fluview_indicators
+        ).items():
+            signals = _get_v5_signals_with_values(
+                v5_source,
+                source_indicators,
+                v5_geo_type,
+                v5_geo_value,
+                fill_method,
+                window,
+            )
+            for indicator in source_indicators:
+                if signals is None:
+                    answers[key(indicator)] = (None, None)
+                elif indicator["indicator"] in signals:
+                    answers[key(indicator)] = (True, "v5")
+                else:
+                    answers[key(indicator)] = (False, None)
+
+        v4_groups = {}
+        for indicator in fluview_indicators:
+            if key(indicator) not in answers:
+                v4_groups.setdefault(indicator["data_source"], []).append(indicator)
+        for data_source, group in v4_groups.items():
+            rows = _fetch_rows(
+                f"{settings.EPIDATA_URL}{data_source}/",
+                {"regions": region, "epiweeks": v4_epiweeks(window)},
+                auth=epidata_auth(),
+            )
+            for indicator in group:
+                name = indicator["indicator"]
+                if rows is None:
+                    answers[key(indicator)] = (None, None)
+                elif any(row.get(name) not in (None, "") for row in rows):
+                    answers[key(indicator)] = (True, "v4")
+                else:
+                    answers[key(indicator)] = (False, None)
+
+    coverage = []
+    for indicator in fluview_indicators:
+        covered, route = answers.get(key(indicator), (False, None))
         coverage.append(
             {
                 "data_source": indicator["data_source"],

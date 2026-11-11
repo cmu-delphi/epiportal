@@ -2,7 +2,6 @@ from delphi_utils.logger import LoggerThread
 import base64
 import json
 import sys
-from datetime import datetime
 from textwrap import dedent
 
 import requests
@@ -11,7 +10,6 @@ from django.conf import settings
 from django.db.models import Case, IntegerField, Q, Value, When
 from django.http import JsonResponse
 from django.views.generic import ListView
-from epiweeks import Week
 
 from base.models import GeographyUnit
 from indicatorsets.filters import IndicatorSetFilter
@@ -31,6 +29,7 @@ from indicatorsets.utils.epidata import (
 )
 from indicatorsets.utils.geos import (
     InvalidDateWindowError,
+    get_fluview_geo_coverage,
     get_nwss_geo_coverage,
     get_nwss_sewersheds_with_values,
     parse_date_window,
@@ -41,7 +40,6 @@ from indicatorsets.utils.locations import (
     POPHIVE_LOCATION_LEVELS,
     POPHIVE_STATES_WITHOUT_DATA,
     nwss_counties,
-    to_fluview_region,
     to_pophive_location,
     use_main_locations,
 )
@@ -874,97 +872,36 @@ def get_related_indicators_json(request):
 
 
 def check_fluview_geo_coverage(request):
-    null_data_indicators = []
-    if request.method == "GET":
-        # The modal sends main-dropdown ids; fluview takes region ids.
-        geo_value = to_fluview_region(request.GET.get("geo"))
-        indicators = request.GET.get("indicators")
-        start_date = 199740
-        end_date = Week.fromdate(datetime.today())
-        end_date = f"{end_date.year}{end_date.week if end_date.week >= 10 else '0' + str(end_date.week)}"
-        indicators = json.loads(indicators)
-        if geo_value is None:
-            # A place fluview has no region for (e.g. a county): nothing
-            # selected here is covered, and there is nothing to ask Epidata.
-            return JsonResponse(
-                {
-                    "not_covered_indicators": [
-                        indicator
-                        for indicator in indicators
-                        if indicator["data_source"] in ("fluview", "fluview_clinical")
-                    ]
-                }
+    """Tell the selected-indicators modal which fluview indicators have data
+    for one main-dropdown location.
+
+    Expects a JSON body ``{"geo": "geo_type:geo_value", "indicators": [...]}``,
+    plus optional ``fill_method`` and ``start_date``/``end_date`` (no dates
+    means all time). See ``get_fluview_geo_coverage`` for the answer.
+    """
+    if request.method != "POST":
+        return JsonResponse({"error": "POST required"}, status=405)
+    try:
+        data = json.loads(request.body)
+    except ValueError:
+        return JsonResponse({"error": "Invalid JSON body"}, status=400)
+    indicators = data.get("indicators") or []
+    if not isinstance(indicators, list):
+        return JsonResponse({"error": "Expected indicators"}, status=400)
+    try:
+        window = parse_date_window(data.get("start_date"), data.get("end_date"))
+    except InvalidDateWindowError as e:
+        return JsonResponse({"error": str(e)}, status=400)
+    return JsonResponse(
+        {
+            "coverage": get_fluview_geo_coverage(
+                data.get("geo") or "",
+                indicators,
+                fill_method=normalize_fill_method(data.get("fill_method")),
+                window=window,
             )
-
-        fluview_indicators = {}
-        fluview_clinical_indicators = {}
-        for indicator in indicators:
-            if indicator["data_source"] == "fluview":
-                fluview_indicators[indicator["indicator"]] = 0
-            elif indicator["data_source"] == "fluview_clinical":
-                fluview_clinical_indicators[indicator["indicator"]] = 0
-
-        params = {
-            "regions": geo_value,
-            "epiweeks": f"{start_date}-{end_date}",
         }
-
-        if fluview_indicators:
-            try:
-                response = requests.get(
-                    f"{settings.EPIDATA_URL}fluview",
-                    params=params,
-                    auth=epidata_auth(),
-                    timeout=(5, 30),
-                )
-                response.raise_for_status()
-            except requests.RequestException:
-                logger.exception(
-                    "Error getting fluview data", extra={"geo_value": geo_value}
-                )
-            else:
-                data = response.json()
-                if len(data["epidata"]):
-                    for el in data["epidata"]:
-                        for indicator in fluview_indicators.keys():
-                            fluview_indicators[indicator] += (
-                                el[indicator] if el[indicator] else 0
-                            )
-        if fluview_clinical_indicators:
-            try:
-                response = requests.get(
-                    f"{settings.EPIDATA_URL}fluview_clinical",
-                    params=params,
-                    auth=epidata_auth(),
-                    timeout=(5, 30),
-                )
-                response.raise_for_status()
-            except requests.RequestException:
-                logger.exception(
-                    "Error getting fluview clinical data",
-                    extra={"geo_value": geo_value},
-                )
-            else:
-                data = response.json()
-                if len(data["epidata"]):
-                    for el in data["epidata"]:
-                        for indicator in fluview_clinical_indicators.keys():
-                            fluview_clinical_indicators[indicator] += el[indicator]
-
-        for indicator in fluview_indicators.keys():
-            if fluview_indicators[indicator] == 0:
-                null_data_indicators.append(indicator)
-        for indicator in fluview_clinical_indicators.keys():
-            if fluview_clinical_indicators[indicator] == 0:
-                null_data_indicators.append(indicator)
-        not_covered_indicators = [
-            indicator
-            for indicator in indicators
-            if indicator["indicator"] in null_data_indicators
-        ]
-        return JsonResponse(
-            {"not_covered_indicators": not_covered_indicators}, safe=False
-        )
+    )
 
 
 def check_pophive_geo_coverage(request):
