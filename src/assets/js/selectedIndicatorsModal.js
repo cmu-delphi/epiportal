@@ -190,6 +190,8 @@ function handleModeChange(mode) {
     $('#modeSubmitResult').html('');
 
     updateFillMethodVisibility();
+    // Plot checks all time, the other modes the Start/End dates.
+    recheckCoverageIfChanged();
 
     document.getElementsByName("modes").forEach((el) => {
         if (currentMode === el.value) {
@@ -205,92 +207,37 @@ document.getElementsByName('modes').forEach((el) => {
     });
 });
 
-function showNotCoveredGeoWarningMessage(notCoveredIndicators, geoValue) {
-    var warningMessage = "";
-    notCoveredIndicators.forEach((indicator) => {
-        if (currentMode === "epivis") {
-            warningMessage += `Indicator "${indicator.display_name}" is not available for Location "${geoValue.text}" <br>`;
-        } else {
-            var startDate = document.getElementById("start_date").value;
-            var endDate = document.getElementById("end_date").value;
-            warningMessage += `Indicator "${indicator.display_name}" is not available for Location "${geoValue.text}" for the time period from "${startDate}" to "${endDate}" <br>`;
-        }
-    });
-    return appendAlert(warningMessage, "warning");
+/* Coverage checks: for each location picked in the main Location(s)
+ * dropdown, ask the server whether each selected indicator has data there,
+ * the way a submission would get it, and warn about the ones that do not. */
+
+/* The dates a check is limited to. Export, Preview and Create query code use
+ * the Start/End dates; Plot always shows the whole series, so null (all
+ * time). undefined when the dates make no window (one missing, or start
+ * after end): there is nothing sensible to check then. */
+function getCoverageWindow() {
+    if (currentMode === "epivis") {
+        return null;
+    }
+    const start = document.getElementById("start_date").value;
+    const end = document.getElementById("end_date").value;
+    if (!start || !end || start > end) {
+        return undefined;
+    }
+    return { start_date: start, end_date: end };
 }
 
-/* Bumped whenever the fill method changes, so a coverage check still in
- * flight for the old one is ignored rather than raising a stale warning. */
-let coverageCheckGeneration = 0;
-
-/* Asks the server, which routes each covidcast indicator to v5 or v4 the
- * same way Export does, whether geoValue has data for it. Only real values
- * count: an indicator with nothing but nulls on both APIs is not covered.
- * The answer depends on the fill method, since Export only falls back to v4
- * for "source". covered === null means the check itself failed, so no warning
- * is shown. Resolves to null when the fill method changed mid-check. */
-async function checkGeoCoverage(geoValue) {
-    const generation = coverageCheckGeneration;
-    const notCoveredIndicators = [];
-    const covidcastIndicators = checkedIndicatorMembers.filter((indicator) =>
-        COVIDCAST_ENDPOINTS.includes(indicator["_endpoint"])
-    );
-    if (covidcastIndicators.length === 0) {
-        return notCoveredIndicators;
-    }
-
-    try {
-        const result = await $.ajax({
-            url: "check_covidcast_geo_coverage/",
-            type: "POST",
-            dataType: "json",
-            contentType: "application/json",
-            headers: { "X-CSRFToken": Cookies.get("csrftoken") },
-            data: JSON.stringify({
-                geo: geoValue,
-                fill_method: getFillMethod(),
-                indicators: covidcastIndicators.map((indicator) => ({
-                    _endpoint: indicator["_endpoint"],
-                    data_source: indicator.data_source,
-                    indicator: indicator.indicator,
-                    time_type: indicator.time_type,
-                })),
-            }),
-        });
-
-        if (generation !== coverageCheckGeneration) {
-            return null;
-        }
-
-        covidcastIndicators.forEach((indicator) => {
-            const entry = result["coverage"].find(
-                (e) =>
-                    e.data_source === indicator.data_source &&
-                    e.indicator === indicator.indicator
-            );
-            if (!entry || entry.covered !== false) {
-                // Covered now, perhaps not under the previous fill method.
-                if (indicator["notCoveredGeos"]) {
-                    indicator["notCoveredGeos"] = indicator["notCoveredGeos"].filter(
-                        (geo) => geo !== geoValue
-                    );
-                }
-                return;
-            }
-            if (!indicator["notCoveredGeos"]) {
-                indicator["notCoveredGeos"] = [];
-            }
-            if (!indicator["notCoveredGeos"].includes(geoValue)) {
-                indicator["notCoveredGeos"].push(geoValue);
-            }
-            notCoveredIndicators.push(indicator);
-        });
-
-        return notCoveredIndicators;
-    } catch (error) {
-        console.error("Error fetching geo coverage:", error);
-        return notCoveredIndicators;
-    }
+function showNotCoveredGeoWarningMessage(labels, geo, window) {
+    const period = window
+        ? ` for the time period from "${window.start_date}" to "${window.end_date}"`
+        : "";
+    const warningMessage = labels
+        .map(
+            (label) =>
+                `Indicator "${label}" is not available for Location "${geo.text}"${period}`
+        )
+        .join(" <br>");
+    return appendAlert(warningMessage, "warning");
 }
 
 function isFluviewIndicator(indicator) {
@@ -300,55 +247,216 @@ function isFluviewIndicator(indicator) {
     );
 }
 
-/* Asks the server, which routes each fluview indicator to v5 or v4 the way
- * Export does, whether geoValue has data for it. Only real values count. Keeps
- * each indicator's notCoveredGeos in step with the answer, which Plot uses to
- * skip the location; covered === null means the check itself failed, so the
- * location is neither warned about nor skipped. Resolves to the uncovered
- * indicators. */
-async function checkFluviewGeoCoverage(geoValue) {
-    const fluviewIndicators = checkedIndicatorMembers.filter(isFluviewIndicator);
-    if (fluviewIndicators.length === 0) {
+function getSelectedNwssSources() {
+    if (!$("#nwssSource").hasClass("select2-hidden-accessible")) {
+        return [];
+    }
+    return $("#nwssSource").select2("data").map((source) => source.id);
+}
+
+/* One entry per kind of source the main dropdown serves. Each picks its
+ * indicators and adds what its server check needs beyond the shared geo, fill
+ * method and dates, or null when there is nothing to check yet (no NWSS
+ * source, no Cosmos age group). skipsInPlot marks the ones Plot leaves an
+ * uncovered location out for, via the indicator's notCoveredGeos; NWSS drops
+ * empty sewersheds on the server instead. */
+const COVERAGE_CHECKS = [
+    {
+        url: "check_covidcast_geo_coverage/",
+        indicators: () =>
+            checkedIndicatorMembers.filter((i) => COVIDCAST_ENDPOINTS.includes(i["_endpoint"])),
+        params: () => ({}),
+        skipsInPlot: true,
+    },
+    {
+        url: "check_fluview_geo_coverage/",
+        indicators: () => checkedIndicatorMembers.filter(isFluviewIndicator),
+        params: () => ({}),
+        skipsInPlot: true,
+    },
+    {
+        url: "check_pophive_geo_coverage/",
+        indicators: () => checkedIndicatorMembers.filter((i) => i["_endpoint"] === "pophive"),
+        params: () => {
+            const ageGroup = getSelectedPophiveAgeGroup();
+            return ageGroup.length > 0 ? { age_group: ageGroup[0].id } : null;
+        },
+    },
+    {
+        url: "check_nwss_geo_coverage/",
+        indicators: () => checkedIndicatorMembers.filter((i) => i["_endpoint"] === "nwss"),
+        params: () => {
+            const sources = getSelectedNwssSources();
+            return sources.length > 0 ? { nwss_sources: sources } : null;
+        },
+        // One answer per selected NWSS source, so name it.
+        label: (indicator, entry) => `${indicator.display_name} (source: ${entry.nwss_source})`,
+    },
+];
+
+/* Resolves to the {indicator, label, skipsInPlot} entries ``check`` reports
+ * no data for at geoId. covered === null means the server could not tell, and
+ * a failed request means the same, so neither warns. */
+async function runCoverageCheck(check, geoId, window) {
+    const indicators = check.indicators();
+    const params = indicators.length > 0 ? check.params() : null;
+    if (params === null) {
         return [];
     }
     try {
         const result = await $.ajax({
-            url: "check_fluview_geo_coverage/",
+            url: check.url,
             type: "POST",
             dataType: "json",
             contentType: "application/json",
             headers: { "X-CSRFToken": Cookies.get("csrftoken") },
             data: JSON.stringify({
-                geo: geoValue,
+                geo: geoId,
                 fill_method: getFillMethod(),
-                indicators: fluviewIndicators.map((indicator) => ({
+                ...(window || {}),
+                ...params,
+                indicators: indicators.map((indicator) => ({
                     _endpoint: indicator["_endpoint"],
                     data_source: indicator.data_source,
                     indicator: indicator.indicator,
+                    time_type: indicator.time_type,
                 })),
             }),
         });
-        const notCovered = [];
-        fluviewIndicators.forEach((indicator) => {
-            const entry = result["coverage"].find(
-                (e) =>
-                    e.data_source === indicator.data_source &&
-                    e.indicator === indicator.indicator
-            );
-            indicator["notCoveredGeos"] = (indicator["notCoveredGeos"] || []).filter(
-                (geo) => geo !== geoValue
-            );
-            if (entry && entry.covered === false) {
-                indicator["notCoveredGeos"].push(geoValue);
-                notCovered.push(indicator);
-            }
-        });
-        return notCovered;
+        return result["coverage"]
+            .filter((entry) => entry.covered === false)
+            .map((entry) => {
+                const indicator = indicators.find(
+                    (i) => i.data_source === entry.data_source && i.indicator === entry.indicator
+                );
+                return (
+                    indicator && {
+                        indicator,
+                        label: check.label ? check.label(indicator, entry) : indicator.display_name,
+                        skipsInPlot: Boolean(check.skipsInPlot),
+                    }
+                );
+            })
+            .filter(Boolean);
     } catch (error) {
-        console.error("Error fetching fluview geo coverage:", error);
+        console.error(`Error checking coverage with ${check.url}:`, error);
         return [];
     }
 }
+
+function selectedGeos() {
+    if (!$("#geographic_value").hasClass("select2-hidden-accessible")) {
+        return [];
+    }
+    return $("#geographic_value").select2("data");
+}
+
+/* Bumped by every full re-check, so a check still in flight for the old
+ * dates, fill method, NWSS sources or age group is ignored rather than
+ * raising a stale warning or skipping a location in Plot. */
+let coverageCheckGeneration = 0;
+
+/* Checks one location against every kind of source at once, and raises one
+ * warning for it, tagged with the location so removing it can take the
+ * warning away. */
+function warnIfGeoNotCovered(geo) {
+    const window = getCoverageWindow();
+    if (window === undefined) {
+        return;
+    }
+    const generation = coverageCheckGeneration;
+    Promise.all(COVERAGE_CHECKS.map((check) => runCoverageCheck(check, geo.id, window))).then(
+        (results) => {
+            if (
+                generation !== coverageCheckGeneration ||
+                !selectedGeos().some((selected) => selected.id === geo.id)
+            ) {
+                return;
+            }
+            const notCovered = results.flat();
+            notCovered.forEach(({ indicator, skipsInPlot }) => {
+                if (!skipsInPlot) {
+                    return;
+                }
+                indicator["notCoveredGeos"] = indicator["notCoveredGeos"] || [];
+                if (!indicator["notCoveredGeos"].includes(geo.id)) {
+                    indicator["notCoveredGeos"].push(geo.id);
+                }
+            });
+            if (notCovered.length > 0) {
+                const alert = showNotCoveredGeoWarningMessage(
+                    notCovered.map((entry) => entry.label),
+                    geo,
+                    window
+                );
+                alert.classList.add("coverage-alert");
+                alert.dataset.geo = geo.id;
+            }
+        }
+    );
+}
+
+/* Everything besides the location an answer depends on. A full re-check only
+ * runs when this changes, so a mode switch that keeps the same dates (Export
+ * to Preview, say) asks the server nothing. */
+function coverageInputs() {
+    const window = getCoverageWindow();
+    return JSON.stringify([
+        window === undefined ? "no window" : window,
+        getFillMethod(),
+        getSelectedNwssSources(),
+        getSelectedPophiveAgeGroup().map((ageGroup) => ageGroup.id),
+    ]);
+}
+
+let lastCoverageInputs = null;
+
+/* Drops every coverage warning and every location Plot was told to skip, and
+ * checks each picked location again. */
+function recheckCoverage() {
+    coverageCheckGeneration += 1;
+    lastCoverageInputs = coverageInputs();
+    $("#warning-alert .coverage-alert").remove();
+    checkedIndicatorMembers.forEach((indicator) => {
+        delete indicator["notCoveredGeos"];
+    });
+    selectedGeos().forEach(warnIfGeoNotCovered);
+}
+
+function recheckCoverageIfChanged() {
+    if (coverageInputs() !== lastCoverageInputs) {
+        recheckCoverage();
+    }
+}
+
+$("#geographic_value").on("select2:select", function (e) {
+    warnIfGeoNotCovered(e.params.data);
+});
+
+$("#geographic_value").on("select2:unselect", function (e) {
+    const geoId = e.params.data.id;
+    $("#warning-alert .coverage-alert")
+        .filter((_, alert) => alert.dataset.geo === geoId)
+        .remove();
+    checkedIndicatorMembers.forEach((indicator) => {
+        if (indicator["notCoveredGeos"]) {
+            indicator["notCoveredGeos"] = indicator["notCoveredGeos"].filter(
+                (id) => id !== geoId
+            );
+        }
+    });
+});
+
+$("#fillMethod").on("change", recheckCoverageIfChanged);
+// Both are added to the modal only once their indicators are selected.
+$(document).on("change", "#nwssSource, #pophiveAgeGroup", recheckCoverageIfChanged);
+
+// Typing a date fires change per edit; wait for the user to settle.
+let coverageDatesTimer = null;
+$("#start_date, #end_date").on("change", function () {
+    clearTimeout(coverageDatesTimer);
+    coverageDatesTimer = setTimeout(recheckCoverageIfChanged, 500);
+});
 
 async function getAvailableGeos(indicators) {
     const csrftoken = Cookies.get("csrftoken");
@@ -369,245 +477,6 @@ async function getAvailableGeos(indicators) {
         return null;
     }
 }
-
-/* Covidcast coverage warnings are tagged so a fill method change can swap
- * them out without touching the other alerts in the modal. */
-function warnIfCovidcastGeoNotCovered(geo) {
-    checkGeoCoverage(geo.id).then((notCoveredIndicators) => {
-        if (notCoveredIndicators && notCoveredIndicators.length > 0) {
-            showNotCoveredGeoWarningMessage(notCoveredIndicators, geo).classList.add(
-                "covidcast-coverage-alert"
-            );
-        }
-    });
-}
-
-// Fluview reads its locations from the main dropdown too; the server maps
-// each pick to a fluview region and answers "not covered" when there is none.
-// Bumped whenever the fluview answer may change (fill method), so a check
-// still in flight for the old choice is ignored. Its warnings are tagged so
-// they can be swapped out without touching the other alerts.
-let fluviewCoverageCheckGeneration = 0;
-
-function warnIfFluviewGeoNotCovered(geo) {
-    const generation = fluviewCoverageCheckGeneration;
-    checkFluviewGeoCoverage(geo.id).then((notCoveredIndicators) => {
-        if (generation !== fluviewCoverageCheckGeneration) {
-            return;
-        }
-        if (notCoveredIndicators.length > 0) {
-            showNotCoveredGeoWarningMessage(notCoveredIndicators, geo).classList.add(
-                "fluview-coverage-alert"
-            );
-        }
-    });
-}
-
-function recheckFluviewCoverage() {
-    fluviewCoverageCheckGeneration += 1;
-    $("#warning-alert .fluview-coverage-alert").remove();
-    if (!$("#geographic_value").hasClass("select2-hidden-accessible")) {
-        return;
-    }
-    $("#geographic_value").select2("data").forEach(warnIfFluviewGeoNotCovered);
-}
-
-/* Asks the server, which reads /viz/ the way Export does, whether geoValue
- * has Cosmos data for each pophive indicator with the selected age group and
- * fill method. The age group list loads after the modal opens, so until one
- * is selected there is nothing to check; selecting it re-checks. Resolves to
- * the uncovered indicators; covered === null means the check itself failed,
- * so no warning is shown. */
-async function checkPophiveGeoCoverage(geoValue) {
-    const pophiveIndicators = checkedIndicatorMembers.filter(
-        (indicator) => indicator["_endpoint"] === "pophive"
-    );
-    const ageGroup = getSelectedPophiveAgeGroup();
-    if (pophiveIndicators.length === 0 || ageGroup.length === 0) {
-        return [];
-    }
-    try {
-        const result = await $.ajax({
-            url: "check_pophive_geo_coverage/",
-            type: "POST",
-            dataType: "json",
-            contentType: "application/json",
-            headers: { "X-CSRFToken": Cookies.get("csrftoken") },
-            data: JSON.stringify({
-                geo: geoValue,
-                age_group: ageGroup[0].id,
-                fill_method: getFillMethod(),
-                indicators: pophiveIndicators.map((indicator) => ({
-                    _endpoint: indicator["_endpoint"],
-                    data_source: indicator.data_source,
-                    indicator: indicator.indicator,
-                })),
-            }),
-        });
-        return pophiveIndicators.filter((indicator) =>
-            result["coverage"].some(
-                (entry) => entry.indicator === indicator.indicator && entry.covered === false
-            )
-        );
-    } catch (error) {
-        console.error("Error fetching Cosmos geo coverage:", error);
-        return [];
-    }
-}
-
-// Bumped whenever the Cosmos answer may change (age group or fill method), so
-// a check still in flight for the old choice is ignored. Its warnings are
-// tagged so they can be swapped out without touching the other alerts.
-let pophiveCoverageCheckGeneration = 0;
-
-// Cosmos (pophive) reads its locations from the main dropdown too; places it
-// has no data for (counties, territories, ...) are skipped, so say so.
-function warnIfPophiveGeoNotCovered(geo) {
-    const generation = pophiveCoverageCheckGeneration;
-    checkPophiveGeoCoverage(geo.id).then((notCoveredIndicators) => {
-        if (generation !== pophiveCoverageCheckGeneration) {
-            return;
-        }
-        if (notCoveredIndicators.length > 0) {
-            showNotCoveredGeoWarningMessage(notCoveredIndicators, geo).classList.add(
-                "pophive-coverage-alert"
-            );
-        }
-    });
-}
-
-function recheckPophiveCoverage() {
-    pophiveCoverageCheckGeneration += 1;
-    $("#warning-alert .pophive-coverage-alert").remove();
-    if (!$("#geographic_value").hasClass("select2-hidden-accessible")) {
-        return;
-    }
-    $("#geographic_value").select2("data").forEach(warnIfPophiveGeoNotCovered);
-}
-
-// #pophiveAgeGroup is added to the modal only once Cosmos indicators are
-// selected, and selecting its default fires a change too.
-$(document).on("change", "#pophiveAgeGroup", recheckPophiveCoverage);
-
-function getSelectedNwssSources() {
-    if (!$("#nwssSource").hasClass("select2-hidden-accessible")) {
-        return [];
-    }
-    return $("#nwssSource").select2("data").map((source) => source.id);
-}
-
-/* Asks the server, which reads /viz/ for the county's sewersheds the way
- * Export does, whether each NWSS indicator has data from each selected NWSS
- * source. Until a source is picked there is nothing to check. Resolves to one
- * entry per uncovered (indicator, source), labelled with the source;
- * covered === null means the check itself failed, so no warning is shown. */
-async function checkNwssGeoCoverage(geoValue) {
-    const nwssIndicators = checkedIndicatorMembers.filter(
-        (indicator) => indicator["_endpoint"] === "nwss"
-    );
-    const nwssSources = getSelectedNwssSources();
-    if (nwssIndicators.length === 0 || nwssSources.length === 0) {
-        return [];
-    }
-    try {
-        const result = await $.ajax({
-            url: "check_nwss_geo_coverage/",
-            type: "POST",
-            dataType: "json",
-            contentType: "application/json",
-            headers: { "X-CSRFToken": Cookies.get("csrftoken") },
-            data: JSON.stringify({
-                geo: geoValue,
-                nwss_sources: nwssSources,
-                fill_method: getFillMethod(),
-                indicators: nwssIndicators.map((indicator) => ({
-                    _endpoint: indicator["_endpoint"],
-                    data_source: indicator.data_source,
-                    indicator: indicator.indicator,
-                })),
-            }),
-        });
-        const notCovered = [];
-        result["coverage"].forEach((entry) => {
-            if (entry.covered !== false) {
-                return;
-            }
-            const indicator = nwssIndicators.find(
-                (i) => i.indicator === entry.indicator
-            );
-            if (indicator) {
-                notCovered.push({
-                    ...indicator,
-                    display_name: `${indicator.display_name} (source: ${entry.nwss_source})`,
-                });
-            }
-        });
-        return notCovered;
-    } catch (error) {
-        console.error("Error fetching NWSS geo coverage:", error);
-        return [];
-    }
-}
-
-// NWSS reads its locations from the main dropdown too, as the sewersheds of
-// the picked counties; anything else (states, counties with no sewershed) is
-// skipped, so say so, per selected NWSS source.
-// Bumped whenever the NWSS answer may change (source or fill method), so a
-// check still in flight for the old choice is ignored.
-let nwssCoverageCheckGeneration = 0;
-
-// NWSS warnings are tagged so a source or fill method change can swap them
-// out without touching the other alerts in the modal.
-function warnIfNwssGeoNotCovered(geo) {
-    const generation = nwssCoverageCheckGeneration;
-    checkNwssGeoCoverage(geo.id).then((notCoveredIndicators) => {
-        if (generation !== nwssCoverageCheckGeneration) {
-            return;
-        }
-        if (notCoveredIndicators.length > 0) {
-            showNotCoveredGeoWarningMessage(notCoveredIndicators, geo).classList.add(
-                "nwss-coverage-alert"
-            );
-        }
-    });
-}
-
-// The answer depends on the selected NWSS sources and fill method as well as
-// the location, so re-check every picked location whichever is chosen last.
-function recheckNwssCoverage() {
-    nwssCoverageCheckGeneration += 1;
-    $("#warning-alert .nwss-coverage-alert").remove();
-    if (!$("#geographic_value").hasClass("select2-hidden-accessible")) {
-        return;
-    }
-    $("#geographic_value").select2("data").forEach(warnIfNwssGeoNotCovered);
-}
-
-// #nwssSource is added to the modal only once NWSS indicators are selected.
-$(document).on("change", "#nwssSource", recheckNwssCoverage);
-
-function warnIfGeoNotCovered(geo) {
-    warnIfCovidcastGeoNotCovered(geo);
-    warnIfFluviewGeoNotCovered(geo);
-    warnIfPophiveGeoNotCovered(geo);
-    warnIfNwssGeoNotCovered(geo);
-}
-
-$("#geographic_value").on("select2:select", function (e) {
-    warnIfGeoNotCovered(e.params.data);
-});
-
-$("#fillMethod").on("change", function () {
-    coverageCheckGeneration += 1;
-    $("#warning-alert .covidcast-coverage-alert").remove();
-    recheckFluviewCoverage();
-    recheckPophiveCoverage();
-    recheckNwssCoverage();
-    if (!$("#geographic_value").hasClass("select2-hidden-accessible")) {
-        return;
-    }
-    $("#geographic_value").select2("data").forEach(warnIfCovidcastGeoNotCovered);
-});
 
 function showNIDSSFluLocationSelect() {
     if (indicatorHandler.getNIDSSFluIndicators().length > 0) {
@@ -679,7 +548,6 @@ function showNwssFieldsSelect() {
         }
     }
     else {
-        $("#nwssPcrTarget").val(null).trigger("change");
         $("#nwssSource").val(null).trigger("change");
         $("#nwssDiv").hide();
     }
@@ -760,7 +628,7 @@ $("#showSelectedIndicatorsButton").click(async function () {
     } else {
         $("#geographic_value").prop("disabled", false);
     }
-    $('#geographic_value').select2("data").forEach(warnIfGeoNotCovered);
+    recheckCoverage();
 });
 
 
