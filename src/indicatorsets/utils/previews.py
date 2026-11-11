@@ -19,8 +19,10 @@ from indicatorsets.utils.epidata import (
     get_v5_source,
     can_fall_back_to_v4,
     is_covidcast_indicator,
+    group_v5_indicators_by_source,
     split_geos_by_v5_values,
     split_v4_v5_indicators,
+    v5_values_missing_a_signal,
 )
 from indicatorsets.utils.exceptions import InvalidApiKeyError
 from indicatorsets.utils.helpers import get_epiweek
@@ -241,6 +243,7 @@ def preview_v5_epiweek_data(
     api_key,
     data_format,
     fill_method=DEFAULT_FILL_METHOD,
+    fallback_geos=None,
 ):
     """Fetch preview rows for epiweek signals whose source has migrated to v5.
 
@@ -256,37 +259,71 @@ def preview_v5_epiweek_data(
     one endpoint can cover several data sources mapping to different v5
     sources, and querying one source for another's signal returns the wrong
     data rather than an error.
+
+    ``fallback_geos``, a dict, turns on the v4 fallback the export uses: a geo
+    v5 lacks a value for, for any of a v5 source's signals, is left out of
+    these previews and added to ``fallback_geos`` under each indicator's v4
+    ``data_source``, for the caller to preview from v4.
     """
     preview_data = []
-    for indicator in v5_indicators:
-        for geo_type, geo_values in source.group_geos_by_v5_type(geos).items():
-            params = {
-                "source": get_v5_source(indicator),
-                "signal": indicator["indicator"],
-                "geo_type": geo_type,
-                "geo_value": ",".join(geo_values),
-                "reference_times": f"{start_date}:{end_date}",
-                "format": data_format,
-                "header": "true" if data_format == "csv" else "false",
-            }
-            if api_key:
-                params["token"] = api_key
-            if fill_method:
-                params["fill_method"] = fill_method
-            try:
-                response = requests.get(
-                    f"{settings.EPIDATA_V5_URL}viz/", params=params, timeout=(5, 30)
+    for _v5_source, source_indicators in group_v5_indicators_by_source(
+        v5_indicators
+    ).items():
+        for geo_type, pairs in source.pair_geos_by_v5_type(geos).items():
+            geo_values = [geo_value for geo_value, _geo in pairs]
+            responses = []
+            for indicator in source_indicators:
+                params = {
+                    "source": get_v5_source(indicator),
+                    "signal": indicator["indicator"],
+                    "geo_type": geo_type,
+                    "geo_value": ",".join(geo_values),
+                    "reference_times": f"{start_date}:{end_date}",
+                    "format": data_format,
+                    "header": "true" if data_format == "csv" else "false",
+                }
+                if api_key:
+                    params["token"] = api_key
+                if fill_method:
+                    params["fill_method"] = fill_method
+                try:
+                    response = requests.get(
+                        f"{settings.EPIDATA_V5_URL}viz/", params=params, timeout=(5, 30)
+                    )
+                    if response.status_code == 401:
+                        raise InvalidApiKeyError(INVALID_API_KEY_MESSAGE)
+                    response.raise_for_status()
+                except requests.RequestException:
+                    logger.exception(
+                        "Error getting epiweek v5 data",
+                        extra={"signal": indicator["indicator"], "geo_type": geo_type},
+                    )
+                    continue
+                responses.append((indicator, response))
+            keep = None
+            if fallback_geos is not None and responses:
+                rows = [
+                    row
+                    for _indicator, response in responses
+                    for row in get_response_rows(response, data_format)
+                ]
+                missing = set(
+                    v5_values_missing_a_signal(
+                        rows, [i["indicator"] for i, _r in responses], geo_values
+                    )
                 )
-                if response.status_code == 401:
-                    raise InvalidApiKeyError(INVALID_API_KEY_MESSAGE)
-                response.raise_for_status()
-            except requests.RequestException:
-                logger.exception(
-                    "Error getting epiweek v5 data",
-                    extra={"signal": indicator["indicator"], "geo_type": geo_type},
+                for data_source in sorted({i["data_source"] for i, _r in responses}):
+                    for geo_value, geo in pairs:
+                        bucket = fallback_geos.get(data_source, [])
+                        if geo_value in missing and geo not in bucket:
+                            fallback_geos[data_source] = [*bucket, geo]
+                keep = [v for v in geo_values if v not in missing]
+                if not keep:
+                    continue
+            for _indicator, response in responses:
+                preview_data.append(
+                    get_preview_data(response, data_format, geo_values=keep)
                 )
-                continue
-            preview_data.append(get_preview_data(response, data_format))
     return preview_data
 
 
@@ -362,6 +399,8 @@ def preview_epiweek_data(
     preview_data = []
     source_indicators = [i for i in indicators if i["_endpoint"] == source.key]
     v5_indicators, v4_indicators, _ = split_v4_v5_indicators(source_indicators)
+    # v4 data_source -> geos to preview from v4 instead; see the export.
+    fallback_geos = {} if source.can_fall_back_to_v4(fill_method) else None
     if v5_indicators:
         preview_data.extend(
             preview_v5_epiweek_data(
@@ -373,8 +412,10 @@ def preview_epiweek_data(
                 api_key,
                 data_format,
                 fill_method,
+                fallback_geos=fallback_geos,
             )
         )
+    v4_data_sources = []
     if v4_indicators or not v5_indicators:
         v4_data_sources = sorted({i["data_source"] for i in v4_indicators}) or [
             source.key
@@ -385,6 +426,20 @@ def preview_epiweek_data(
                     source,
                     data_source,
                     geos,
+                    start_date,
+                    end_date,
+                    api_key,
+                    data_format,
+                )
+            )
+    # A data_source already previewed from v4 above covers every geo.
+    for data_source, missing in (fallback_geos or {}).items():
+        if data_source not in v4_data_sources:
+            preview_data.extend(
+                preview_v4_epiweek_data(
+                    source,
+                    data_source,
+                    missing,
                     start_date,
                     end_date,
                     api_key,

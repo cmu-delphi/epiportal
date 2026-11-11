@@ -1800,8 +1800,13 @@ class V5RoutingTestMixin:
             # real value back to v4, so a row that names no geo would count
             # as "no data" for every geo.
             geos = (params or {}).get("geo_value") or (params or {}).get("geo_values")
+            # And one per requested signal, named as v5 names it, so a batched
+            # epiweek probe sees every signal it asked for.
+            signals = (params or {}).get("signal") or (params or {}).get("signals")
             rows = [
-                {"geo_value": geo, "value": 1} for geo in str(geos or "").split(",")
+                {"geo_value": geo, "value": 1, **({"signal": signal} if signal else {})}
+                for geo in str(geos or "").split(",")
+                for signal in (str(signals).split(",") if signals else [None])
             ]
             response.json.return_value = (
                 {"epidata": rows, "result": 1, "message": "success"}
@@ -6125,6 +6130,7 @@ class ModalScriptsAreVersionedTests(TestCase):
 
 
 FLUVIEW_WILI = {"_endpoint": "fluview", "data_source": "fluview", "indicator": "wili"}
+FLUVIEW_ILI = {"_endpoint": "fluview", "data_source": "fluview", "indicator": "ili"}
 FLUVIEW_AGE_0 = {"_endpoint": "fluview", "data_source": "fluview", "indicator": "num_age_0"}
 CLINICAL_SPECIMENS = {
     "_endpoint": "fluview",
@@ -6185,7 +6191,7 @@ class FluviewGeoCoverageTests(TestCase):
         fake, calls = _fluview_get(
             v5_rows={
                 "fluview_ilinet": [{"signal": "wili", "value": 1.2}],
-                "fluview_resp_lab_clinical": [{"signal": "total_specimens", "value": None}],
+                "fluview_resp_lab_clinical": [{"signal": "total_specimens", "value": 0}],
             }
         )
         coverage = self._coverage(
@@ -6196,7 +6202,7 @@ class FluviewGeoCoverageTests(TestCase):
         )
         self.assertEqual(
             (coverage["total_specimens"]["covered"], coverage["total_specimens"]["route"]),
-            (False, None),
+            (True, "v5"),
         )
         self.assertEqual(
             sorted((params["source"], params["geo_type"], params["geo_value"]) for _u, params, _k in calls),
@@ -6208,10 +6214,27 @@ class FluviewGeoCoverageTests(TestCase):
             self.assertEqual(params["token"], "key")
             self.assertNotIn("reference_times", params)
 
-    def test_migrated_signal_without_v5_values_is_not_asked_of_v4(self, _meta):
-        # Exports never fall back to v4 for migrated fluview signals.
+    def test_migrated_signal_without_v5_values_falls_back_to_v4(self, _meta):
+        # v5 has no wili for states; v4 does, and exports fall back to it.
+        fake, calls = _fluview_get(
+            v5_rows={"fluview_ilinet": [{"signal": "ili", "value": 2.0}]},
+            v4_rows={"fluview": [{"wili": 1.1, "ili": 2.0}]},
+        )
+        coverage = self._coverage("state:PA", [FLUVIEW_WILI, FLUVIEW_ILI], fake)
+        self.assertEqual(
+            (coverage["wili"]["covered"], coverage["wili"]["route"]), (True, "v4")
+        )
+        # Exports serve the whole location from v4, so ili is answered there too.
+        self.assertEqual(
+            (coverage["ili"]["covered"], coverage["ili"]["route"]), (True, "v4")
+        )
+        v4_calls = [p for url, p, _k in calls if url == "https://v4.test/fluview/"]
+        self.assertEqual([p["regions"] for p in v4_calls], ["PA"])
+
+    def test_a_filled_fill_method_never_falls_back_to_v4(self, _meta):
+        # v4 cannot fill, so exports keep a filled series on v5.
         fake, calls = _fluview_get(v5_rows={"fluview_ilinet": []})
-        coverage = self._coverage("nation:US", [FLUVIEW_WILI], fake)
+        coverage = self._coverage("nation:US", [FLUVIEW_WILI], fake, fill_method="ave")
         self.assertIs(coverage["wili"]["covered"], False)
         self.assertEqual([url for url, _p, _k in calls], ["https://v5.test/viz/"])
 
@@ -6285,6 +6308,127 @@ class FluviewGeoCoverageTests(TestCase):
             {name: e["covered"] for name, e in coverage.items()},
             {"wili": False, "percent_positive": False},
         )
+
+
+@override_settings(EPIDATA_URL="https://v4.test/", EPIDATA_V5_URL="https://v5.test/")
+@patch("indicatorsets.utils.epidata.get_v5_metadata", return_value=FLUVIEW_V5_METADATA)
+class FluviewV5FallbackTests(TestCase):
+    """Export and Preview serve a fluview location from v4 when v5 lacks one of
+    the selected migrated signals there, as covidcast does per geo.
+
+    v4 fluview returns every column for a region, so the whole location
+    moves to v4 rather than being exported twice.
+    """
+
+    GEOS = [
+        {"id": "nat", "text": "United States"},
+        {"id": "PA", "text": "Pennsylvania"},
+        {"id": "jfk", "text": "New York City"},
+    ]
+    # What v5 has today: wili and ili nationally, only ili for states and NYC.
+    V5_VALUES = {("us", "wili"), ("us", "ili"), ("pa", "ili"), ("nyc", "ili")}
+
+    def _fake(self, v5_values=V5_VALUES):
+        calls = []
+
+        def fake_get(url, params=None, **kwargs):
+            calls.append((url, dict(params or {})))
+            if url.endswith("/viz/"):
+                rows = [
+                    {
+                        "signal": signal,
+                        "geo_type": params["geo_type"],
+                        "geo_value": geo,
+                        "value": 1.0 if (geo, signal) in v5_values else None,
+                    }
+                    for geo in params["geo_value"].split(",")
+                    for signal in params["signal"].split(",")
+                ]
+                return _json_response(rows)
+            return _json_response(_v4_envelope([{"region": "x", "wili": 1.0, "ili": 2.0}]))
+
+        return fake_get, calls
+
+    def _export(self, indicators, fill_method="", v5_values=V5_VALUES, source="fluview"):
+        fake, calls = self._fake(v5_values)
+        with patch("indicatorsets.utils.epidata.requests.get", side_effect=fake):
+            commands = generate_epiweek_export_url(
+                EPIWEEK_SOURCES[source],
+                self.GEOS,
+                "2024-01-01",
+                "2024-03-31",
+                None,
+                "csv",
+                indicators,
+                fill_method,
+            )
+        return commands, calls
+
+    def _preview(self, indicators, fill_method=""):
+        fake, calls = self._fake()
+        with patch("indicatorsets.utils.epidata.requests.get", side_effect=fake):
+            previews = preview_epiweek_data(
+                EPIWEEK_SOURCES["fluview"],
+                self.GEOS,
+                "2024-01-01",
+                "2024-03-31",
+                None,
+                "json",
+                indicators,
+                fill_method,
+            )
+        return previews, calls
+
+    def _v4_regions(self, calls, endpoint="fluview"):
+        return [
+            p["regions"] for url, p in calls if url.rstrip("/") == f"https://v4.test/{endpoint}"
+        ]
+
+    def test_export_moves_locations_v5_lacks_a_signal_for_to_v4(self, _meta):
+        commands, _calls = self._export([FLUVIEW_WILI, FLUVIEW_ILI])
+        curls = [c for c in commands if "curl -o" in c]
+        wgets = [c for c in commands if "wget" in c]
+        self.assertTrue(curls)
+        self.assertTrue(all("geo_value=us&" in c for c in curls))
+        # The v4 ids, not v5's: jfk rather than nyc.
+        self.assertEqual(len(wgets), 1)
+        self.assertIn("https://v4.test/fluview/?regions=PA,jfk&", wgets[0])
+
+    def test_export_stays_on_v5_when_it_has_every_signal(self, _meta):
+        everything = {(g, s) for g in ("us", "pa", "nyc") for s in ("wili", "ili")}
+        commands, _calls = self._export([FLUVIEW_WILI, FLUVIEW_ILI], v5_values=everything)
+        self.assertFalse(any("wget" in c for c in commands))
+
+    def test_export_never_falls_back_for_a_filled_fill_method(self, _meta):
+        commands, _calls = self._export([FLUVIEW_WILI, FLUVIEW_ILI], fill_method="ave")
+        self.assertFalse(any("wget" in c for c in commands))
+
+    def test_export_adds_no_second_v4_command_when_one_covers_every_location(self, _meta):
+        # num_age_0 is v4-only, so fluview already gets a v4 command for all geos.
+        commands, _calls = self._export([FLUVIEW_WILI, FLUVIEW_AGE_0])
+        wgets = [c for c in commands if "wget" in c]
+        self.assertEqual(len(wgets), 1)
+        self.assertIn("regions=nat,PA,jfk&", wgets[0])
+
+    def test_export_falls_back_to_the_indicators_own_v4_endpoint(self, _meta):
+        # total_specimens is v5 fluview_resp_lab_clinical, v4 fluview_clinical.
+        commands, _calls = self._export(
+            [CLINICAL_SPECIMENS], v5_values={("us", "total_specimens")}
+        )
+        wgets = [c for c in commands if "wget" in c]
+        self.assertEqual(len(wgets), 1)
+        self.assertIn("https://v4.test/fluview_clinical/?regions=PA,jfk&", wgets[0])
+
+    def test_preview_moves_locations_v5_lacks_a_signal_for_to_v4(self, _meta):
+        previews, calls = self._preview([FLUVIEW_WILI, FLUVIEW_ILI])
+        self.assertEqual(self._v4_regions(calls), ["PA,jfk"])
+        v5_previews = [p for p in previews if "geo_value" in p]
+        self.assertTrue(v5_previews)
+        self.assertEqual({p["geo_value"] for p in v5_previews}, {"us"})
+
+    def test_preview_never_falls_back_for_a_filled_fill_method(self, _meta):
+        _previews, calls = self._preview([FLUVIEW_WILI, FLUVIEW_ILI], fill_method="ave")
+        self.assertEqual(self._v4_regions(calls), [])
 
 
 class CheckFluviewGeoCoverageViewTests(TestCase):

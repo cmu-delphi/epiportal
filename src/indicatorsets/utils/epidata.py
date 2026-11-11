@@ -246,6 +246,26 @@ def group_geos_by_v5_type(geos, mapper):
         grouped.setdefault(geo_type, []).append(geo_value)
     return grouped
 
+def v5_values_missing_a_signal(rows, signals, geo_values):
+    """The ``geo_values`` that lack a real value for at least one of ``signals``.
+
+    For a probe batching several signals of one v5 source: a geo goes to the
+    v4 fallback when any requested signal has no value there, since the v4
+    epiweek endpoints return every signal for a geo anyway. The same null
+    test as ``split_geos_by_v5_values``. Request order is kept.
+    """
+    with_values = {
+        (str(row.get("geo_value")).lower(), row.get("signal"))
+        for row in rows
+        if row.get("value") not in (None, "")
+    }
+    return [
+        geo_value
+        for geo_value in geo_values
+        if any((str(geo_value).lower(), signal) not in with_values for signal in signals)
+    ]
+
+
 def split_geos_by_v5_values(rows, geo_values):
     """Split requested ``geo_values`` into ``(on_v5, fall_back_to_v4)``.
 

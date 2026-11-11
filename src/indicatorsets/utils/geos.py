@@ -21,6 +21,7 @@ from indicatorsets.utils.epidata import (
     map_fluview_geo_to_v5,
 )
 from indicatorsets.utils.helpers import get_epiweek, list_to_dict
+from indicatorsets.utils.sources import EPIWEEK_SOURCES
 from indicatorsets.utils.locations import (
     to_covidcast_geo,
     to_fluview_region,
@@ -355,8 +356,11 @@ def get_fluview_geo_coverage(
     """Report, per fluview indicator, whether ``geo`` has data and from where.
 
     Routes the way exports do: a migrated signal is asked of its v5 source
-    (with ``fill_method``) and never falls back to v4, since exports do not;
-    any other goes to its v4 endpoint, one request per ``data_source``. Only
+    (with ``fill_method``); where v5 lacks a value for any of that source's
+    selected signals, exports serve the whole location from v4 instead, so
+    v4 answers for all of them -- except for a filled ``fill_method``, which
+    v4 cannot serve. Any other signal goes to its v4 endpoint, one request
+    per ``data_source``. Only
     real values count, so a ``0`` is data and an all-null series is not.
     ``window`` (see ``parse_date_window``) limits both APIs to the chosen
     dates; ``None`` is all time.
@@ -377,6 +381,7 @@ def get_fluview_geo_coverage(
         return indicator["data_source"], indicator["indicator"]
 
     answers = {}
+    fluview = EPIWEEK_SOURCES["fluview"]
     region = to_fluview_region(geo)
     if region is not None:
         v5_geo_type, v5_geo_value = map_fluview_geo_to_v5(region)
@@ -391,6 +396,14 @@ def get_fluview_geo_coverage(
                 fill_method,
                 window,
             )
+            if (
+                signals is not None
+                and fluview.can_fall_back_to_v4(fill_method)
+                and any(i["indicator"] not in signals for i in source_indicators)
+            ):
+                # Exports move the whole location to v4, which has every
+                # signal, so v4 answers for all of this source's signals.
+                continue
             for indicator in source_indicators:
                 if signals is None:
                     answers[key(indicator)] = (None, None)
