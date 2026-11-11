@@ -1038,7 +1038,8 @@ def check_covidcast_geo_coverage(request):
 
     Expects a JSON body ``{"geo": "geo_type:geo_value", "indicators": [...]}``,
     plus an optional ``fill_method``: exports only fall back to v4 for the
-    ``source`` one, so the answer depends on it.
+    ``source`` one, so the answer depends on it. Optional ``start_date`` and
+    ``end_date`` limit the check to those dates; none means all time.
     """
     if request.method != "POST":
         return JsonResponse({"error": "POST required"}, status=405)
@@ -1051,10 +1052,14 @@ def check_covidcast_geo_coverage(request):
     if ":" not in geo or not isinstance(indicators, list):
         return JsonResponse({"error": "Expected geo and indicators"}, status=400)
     fill_method = normalize_fill_method(data.get("fill_method"))
+    try:
+        window = parse_date_window(data.get("start_date"), data.get("end_date"))
+    except InvalidDateWindowError as e:
+        return JsonResponse({"error": str(e)}, status=400)
     return JsonResponse(
         {
             "coverage": get_covidcast_geo_coverage(
-                geo, indicators, fill_method=fill_method
+                geo, indicators, fill_method=fill_method, window=window
             )
         }
     )

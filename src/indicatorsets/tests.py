@@ -760,6 +760,59 @@ class CovidcastGeoCoverageTests(TestCase):
     def _v4_calls(self, calls):
         return [params for url, params in calls if url.endswith("covidcast/")]
 
+    def _v5_calls(self, calls):
+        return [params for url, params in calls if url.endswith("viz/")]
+
+    @patch("indicatorsets.utils.geos.requests.get")
+    def test_dates_reach_v5_and_weekly_v4_as_epiweeks(self, mock_get, _mock_meta):
+        # Null-only on v5, so v4 is asked too.
+        fake_get, calls = self._fake_get([_row("smoothed_pct_ed_visits_rsv", None)], [])
+        mock_get.side_effect = fake_get
+
+        get_covidcast_geo_coverage(
+            "county:42003", [NSSP_RSV], window=parse_date_window("2024-01-01", "2024-03-31")
+        )
+
+        self.assertEqual(
+            self._v5_calls(calls)[0]["reference_times"], "2024-01-01:2024-03-31"
+        )
+        self.assertEqual(self._v4_calls(calls)[0]["time_values"], "202401-202414")
+
+    @patch("indicatorsets.utils.geos.requests.get")
+    def test_dates_reach_daily_v4_as_a_date_range(self, mock_get, _mock_meta):
+        fake_get, calls = self._fake_get([], [])
+        mock_get.side_effect = fake_get
+
+        get_covidcast_geo_coverage(
+            "state:pa", [V4_ONLY], window=parse_date_window("2024-01-01", "2024-03-31")
+        )
+
+        self.assertEqual(
+            self._v4_calls(calls)[0]["time_values"], "2024-01-01--2024-03-31"
+        )
+
+    @patch("indicatorsets.utils.geos.requests.get")
+    def test_values_only_outside_the_dates_are_not_covered(self, mock_get, _mock_meta):
+        # Both APIs answer for the window only; neither has values in it.
+        fake_get, _calls = self._fake_get([], [])
+        mock_get.side_effect = fake_get
+
+        coverage = get_covidcast_geo_coverage(
+            "county:42003", [NSSP_RSV], window=parse_date_window("2019-01-01", "2019-03-31")
+        )
+
+        self.assertIs(coverage[0]["covered"], False)
+
+    @patch("indicatorsets.utils.geos.requests.get")
+    def test_no_dates_ask_for_all_time(self, mock_get, _mock_meta):
+        fake_get, calls = self._fake_get([_row("smoothed_pct_ed_visits_rsv", None)], [])
+        mock_get.side_effect = fake_get
+
+        get_covidcast_geo_coverage("county:42003", [NSSP_RSV])
+
+        self.assertNotIn("reference_times", self._v5_calls(calls)[0])
+        self.assertEqual(self._v4_calls(calls)[0]["time_values"], "*")
+
     @patch("indicatorsets.utils.geos.requests.get")
     def test_signal_with_v5_values_routes_to_v5_without_v4_lookup(
         self, mock_get, _mock_meta
@@ -1052,7 +1105,7 @@ class CheckCovidcastGeoCoverageViewTests(TestCase):
             response.json(), {"coverage": [{"indicator": "sig", "covered": True}]}
         )
         mock_coverage.assert_called_once_with(
-            "county:42003", [NSSP_RSV], fill_method=""
+            "county:42003", [NSSP_RSV], fill_method="", window=None
         )
 
     @patch("indicatorsets.views.get_covidcast_geo_coverage", return_value=[])
@@ -1066,7 +1119,7 @@ class CheckCovidcastGeoCoverageViewTests(TestCase):
         )
 
         mock_coverage.assert_called_once_with(
-            "county:42003", [NSSP_RSV], fill_method="ave"
+            "county:42003", [NSSP_RSV], fill_method="ave", window=None
         )
 
     @patch("indicatorsets.views.get_covidcast_geo_coverage", return_value=[])
@@ -1080,8 +1133,48 @@ class CheckCovidcastGeoCoverageViewTests(TestCase):
         )
 
         mock_coverage.assert_called_once_with(
-            "county:42003", [NSSP_RSV], fill_method=""
+            "county:42003", [NSSP_RSV], fill_method="", window=None
         )
+
+    @patch("indicatorsets.views.get_covidcast_geo_coverage", return_value=[])
+    def test_post_passes_the_dates(self, mock_coverage):
+        self.client.post(
+            reverse("check_covidcast_geo_coverage"),
+            data=json.dumps(
+                {
+                    "geo": "county:42003",
+                    "indicators": [NSSP_RSV],
+                    "start_date": "2024-01-01",
+                    "end_date": "2024-03-31",
+                }
+            ),
+            content_type="application/json",
+        )
+
+        mock_coverage.assert_called_once_with(
+            "county:42003",
+            [NSSP_RSV],
+            fill_method="",
+            window=parse_date_window("2024-01-01", "2024-03-31"),
+        )
+
+    @patch("indicatorsets.views.get_covidcast_geo_coverage", return_value=[])
+    def test_bad_dates_are_rejected(self, mock_coverage):
+        response = self.client.post(
+            reverse("check_covidcast_geo_coverage"),
+            data=json.dumps(
+                {
+                    "geo": "county:42003",
+                    "indicators": [NSSP_RSV],
+                    "start_date": "2024-03-31",
+                    "end_date": "2024-01-01",
+                }
+            ),
+            content_type="application/json",
+        )
+
+        self.assertEqual(response.status_code, 400)
+        mock_coverage.assert_not_called()
 
     def test_get_is_rejected(self):
         response = self.client.get(reverse("check_covidcast_geo_coverage"))

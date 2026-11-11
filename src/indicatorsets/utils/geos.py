@@ -184,7 +184,7 @@ def _signals_with_values(rows):
 
 
 def _get_v5_signals_with_values(
-    v5_source, indicators, geo_type, geo_value, fill_method
+    v5_source, indicators, geo_type, geo_value, fill_method, window=None
 ):
     """Return the signals of ``indicators`` v5 has a real value for, or ``None``.
 
@@ -202,11 +202,16 @@ def _get_v5_signals_with_values(
     }
     if fill_method:
         params["fill_method"] = fill_method
+    reference_times = v5_reference_times(window)
+    if reference_times:
+        params["reference_times"] = reference_times
     rows = _fetch_rows(f"{settings.EPIDATA_V5_URL}viz/", params)
     return None if rows is None else _signals_with_values(rows)
 
 
-def _get_v4_signals_with_values(data_source, time_type, indicators, geo_type, geo_value):
+def _get_v4_signals_with_values(
+    data_source, time_type, indicators, geo_type, geo_value, window=None
+):
     """Return the signals of ``indicators`` v4 has a real value for, or ``None``.
 
     Reads the series itself rather than ``covidcast/geo_coverage``, which, like
@@ -222,14 +227,16 @@ def _get_v4_signals_with_values(data_source, time_type, indicators, geo_type, ge
             "time_type": time_type,
             "geo_type": geo_type,
             "geo_values": geo_value,
-            "time_values": "*",
+            "time_values": v4_covidcast_time_values(window, time_type),
         },
         auth=epidata_auth(),
     )
     return None if rows is None else _signals_with_values(rows)
 
 
-def get_covidcast_geo_coverage(geo, indicators, fill_method=DEFAULT_FILL_METHOD):
+def get_covidcast_geo_coverage(
+    geo, indicators, fill_method=DEFAULT_FILL_METHOD, window=None
+):
     """Report, per covidcast indicator, whether ``geo`` has data and from where.
 
     Mirrors the routing exports use, so the modal's warning agrees with what a
@@ -239,6 +246,8 @@ def get_covidcast_geo_coverage(geo, indicators, fill_method=DEFAULT_FILL_METHOD)
     with only null values is not covered. For a filled ``fill_method`` a
     migrated signal never falls back to v4, which cannot fill, so only v5's
     values count for it; nor does a v5-only source, which v4 does not have.
+    ``window`` (see ``parse_date_window``) limits both APIs to the chosen
+    dates, so values only outside them do not count; ``None`` is all time.
 
     ``geo`` is a ``"geo_type:geo_value"`` id. Returns one dict per covidcast
     indicator with its ``data_source`` and ``indicator`` plus ``covered``
@@ -272,7 +281,7 @@ def get_covidcast_geo_coverage(geo, indicators, fill_method=DEFAULT_FILL_METHOD)
             continue
         geo_type, geo_value = v5_geo
         signals = _get_v5_signals_with_values(
-            v5_source, source_indicators, geo_type, geo_value, fill_method
+            v5_source, source_indicators, geo_type, geo_value, fill_method, window
         )
         for indicator in source_indicators:
             migrated.add(key(indicator))
@@ -301,7 +310,7 @@ def get_covidcast_geo_coverage(geo, indicators, fill_method=DEFAULT_FILL_METHOD)
     for (data_source, time_type), group in v4_groups.items():
         geo_type, geo_value = api_geo(group[0], on_v5=False)
         signals = _get_v4_signals_with_values(
-            data_source, time_type, group, geo_type, geo_value
+            data_source, time_type, group, geo_type, geo_value, window
         )
         for indicator in group:
             if signals is None:
