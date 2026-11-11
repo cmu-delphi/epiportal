@@ -274,6 +274,13 @@ const COVERAGE_CHECKS = [
         params: () => ({}),
         skipsInPlot: true,
     },
+    // FluSurv and NIDSS share one check, told which endpoint it is for.
+    ...["flusurv", "nidss_flu", "nidss_dengue"].map((endpoint) => ({
+        url: "check_epiweek_geo_coverage/",
+        indicators: () => checkedIndicatorMembers.filter((i) => i["_endpoint"] === endpoint),
+        params: () => ({ source: endpoint }),
+        skipsInPlot: true,
+    })),
     {
         url: "check_pophive_geo_coverage/",
         indicators: () => checkedIndicatorMembers.filter((i) => i["_endpoint"] === "pophive"),
@@ -432,9 +439,16 @@ function warnIfGeoNotCovered(geo) {
                     indicator["notCoveredGeos"].push(geo.id);
                 }
             });
-            if (notCovered.length > 0) {
+            // Only warn where a source has a gap: a place it never has (Taiwan
+            // for FluSurv, a county for fluview) is simply not for it, and a
+            // source with no place picked at all gets its own warning.
+            const gaps = notCovered.filter(
+                ({ indicator }) =>
+                    !geo.endpoints || geo.endpoints.includes(locationSource(indicator))
+            );
+            if (gaps.length > 0) {
                 const alert = showNotCoveredGeoWarningMessage(
-                    notCovered.map((entry) => entry.label),
+                    gaps.map((entry) => entry.label),
                     geo,
                     window
                 );

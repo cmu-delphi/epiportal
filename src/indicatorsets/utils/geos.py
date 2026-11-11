@@ -18,11 +18,11 @@ from indicatorsets.utils.epidata import (
     get_v5_source,
     group_v5_indicators_by_source,
     is_covidcast_indicator,
-    map_fluview_geo_to_v5,
 )
 from indicatorsets.utils.helpers import get_epiweek, list_to_dict
 from indicatorsets.utils.sources import EPIWEEK_SOURCES
 from indicatorsets.utils.locations import (
+    EPIWEEK_MAIN_LOCATIONS,
     to_covidcast_geo,
     to_fluview_region,
     to_nwss_sewersheds,
@@ -353,45 +353,55 @@ def get_covidcast_geo_coverage(
 # indicators' ``data_source``.
 FLUVIEW_DATA_SOURCES = ("fluview", "fluview_clinical")
 
+# How each epiweek endpoint reads a main-dropdown pick.
+EPIWEEK_LOCATION_TRANSLATORS = {
+    "fluview": to_fluview_region,
+    **{endpoint: translate for endpoint, (_key, translate) in EPIWEEK_MAIN_LOCATIONS.items()},
+}
 
-def get_fluview_geo_coverage(
-    geo, indicators, fill_method=DEFAULT_FILL_METHOD, window=None
+
+def get_epiweek_geo_coverage(
+    source_key, geo, indicators, fill_method=DEFAULT_FILL_METHOD, window=None
 ):
-    """Report, per fluview indicator, whether ``geo`` has data and from where.
+    """Report, per indicator of one epiweek endpoint, whether ``geo`` has data
+    and from where.
 
-    Routes the way exports do: a migrated signal is asked of its v5 source
-    (with ``fill_method``); where v5 lacks a value for any of that source's
-    selected signals, exports serve the whole location from v4 instead, so
-    v4 answers for all of them -- except for a filled ``fill_method``, which
-    v4 cannot serve. Any other signal goes to its v4 endpoint, one request
-    per ``data_source``. Only
-    real values count, so a ``0`` is data and an all-null series is not.
-    ``window`` (see ``parse_date_window``) limits both APIs to the chosen
-    dates; ``None`` is all time.
+    ``source_key`` names an ``EPIWEEK_SOURCES`` entry (fluview, flusurv,
+    nidss_flu, nidss_dengue). Routes the way exports do: a migrated signal
+    is asked of its v5 source (with ``fill_method``), under the location's v5
+    name. Where the endpoint falls back to v4 (fluview) and v5 lacks a value
+    for any of that source's selected signals, exports serve the whole
+    location from v4 instead, so v4 answers for all of them -- except for a
+    filled ``fill_method``, which v4 cannot serve. Any other signal goes to
+    its v4 endpoint, one request per ``data_source``. Only real values count,
+    so a ``0`` is data and an all-null series is not. ``window`` (see
+    ``parse_date_window``) limits both APIs to the chosen dates; ``None`` is
+    all time.
 
-    ``geo`` is a main-dropdown ``"geo_type:geo_value"`` id; a place fluview
-    has no region for (a county, say) is not covered and nothing is asked.
-    Returns one dict per fluview indicator with its ``data_source`` and
-    ``indicator`` plus ``covered`` (``True``/``False``, or ``None`` when the
-    lookup failed) and ``route`` (``"v5"``, ``"v4"`` or ``None``).
+    ``geo`` is a main-dropdown ``"geo_type:geo_value"`` id; a place the
+    endpoint has no location for is not covered and nothing is asked.
+    Returns one dict per indicator of the endpoint with its ``data_source``
+    and ``indicator`` plus ``covered`` (``True``/``False``, or ``None`` when
+    the lookup failed) and ``route`` (``"v5"``, ``"v4"`` or ``None``).
     """
-    fluview_indicators = [
+    source = EPIWEEK_SOURCES[source_key]
+    source_indicators_all = [
         indicator
         for indicator in indicators
-        if indicator.get("data_source") in FLUVIEW_DATA_SOURCES
+        if indicator.get("_endpoint") == source_key
+        or (source_key == "fluview" and indicator.get("data_source") in FLUVIEW_DATA_SOURCES)
     ]
 
     def key(indicator):
         return indicator["data_source"], indicator["indicator"]
 
     answers = {}
-    fluview = EPIWEEK_SOURCES["fluview"]
-    region = to_fluview_region(geo)
-    if region is not None:
-        v5_geo_type, v5_geo_value = map_fluview_geo_to_v5(region)
+    location = EPIWEEK_LOCATION_TRANSLATORS[source_key](geo)
+    if location is not None:
         for v5_source, source_indicators in group_v5_indicators_by_source(
-            fluview_indicators
+            source_indicators_all
         ).items():
+            v5_geo_type, v5_geo_value = source.v5_geo_mapper(location)
             signals = _get_v5_signals_with_values(
                 v5_source,
                 source_indicators,
@@ -402,7 +412,7 @@ def get_fluview_geo_coverage(
             )
             if (
                 signals is not None
-                and fluview.can_fall_back_to_v4(fill_method)
+                and source.can_fall_back_to_v4(fill_method)
                 and any(i["indicator"] not in signals for i in source_indicators)
             ):
                 # Exports move the whole location to v4, which has every
@@ -417,13 +427,13 @@ def get_fluview_geo_coverage(
                     answers[key(indicator)] = (False, None)
 
         v4_groups = {}
-        for indicator in fluview_indicators:
+        for indicator in source_indicators_all:
             if key(indicator) not in answers:
                 v4_groups.setdefault(indicator["data_source"], []).append(indicator)
         for data_source, group in v4_groups.items():
             rows = _fetch_rows(
                 f"{settings.EPIDATA_URL}{data_source}/",
-                {"regions": region, "epiweeks": v4_epiweeks(window)},
+                {source.geo_param: location, "epiweeks": v4_epiweeks(window)},
                 auth=epidata_auth(),
             )
             for indicator in group:
@@ -436,7 +446,7 @@ def get_fluview_geo_coverage(
                     answers[key(indicator)] = (False, None)
 
     coverage = []
-    for indicator in fluview_indicators:
+    for indicator in source_indicators_all:
         covered, route = answers.get(key(indicator), (False, None))
         coverage.append(
             {
@@ -447,6 +457,15 @@ def get_fluview_geo_coverage(
             }
         )
     return coverage
+
+
+def get_fluview_geo_coverage(
+    geo, indicators, fill_method=DEFAULT_FILL_METHOD, window=None
+):
+    """``get_epiweek_geo_coverage`` for fluview (and fluview_clinical)."""
+    return get_epiweek_geo_coverage(
+        "fluview", geo, indicators, fill_method=fill_method, window=window
+    )
 
 
 def get_pophive_geo_coverage(

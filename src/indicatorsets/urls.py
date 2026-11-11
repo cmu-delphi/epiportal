@@ -5,6 +5,7 @@ from indicatorsets.proxy_views import download_viz_export
 from indicatorsets.views import (
     IndicatorSetListView,
     check_covidcast_geo_coverage,
+    check_epiweek_geo_coverage,
     check_fluview_geo_coverage,
     check_nwss_geo_coverage,
     check_pophive_geo_coverage,
@@ -44,6 +45,11 @@ urlpatterns: list[URLPattern] = [
         "check_fluview_geo_coverage/",
         check_fluview_geo_coverage,
         name="check_fluview_geo_coverage",
+    ),
+    path(
+        "check_epiweek_geo_coverage/",
+        check_epiweek_geo_coverage,
+        name="check_epiweek_geo_coverage",
     ),
     path(
         "get_table_stats_info/",

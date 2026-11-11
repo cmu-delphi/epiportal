@@ -79,8 +79,13 @@ def generate_epiweek_dataset_epivis(source, indicator, geos):
 
     Covers the endpoints whose payload is fully generic (nidss_flu,
     nidss_dengue, flusurv). fluview has its own builder because it maps
-    indicator names to display titles, skips geos the indicator does not cover,
-    and falls back to the fluview_clinical endpoint.
+    indicator names to display titles and falls back to the
+    fluview_clinical endpoint.
+
+    Locations the modal found no data for are left out, as for covidcast and
+    fluview: EpiVis would only warn about each empty series. The modal
+    records them by main-dropdown id, which each geo carries as
+    ``location_id``.
 
     Args:
         source: The :class:`EpiweekSource` supplying the geo parameter name.
@@ -89,6 +94,8 @@ def generate_epiweek_dataset_epivis(source, indicator, geos):
     """
     datasets = []
     for geo in geos:
+        if geo.get("location_id", geo["id"]) in indicator.get("notCoveredGeos", []):
+            continue
         datasets.append(
             {
                 "color": generate_random_color(),

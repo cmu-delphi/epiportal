@@ -29,7 +29,7 @@ from indicatorsets.utils.epidata import (
 )
 from indicatorsets.utils.geos import (
     InvalidDateWindowError,
-    get_fluview_geo_coverage,
+    get_epiweek_geo_coverage,
     get_nwss_geo_coverage,
     get_nwss_sewersheds_with_values,
     get_pophive_geo_coverage,
@@ -914,20 +914,16 @@ def get_related_indicators_json(request):
     return JsonResponse({"related_indicators": related_indicators})
 
 
-def check_fluview_geo_coverage(request):
-    """Tell the selected-indicators modal which fluview indicators have data
-    for one main-dropdown location.
-
-    Expects a JSON body ``{"geo": "geo_type:geo_value", "indicators": [...]}``,
-    plus optional ``fill_method`` and ``start_date``/``end_date`` (no dates
-    means all time). See ``get_fluview_geo_coverage`` for the answer.
-    """
+def _epiweek_coverage_response(request, source_key=None):
     if request.method != "POST":
         return JsonResponse({"error": "POST required"}, status=405)
     try:
         data = json.loads(request.body)
     except ValueError:
         return JsonResponse({"error": "Invalid JSON body"}, status=400)
+    source_key = source_key or data.get("source")
+    if source_key not in EPIWEEK_SOURCES:
+        return JsonResponse({"error": "Unknown epiweek source"}, status=400)
     indicators = data.get("indicators") or []
     if not isinstance(indicators, list):
         return JsonResponse({"error": "Expected indicators"}, status=400)
@@ -937,7 +933,8 @@ def check_fluview_geo_coverage(request):
         return JsonResponse({"error": str(e)}, status=400)
     return JsonResponse(
         {
-            "coverage": get_fluview_geo_coverage(
+            "coverage": get_epiweek_geo_coverage(
+                source_key,
                 data.get("geo") or "",
                 indicators,
                 fill_method=normalize_fill_method(data.get("fill_method")),
@@ -945,6 +942,23 @@ def check_fluview_geo_coverage(request):
             )
         }
     )
+
+
+def check_fluview_geo_coverage(request):
+    """Tell the selected-indicators modal which fluview indicators have data
+    for one main-dropdown location.
+
+    Expects a JSON body ``{"geo": "geo_type:geo_value", "indicators": [...]}``,
+    plus optional ``fill_method`` and ``start_date``/``end_date`` (no dates
+    means all time). See ``get_epiweek_geo_coverage`` for the answer.
+    """
+    return _epiweek_coverage_response(request, "fluview")
+
+
+def check_epiweek_geo_coverage(request):
+    """The same for any epiweek endpoint (FluSurv, NIDSS), named by the
+    body's ``source``: one of ``EPIWEEK_SOURCES``."""
+    return _epiweek_coverage_response(request)
 
 
 def check_pophive_geo_coverage(request):
