@@ -396,11 +396,24 @@ function warnIfPophiveGeoNotCovered(geo) {
     });
 }
 
+function getSelectedNwssSources() {
+    if (!$("#nwssSource").hasClass("select2-hidden-accessible")) {
+        return [];
+    }
+    return $("#nwssSource").select2("data").map((source) => source.id);
+}
+
+/* Asks the server, which reads /viz/ for the county's sewersheds the way
+ * Export does, whether each NWSS indicator has data from each selected NWSS
+ * source. Until a source is picked there is nothing to check. Resolves to one
+ * entry per uncovered (indicator, source), labelled with the source;
+ * covered === null means the check itself failed, so no warning is shown. */
 async function checkNwssGeoCoverage(geoValue) {
     const nwssIndicators = checkedIndicatorMembers.filter(
         (indicator) => indicator["_endpoint"] === "nwss"
     );
-    if (nwssIndicators.length === 0) {
+    const nwssSources = getSelectedNwssSources();
+    if (nwssIndicators.length === 0 || nwssSources.length === 0) {
         return [];
     }
     try {
@@ -410,9 +423,33 @@ async function checkNwssGeoCoverage(geoValue) {
             dataType: "json",
             contentType: "application/json",
             headers: { "X-CSRFToken": Cookies.get("csrftoken") },
-            data: JSON.stringify({ geo: geoValue, indicators: nwssIndicators }),
+            data: JSON.stringify({
+                geo: geoValue,
+                nwss_sources: nwssSources,
+                fill_method: getFillMethod(),
+                indicators: nwssIndicators.map((indicator) => ({
+                    _endpoint: indicator["_endpoint"],
+                    data_source: indicator.data_source,
+                    indicator: indicator.indicator,
+                })),
+            }),
         });
-        return result["not_covered_indicators"];
+        const notCovered = [];
+        result["coverage"].forEach((entry) => {
+            if (entry.covered !== false) {
+                return;
+            }
+            const indicator = nwssIndicators.find(
+                (i) => i.indicator === entry.indicator
+            );
+            if (indicator) {
+                notCovered.push({
+                    ...indicator,
+                    display_name: `${indicator.display_name} (source: ${entry.nwss_source})`,
+                });
+            }
+        });
+        return notCovered;
     } catch (error) {
         console.error("Error fetching NWSS geo coverage:", error);
         return [];
@@ -421,14 +458,40 @@ async function checkNwssGeoCoverage(geoValue) {
 
 // NWSS reads its locations from the main dropdown too, as the sewersheds of
 // the picked counties; anything else (states, counties with no sewershed) is
-// skipped, so say so.
+// skipped, so say so, per selected NWSS source.
+// Bumped whenever the NWSS answer may change (source or fill method), so a
+// check still in flight for the old choice is ignored.
+let nwssCoverageCheckGeneration = 0;
+
+// NWSS warnings are tagged so a source or fill method change can swap them
+// out without touching the other alerts in the modal.
 function warnIfNwssGeoNotCovered(geo) {
+    const generation = nwssCoverageCheckGeneration;
     checkNwssGeoCoverage(geo.id).then((notCoveredIndicators) => {
+        if (generation !== nwssCoverageCheckGeneration) {
+            return;
+        }
         if (notCoveredIndicators.length > 0) {
-            showNotCoveredGeoWarningMessage(notCoveredIndicators, geo);
+            showNotCoveredGeoWarningMessage(notCoveredIndicators, geo).classList.add(
+                "nwss-coverage-alert"
+            );
         }
     });
 }
+
+// The answer depends on the selected NWSS sources and fill method as well as
+// the location, so re-check every picked location whichever is chosen last.
+function recheckNwssCoverage() {
+    nwssCoverageCheckGeneration += 1;
+    $("#warning-alert .nwss-coverage-alert").remove();
+    if (!$("#geographic_value").hasClass("select2-hidden-accessible")) {
+        return;
+    }
+    $("#geographic_value").select2("data").forEach(warnIfNwssGeoNotCovered);
+}
+
+// #nwssSource is added to the modal only once NWSS indicators are selected.
+$(document).on("change", "#nwssSource", recheckNwssCoverage);
 
 function warnIfGeoNotCovered(geo) {
     warnIfCovidcastGeoNotCovered(geo);
@@ -444,6 +507,7 @@ $("#geographic_value").on("select2:select", function (e) {
 $("#fillMethod").on("change", function () {
     coverageCheckGeneration += 1;
     $("#warning-alert .covidcast-coverage-alert").remove();
+    recheckNwssCoverage();
     if (!$("#geographic_value").hasClass("select2-hidden-accessible")) {
         return;
     }

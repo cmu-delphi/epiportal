@@ -136,11 +136,27 @@ def generate_nwss_dataset_epivis(
     geographic_value,
     source,
     fill_method,
+    sewersheds_with_values=None,
 ):
+    """Build one EpiVis dataset per (sewershed, NWSS source) for ``indicator``.
+
+    ``sewersheds_with_values`` maps a source id to ``{signal: {sewershed
+    ids}}`` (see ``get_nwss_sewersheds_with_values``). EpiVis warns once per
+    series it finds no data for, and most counties have sewersheds a given
+    source does not report, so only the sewersheds listed there are plotted.
+    A source mapped to ``None``, or no mapping at all, means unknown: every
+    sewershed is kept rather than dropping data that may exist.
+    """
     datasets = []
     geo_values = ",".join(geographic_value).replace(" ", "").split(",")
     for geo_value in geo_values:
         for s in source:
+            if sewersheds_with_values is not None:
+                with_values = sewersheds_with_values.get(s["id"])
+                if with_values is not None and geo_value not in with_values.get(
+                    indicator["indicator"], set()
+                ):
+                    continue
             params = {
                 "_endpoint": indicator["_endpoint"],
                 "source": "nwss",

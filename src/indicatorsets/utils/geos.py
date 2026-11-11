@@ -20,7 +20,7 @@ from indicatorsets.utils.epidata import (
     is_covidcast_indicator,
 )
 from indicatorsets.utils.helpers import get_epiweek, list_to_dict
-from indicatorsets.utils.locations import to_covidcast_geo
+from indicatorsets.utils.locations import to_covidcast_geo, to_nwss_sewersheds
 
 logger = get_structured_logger("indicatorsets.utils")
 
@@ -327,6 +327,96 @@ def get_covidcast_geo_coverage(geo, indicators, fill_method=DEFAULT_FILL_METHOD)
                 "route": route,
             }
         )
+    return coverage
+
+
+def get_nwss_sewersheds_with_values(
+    nwss_source, signals, sewersheds, fill_method=DEFAULT_FILL_METHOD, window=None
+):
+    """Return ``{signal: {sewershed ids with a real value}}`` for one NWSS source.
+
+    Asks ``/viz/`` the way exports do: every signal in one request, with the
+    same ``fill_method`` and dates. A signal with no values anywhere is
+    missing from the result. ``None`` when the lookup failed, so the caller
+    can tell "no data" apart from "could not check".
+    """
+    params = {
+        "source": "nwss",
+        "signal": ",".join(signals),
+        "geo_type": "sewershed",
+        "geo_value": ",".join(sewersheds),
+        "extra_keys": f"nwss_source:{nwss_source}",
+        "token": settings.EPIDATA_API_KEY,
+    }
+    if fill_method:
+        params["fill_method"] = fill_method
+    reference_times = v5_reference_times(window)
+    if reference_times:
+        params["reference_times"] = reference_times
+    rows = _fetch_rows(f"{settings.EPIDATA_V5_URL}viz/", params)
+    if rows is None:
+        return None
+    with_values = {}
+    for row in rows:
+        if row.get("value") not in (None, ""):
+            with_values.setdefault(row.get("signal"), set()).add(
+                str(row.get("geo_value"))
+            )
+    return with_values
+
+
+def get_nwss_geo_coverage(
+    geo, indicators, nwss_sources, fill_method=DEFAULT_FILL_METHOD, window=None
+):
+    """Report, per NWSS indicator and selected NWSS source, whether ``geo`` has data.
+
+    NWSS is offered at counties as the sewersheds that serve them, so this
+    asks ``/viz/`` for those sewersheds the way exports do: one request per
+    source (``extra_keys=nwss_source:<id>``), every selected signal at once,
+    with the same ``fill_method`` and dates. Only real values count, so a
+    signal a source reports for the county with nothing but nulls is not
+    covered. Nothing is selected until a source is, so no source means no
+    answer.
+
+    ``geo`` is a ``"geo_type:geo_value"`` id. Returns one dict per (indicator,
+    source) with ``data_source``, ``indicator`` and ``nwss_source``, plus
+    ``covered`` (``True``/``False``, or ``None`` when the lookup failed) and
+    ``not_covered_sewersheds``: the county's sewersheds with no value for it,
+    which Plot leaves out (``None`` when unknown).
+    """
+    nwss_indicators = [
+        indicator for indicator in indicators if indicator.get("_endpoint") == "nwss"
+    ]
+    if not nwss_indicators or not nwss_sources:
+        return []
+    sewersheds = to_nwss_sewersheds(geo)
+    signals = [indicator["indicator"] for indicator in nwss_indicators]
+    coverage = []
+    for nwss_source in nwss_sources:
+        # sewershed ids with a value, per signal; None when unknown.
+        with_values = (
+            get_nwss_sewersheds_with_values(
+                nwss_source, signals, sewersheds, fill_method, window
+            )
+            if sewersheds
+            else {}
+        )
+        for indicator in nwss_indicators:
+            if with_values is None:
+                covered, not_covered = None, None
+            else:
+                found = with_values.get(indicator["indicator"], set())
+                covered = bool(found)
+                not_covered = [s for s in sewersheds if s not in found]
+            coverage.append(
+                {
+                    "data_source": indicator["data_source"],
+                    "indicator": indicator["indicator"],
+                    "nwss_source": nwss_source,
+                    "covered": covered,
+                    "not_covered_sewersheds": not_covered,
+                }
+            )
     return coverage
 
 

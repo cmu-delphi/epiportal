@@ -29,14 +29,19 @@ from indicatorsets.utils.epidata import (
     get_v5_source,
     is_covidcast_indicator,
 )
-from indicatorsets.utils.geos import v5_location_levels
+from indicatorsets.utils.geos import (
+    InvalidDateWindowError,
+    get_nwss_geo_coverage,
+    get_nwss_sewersheds_with_values,
+    parse_date_window,
+    v5_location_levels,
+)
 from indicatorsets.utils.locations import (
     FLUVIEW_LOCATION_LEVELS,
     POPHIVE_LOCATION_LEVELS,
     POPHIVE_STATES_WITHOUT_DATA,
     nwss_counties,
     to_fluview_region,
-    to_nwss_sewersheds,
     to_pophive_location,
     use_main_locations,
 )
@@ -383,6 +388,24 @@ class IndicatorSetListView(ListView):
         return context
 
 
+def get_nwss_plot_sewersheds(indicators, sewersheds, nwss_sources, fill_method):
+    """Per selected NWSS source, the sewersheds each NWSS signal has values at.
+
+    Plot sends EpiVis one series per (sewershed, source), and EpiVis warns for
+    every empty one, so the empty ones are dropped first. EpiVis plots the
+    whole series, so no dates. ``None`` when there is nothing to plot.
+    """
+    signals = [i["indicator"] for i in indicators if i.get("_endpoint") == "nwss"]
+    if not signals or not sewersheds or not nwss_sources:
+        return None
+    return {
+        source["id"]: get_nwss_sewersheds_with_values(
+            source["id"], signals, sewersheds, fill_method
+        )
+        for source in nwss_sources
+    }
+
+
 def epivis(request):
     if request.method == "POST":
         datasets = []
@@ -399,6 +422,9 @@ def epivis(request):
         fill_method = normalize_fill_method(data.get("fillMethod"))
         log_form_stats(request, data, "epivis")
         log_form_data(request, data, "epivis")
+        nwss_sewersheds_with_values = get_nwss_plot_sewersheds(
+            indicators, nwss_geographic_value, nwss_source, fill_method
+        )
         for indicator in indicators:
             if is_covidcast_indicator(indicator):
                 datasets.extend(
@@ -431,6 +457,7 @@ def epivis(request):
                         nwss_geographic_value,
                         nwss_source,
                         fill_method,
+                        sewersheds_with_values=nwss_sewersheds_with_values,
                     )
                 )
         if datasets:
@@ -970,12 +997,13 @@ def check_pophive_geo_coverage(request):
 
 
 def check_nwss_geo_coverage(request):
-    """Tell the selected-indicators modal which NWSS indicators have no data
-    for one main-dropdown location.
+    """Tell the selected-indicators modal which NWSS indicators have data for
+    one main-dropdown location, per selected NWSS source.
 
-    Expects a JSON body ``{"geo": "geo_type:geo_value", "indicators": [...]}``.
-    NWSS is offered at counties some sewershed serves; the crosswalk answers
-    that, so ``/viz`` is never asked.
+    Expects a JSON body ``{"geo": "geo_type:geo_value", "indicators": [...],
+    "nwss_sources": [...]}``, plus optional ``fill_method`` and
+    ``start_date``/``end_date`` (no dates means all time), since exports ask
+    ``/viz/`` with all of them. See ``get_nwss_geo_coverage`` for the answer.
     """
     if request.method != "POST":
         return JsonResponse({"error": "POST required"}, status=405)
@@ -984,16 +1012,23 @@ def check_nwss_geo_coverage(request):
     except ValueError:
         return JsonResponse({"error": "Invalid JSON body"}, status=400)
     indicators = data.get("indicators") or []
-    if not isinstance(indicators, list):
-        return JsonResponse({"error": "Expected indicators"}, status=400)
-    nwss_indicators = [
-        indicator for indicator in indicators if indicator.get("_endpoint") == "nwss"
-    ]
-    covered = bool(nwss_indicators) and bool(
-        to_nwss_sewersheds(data.get("geo") or "")
-    )
+    nwss_sources = data.get("nwss_sources") or []
+    if not isinstance(indicators, list) or not isinstance(nwss_sources, list):
+        return JsonResponse({"error": "Expected indicators and nwss_sources"}, status=400)
+    try:
+        window = parse_date_window(data.get("start_date"), data.get("end_date"))
+    except InvalidDateWindowError as e:
+        return JsonResponse({"error": str(e)}, status=400)
     return JsonResponse(
-        {"not_covered_indicators": [] if covered else nwss_indicators}
+        {
+            "coverage": get_nwss_geo_coverage(
+                data.get("geo") or "",
+                indicators,
+                nwss_sources,
+                fill_method=normalize_fill_method(data.get("fill_method")),
+                window=window,
+            )
+        }
     )
 
 

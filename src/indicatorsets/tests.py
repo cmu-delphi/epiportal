@@ -33,6 +33,7 @@ from indicatorsets.utils import (
     InvalidApiKeyError,
     generate_covidcast_indicators_export_url,
     generate_epivis_custom_title,
+    generate_nwss_dataset_epivis,
     generate_epiweek_dataset_epivis,
     generate_epiweek_export_url,
     generate_query_code_epiweek,
@@ -60,6 +61,7 @@ from indicatorsets.proxy_views import VIZ_SOURCES
 from indicatorsets.utils.constants import MIGRATED_DATASOURCES
 from indicatorsets.utils.geos import (
     InvalidDateWindowError,
+    get_nwss_geo_coverage,
     parse_date_window,
     v4_covidcast_time_values,
     v4_epiweeks,
@@ -4538,6 +4540,15 @@ class FillMethodViewTests(TestCase):
         )
         patcher.start()
         self.addCleanup(patcher.stop)
+        # Plot keeps only sewersheds /viz/ has values for.
+        viz = patch(
+            "indicatorsets.utils.geos.requests.get",
+            return_value=_viz_response(
+                [_nwss_row("covid_avg_conc", "sewershed_1", 1.0, "CDC_Biobot")]
+            ),
+        )
+        viz.start()
+        self.addCleanup(viz.stop)
 
     def _nwss_epivis_params(self, payload):
         response = self.client.post(
@@ -6385,7 +6396,9 @@ class FormViewsGiveNwssMainLocationsTests(TestCase):
             "epivis": ("indicatorsets.views.generate_nwss_dataset_epivis", 2, []),
         }
         for name, (target, position, returns) in cases.items():
-            with self.subTest(name), _patch_nwss_crosswalk():
+            with self.subTest(name), _patch_nwss_crosswalk(), patch(
+                "indicatorsets.utils.geos.requests.get", return_value=_viz_response([])
+            ):
                 with patch(target, return_value=returns) as mock_fn:
                     self.client.post(
                         reverse(name), data=json.dumps(self.PAYLOAD), content_type="application/json"
@@ -6445,30 +6458,272 @@ class AvailableGeosOfferNwssCountiesTests(TestCase):
         )
 
 
+NWSS_COVID_INDICATOR = {
+    "_endpoint": "nwss",
+    "data_source": "nwss",
+    "indicator": "covid_avg_conc",
+}
+
+
+def _nwss_row(signal, sewershed, value, source="CDC_Verily"):
+    return {
+        "signal": signal,
+        "geo_type": "sewershed",
+        "geo_value": sewershed,
+        "nwss_source": source,
+        "value": value,
+    }
+
+
+def _viz_response(rows):
+    response = MagicMock(status_code=200)
+    response.json.return_value = rows
+    return response
+
+
+def _viz_by_source(rows_by_source):
+    """Answer each /viz/ request with the rows of its ``nwss_source``.
+
+    A source mapped to an exception raises it, as a failed request does.
+    """
+
+    def fake_get(url, params=None, **kwargs):
+        source = params["extra_keys"].split(":", 1)[1]
+        rows = rows_by_source[source]
+        if isinstance(rows, Exception):
+            raise rows
+        return _viz_response(rows)
+
+    return fake_get
+
+
+@override_settings(EPIDATA_V5_URL="https://v5.test/", EPIDATA_API_KEY="key")
+class NwssGeoCoverageTests(TestCase):
+    """Which (signal, NWSS source) pairs have real values for a county."""
+
+    def _coverage(self, geo, indicators, sources, **kwargs):
+        with _patch_nwss_crosswalk():
+            return get_nwss_geo_coverage(geo, indicators, sources, **kwargs)
+
+    def _by_pair(self, coverage):
+        return {(e["indicator"], e["nwss_source"]): e for e in coverage}
+
+    @patch("indicatorsets.utils.geos.requests.get")
+    def test_no_source_selected_answers_nothing(self, mock_get):
+        self.assertEqual(self._coverage("county:42003", [NWSS_INDICATOR], []), [])
+        mock_get.assert_not_called()
+
+    @patch("indicatorsets.utils.geos.requests.get")
+    def test_places_without_sewersheds_are_not_covered_without_asking(self, mock_get):
+        for geo in ("county:01001", "state:PA", "nation:US"):
+            with self.subTest(geo):
+                coverage = self._coverage(geo, [NWSS_INDICATOR], ["CDC_Verily"])
+                self.assertEqual(
+                    coverage,
+                    [
+                        {
+                            "data_source": "nwss",
+                            "indicator": "flu_avg_conc",
+                            "nwss_source": "CDC_Verily",
+                            "covered": False,
+                            "not_covered_sewersheds": [],
+                        }
+                    ],
+                )
+        mock_get.assert_not_called()
+
+    @patch("indicatorsets.utils.geos.requests.get")
+    def test_asks_viz_once_per_source_the_way_exports_do(self, mock_get):
+        mock_get.return_value = _viz_response([])
+        self._coverage(
+            "county:42003",
+            [NWSS_INDICATOR, NWSS_COVID_INDICATOR],
+            ["CDC_Biobot", "CDC_Verily"],
+            fill_method="source",
+            window=parse_date_window("2025-01-01", "2025-06-30"),
+        )
+        self.assertEqual(mock_get.call_count, 2)
+        for call, source in zip(mock_get.call_args_list, ["CDC_Biobot", "CDC_Verily"]):
+            self.assertEqual(call.args[0], "https://v5.test/viz/")
+            self.assertEqual(
+                call.kwargs["params"],
+                {
+                    "source": "nwss",
+                    "signal": "flu_avg_conc,covid_avg_conc",
+                    "geo_type": "sewershed",
+                    "geo_value": "1768,1764",
+                    "extra_keys": f"nwss_source:{source}",
+                    "fill_method": "source",
+                    "reference_times": "2025-01-01:2025-06-30",
+                    "token": "key",
+                    "format": "json",
+                },
+            )
+
+    @patch("indicatorsets.utils.geos.requests.get")
+    def test_all_time_and_no_fill_method_leave_those_params_out(self, mock_get):
+        mock_get.return_value = _viz_response([])
+        self._coverage("county:42003", [NWSS_INDICATOR], ["CDC_Verily"])
+        params = mock_get.call_args.kwargs["params"]
+        self.assertNotIn("reference_times", params)
+        self.assertNotIn("fill_method", params)
+
+    @patch("indicatorsets.utils.geos.requests.get")
+    def test_a_source_with_no_rows_is_not_covered(self, mock_get):
+        # Allegheny has no CDC_Biobot flu_avg_conc at all.
+        mock_get.side_effect = _viz_by_source(
+            {
+                "CDC_Biobot": [],
+                "CDC_Verily": [_nwss_row("flu_avg_conc", "1768", 0.5)],
+            }
+        )
+        coverage = self._by_pair(
+            self._coverage(
+                "county:42003", [NWSS_INDICATOR], ["CDC_Biobot", "CDC_Verily"]
+            )
+        )
+        self.assertIs(coverage[("flu_avg_conc", "CDC_Biobot")]["covered"], False)
+        self.assertEqual(
+            coverage[("flu_avg_conc", "CDC_Biobot")]["not_covered_sewersheds"],
+            ["1768", "1764"],
+        )
+        self.assertIs(coverage[("flu_avg_conc", "CDC_Verily")]["covered"], True)
+
+    @patch("indicatorsets.utils.geos.requests.get")
+    def test_lists_the_sewersheds_without_values(self, mock_get):
+        mock_get.return_value = _viz_response(
+            [
+                _nwss_row("flu_avg_conc", "1768", 0.5),
+                _nwss_row("flu_avg_conc", "1764", None),
+                _nwss_row("flu_avg_conc", "1764", ""),
+            ]
+        )
+        [entry] = self._coverage("county:42003", [NWSS_INDICATOR], ["CDC_Verily"])
+        self.assertIs(entry["covered"], True)
+        self.assertEqual(entry["not_covered_sewersheds"], ["1764"])
+
+    @patch("indicatorsets.utils.geos.requests.get")
+    def test_a_real_zero_counts_as_data(self, mock_get):
+        mock_get.return_value = _viz_response([_nwss_row("flu_avg_conc", "1768", 0)])
+        [entry] = self._coverage("county:42003", [NWSS_INDICATOR], ["CDC_Verily"])
+        self.assertIs(entry["covered"], True)
+
+    @patch("indicatorsets.utils.geos.requests.get")
+    def test_answers_each_signal_on_its_own(self, mock_get):
+        mock_get.return_value = _viz_response(
+            [
+                _nwss_row("covid_avg_conc", "1768", 1.0),
+                _nwss_row("flu_avg_conc", "1768", None),
+            ]
+        )
+        coverage = self._by_pair(
+            self._coverage(
+                "county:42003", [NWSS_INDICATOR, NWSS_COVID_INDICATOR], ["CDC_Verily"]
+            )
+        )
+        self.assertIs(coverage[("covid_avg_conc", "CDC_Verily")]["covered"], True)
+        self.assertIs(coverage[("flu_avg_conc", "CDC_Verily")]["covered"], False)
+
+    @patch("indicatorsets.utils.geos.requests.get")
+    def test_a_failed_request_is_unknown_for_that_source_only(self, mock_get):
+        mock_get.side_effect = _viz_by_source(
+            {
+                "CDC_Biobot": requests.ConnectionError("down"),
+                "CDC_Verily": [_nwss_row("flu_avg_conc", "1768", 0.5)],
+            }
+        )
+        coverage = self._by_pair(
+            self._coverage(
+                "county:42003", [NWSS_INDICATOR], ["CDC_Biobot", "CDC_Verily"]
+            )
+        )
+        self.assertIsNone(coverage[("flu_avg_conc", "CDC_Biobot")]["covered"])
+        self.assertIsNone(
+            coverage[("flu_avg_conc", "CDC_Biobot")]["not_covered_sewersheds"]
+        )
+        self.assertIs(coverage[("flu_avg_conc", "CDC_Verily")]["covered"], True)
+
+    @patch("indicatorsets.utils.geos.requests.get")
+    def test_only_nwss_indicators_are_answered(self, mock_get):
+        mock_get.return_value = _viz_response([])
+        coverage = self._coverage(
+            "county:42003",
+            [NWSS_INDICATOR, {"_endpoint": "covidcast", "data_source": "src", "indicator": "sig"}],
+            ["CDC_Verily"],
+        )
+        self.assertEqual([e["indicator"] for e in coverage], ["flu_avg_conc"])
+        self.assertEqual(mock_get.call_args.kwargs["params"]["signal"], "flu_avg_conc")
+
+
+@override_settings(EPIDATA_V5_URL="https://v5.test/", EPIDATA_API_KEY="key")
 class CheckNwssGeoCoverageTests(TestCase):
-    def _check(self, geo, indicators):
+    def _check(self, body):
         with _patch_nwss_crosswalk():
             return self.client.post(
                 reverse("check_nwss_geo_coverage"),
-                data=json.dumps({"geo": geo, "indicators": indicators}),
+                data=json.dumps(body),
                 content_type="application/json",
             )
 
-    def test_counties_without_sewersheds_and_other_levels_are_not_covered(self):
-        for geo in ("county:01001", "state:PA", "nation:US"):
-            with self.subTest(geo):
-                response = self._check(geo, [NWSS_INDICATOR])
-                self.assertEqual(
-                    [i["indicator"] for i in response.json()["not_covered_indicators"]],
-                    ["flu_avg_conc"],
-                )
-
-    def test_a_county_with_sewersheds_is_covered_and_only_nwss_is_answered(self):
-        response = self._check(
-            "county:42003",
-            [NWSS_INDICATOR, {"_endpoint": "covidcast", "data_source": "src", "indicator": "sig"}],
+    @patch("indicatorsets.utils.geos.requests.get")
+    def test_answers_per_indicator_and_source(self, mock_get):
+        mock_get.side_effect = _viz_by_source(
+            {
+                "CDC_Biobot": [],
+                "CDC_Verily": [_nwss_row("flu_avg_conc", "1768", 0.5)],
+            }
         )
-        self.assertEqual(response.json()["not_covered_indicators"], [])
+        response = self._check(
+            {
+                "geo": "county:42003",
+                "indicators": [NWSS_INDICATOR],
+                "nwss_sources": ["CDC_Biobot", "CDC_Verily"],
+            }
+        )
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(
+            [
+                (e["nwss_source"], e["covered"])
+                for e in response.json()["coverage"]
+            ],
+            [("CDC_Biobot", False), ("CDC_Verily", True)],
+        )
+
+    @patch("indicatorsets.utils.geos.requests.get")
+    def test_passes_fill_method_and_dates_through(self, mock_get):
+        mock_get.return_value = _viz_response([])
+        self._check(
+            {
+                "geo": "county:42003",
+                "indicators": [NWSS_INDICATOR],
+                "nwss_sources": ["CDC_Verily"],
+                "fill_method": "fill_ave",
+                "start_date": "2025-01-01",
+                "end_date": "2025-06-30",
+            }
+        )
+        params = mock_get.call_args.kwargs["params"]
+        # Legacy names are normalised, as on submission.
+        self.assertEqual(params["fill_method"], "ave")
+        self.assertEqual(params["reference_times"], "2025-01-01:2025-06-30")
+
+    @patch("indicatorsets.utils.geos.requests.get")
+    def test_no_source_means_no_answer(self, mock_get):
+        response = self._check({"geo": "county:42003", "indicators": [NWSS_INDICATOR]})
+        self.assertEqual(response.json()["coverage"], [])
+        mock_get.assert_not_called()
+
+    def test_rejects_bad_dates(self):
+        response = self._check(
+            {
+                "geo": "county:42003",
+                "indicators": [NWSS_INDICATOR],
+                "nwss_sources": ["CDC_Verily"],
+                "start_date": "2025-06-30",
+                "end_date": "2025-01-01",
+            }
+        )
+        self.assertEqual(response.status_code, 400)
 
     def test_rejects_get_and_bad_bodies(self):
         self.assertEqual(self.client.get(reverse("check_nwss_geo_coverage")).status_code, 405)
@@ -6476,6 +6731,169 @@ class CheckNwssGeoCoverageTests(TestCase):
             reverse("check_nwss_geo_coverage"), data="not json", content_type="application/json"
         )
         self.assertEqual(response.status_code, 400)
+        for body in (
+            {"geo": "county:42003", "indicators": "flu_avg_conc"},
+            {"geo": "county:42003", "indicators": [], "nwss_sources": "CDC_Verily"},
+        ):
+            with self.subTest(body=body):
+                self.assertEqual(self._check(body).status_code, 400)
+
+
+NWSS_PLOT_INDICATOR = {**NWSS_INDICATOR, "indicator_set_short_name": "NWSS flu"}
+
+
+def _series(datasets):
+    return [
+        (d["params"]["geo_value"], d["params"]["extra_keys"]) for d in datasets
+    ]
+
+
+class NwssEpivisDropsEmptySewershedsTests(TestCase):
+    """EpiVis warns once per series it gets no data for, so sewersheds with
+    no values for a (signal, source) are left out of the plot."""
+
+    SOURCES = [{"id": "CDC_Verily"}, {"id": "State_Territory"}]
+
+    def _datasets(self, **kwargs):
+        return generate_nwss_dataset_epivis(
+            NWSS_PLOT_INDICATOR, "sewershed", ["1768", "1764"], self.SOURCES, "", **kwargs
+        )
+
+    def test_keeps_only_sewersheds_with_values(self):
+        datasets = self._datasets(
+            sewersheds_with_values={
+                "CDC_Verily": {"flu_avg_conc": {"1768"}},
+                "State_Territory": {"flu_avg_conc": {"1768", "1764"}},
+            }
+        )
+        self.assertEqual(
+            _series(datasets),
+            [
+                ("1768", "nwss_source:CDC_Verily"),
+                ("1768", "nwss_source:State_Territory"),
+                ("1764", "nwss_source:State_Territory"),
+            ],
+        )
+
+    def test_a_source_without_values_gets_no_series(self):
+        datasets = self._datasets(
+            sewersheds_with_values={
+                "CDC_Verily": {"covid_avg_conc": {"1768"}},
+                "State_Territory": {},
+            }
+        )
+        self.assertEqual(datasets, [])
+
+    def test_an_unknown_answer_keeps_every_sewershed(self):
+        everything = [
+            ("1768", "nwss_source:CDC_Verily"),
+            ("1768", "nwss_source:State_Territory"),
+            ("1764", "nwss_source:CDC_Verily"),
+            ("1764", "nwss_source:State_Territory"),
+        ]
+        self.assertEqual(sorted(_series(self._datasets())), sorted(everything))
+        self.assertEqual(
+            sorted(
+                _series(
+                    self._datasets(
+                        sewersheds_with_values={"CDC_Verily": None, "State_Territory": None}
+                    )
+                )
+            ),
+            sorted(everything),
+        )
+
+
+@override_settings(
+    EPIDATA_V5_URL="https://v5.test/",
+    EPIDATA_API_KEY="key",
+    EPIVIS_URL="https://epivis.example.com/",
+)
+class NwssPlotDropsEmptySewershedsTests(TestCase):
+    PAYLOAD = {
+        "indicators": [NWSS_PLOT_INDICATOR],
+        "covidCastGeographicValues": {
+            "county": [{"id": "county:42003", "text": "Allegheny", "geoType": "county"}]
+        },
+        "nwssSource": [{"id": "CDC_Biobot"}, {"id": "State_Territory"}],
+        "fillMethod": "source",
+    }
+
+    def _plot(self, payload=PAYLOAD):
+        with _patch_nwss_crosswalk():
+            response = self.client.post(
+                reverse("epivis"), data=json.dumps(payload), content_type="application/json"
+            )
+        self.assertEqual(response.status_code, 200)
+        url = response.json()["epivis_url"]
+        if "#" not in url:
+            return []
+        return json.loads(base64.b64decode(url.split("#", 1)[1]).decode("ascii"))[
+            "datasets"
+        ]
+
+    @patch("indicatorsets.utils.geos.requests.get")
+    def test_plots_only_sewersheds_with_values(self, mock_get):
+        mock_get.side_effect = _viz_by_source(
+            {
+                "CDC_Biobot": [],
+                "State_Territory": [
+                    _nwss_row("flu_avg_conc", "1768", 0.5, "State_Territory"),
+                    _nwss_row("flu_avg_conc", "1764", None, "State_Territory"),
+                ],
+            }
+        )
+        self.assertEqual(
+            _series(self._plot()), [("1768", "nwss_source:State_Territory")]
+        )
+
+    @patch("indicatorsets.utils.geos.requests.get")
+    def test_asks_for_the_whole_series_with_the_fill_method(self, mock_get):
+        mock_get.return_value = _viz_response([])
+        self._plot()
+        self.assertEqual(mock_get.call_count, 2)
+        params = mock_get.call_args.kwargs["params"]
+        self.assertEqual(params["geo_value"], "1768,1764")
+        self.assertEqual(params["signal"], "flu_avg_conc")
+        self.assertEqual(params["fill_method"], "source")
+        # EpiVis plots the whole series, so no dates.
+        self.assertNotIn("reference_times", params)
+
+    @patch("indicatorsets.utils.geos.requests.get")
+    def test_a_failed_lookup_keeps_that_sources_sewersheds(self, mock_get):
+        mock_get.side_effect = _viz_by_source(
+            {
+                "CDC_Biobot": requests.ConnectionError("down"),
+                "State_Territory": [
+                    _nwss_row("flu_avg_conc", "1768", 0.5, "State_Territory")
+                ],
+            }
+        )
+        self.assertEqual(
+            _series(self._plot()),
+            [
+                ("1768", "nwss_source:CDC_Biobot"),
+                ("1768", "nwss_source:State_Territory"),
+                ("1764", "nwss_source:CDC_Biobot"),
+            ],
+        )
+
+    @patch("indicatorsets.utils.geos.requests.get")
+    def test_no_nwss_indicator_asks_nothing(self, mock_get):
+        payload = {
+            **self.PAYLOAD,
+            "indicators": [
+                {
+                    "_endpoint": "covidcast",
+                    "data_source": "src",
+                    "indicator": "sig",
+                    "time_type": "day",
+                    "indicator_set_short_name": "S",
+                }
+            ],
+        }
+        self._plot(payload)
+        mock_get.assert_not_called()
 
 
 class NwssCountyMappingEndpointRemovedTests(TestCase):
