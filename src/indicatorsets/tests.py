@@ -3103,10 +3103,10 @@ class EpivisViewEndpointRoutingTests(TestCase):
         self.assertEqual(datasets[0]["params"]["regions"], "nat")
 
     def test_other_epiweek_sources_use_the_generic_payload(self):
-        for endpoint, form_key, geo_param in (
-            ("nidss_flu", "nidssFluLocations", "regions"),
-            ("nidss_dengue", "nidssDengueLocations", "locations"),
-            ("flusurv", "flusurvLocations", "locations"),
+        for endpoint, location_id, geo_param in (
+            ("nidss_flu", "taiwan-region:taipei", "regions"),
+            ("nidss_dengue", "taiwan-region:taipei", "locations"),
+            ("flusurv", "FluSurv-Net site:taipei", "locations"),
         ):
             with self.subTest(endpoint=endpoint):
                 datasets = self._datasets(
@@ -3119,8 +3119,9 @@ class EpivisViewEndpointRoutingTests(TestCase):
                                 "indicator_set_short_name": "SRC",
                             }
                         ],
-                        "covidCastGeographicValues": {},
-                        form_key: [{"id": "taipei", "text": "Taipei"}],
+                        "covidCastGeographicValues": {
+                            location_id.split(":")[0]: [_geo(location_id, "Taipei")]
+                        },
                     }
                 )
                 self.assertEqual(len(datasets), 1)
@@ -3505,14 +3506,18 @@ class QueryCodeViewEpiweekOrderingTests(TestCase):
             {
                 "start_date": "2024-01-01",
                 "end_date": "2024-02-01",
-                "indicators": [FLUVIEW_V4_INDICATOR],
-                # fluview takes its locations from the main Location(s) dropdown
+                "indicators": [
+                    FLUVIEW_V4_INDICATOR,
+                    NIDSS_FLU_INDICATOR,
+                    NIDSS_DENGUE_INDICATOR,
+                    FLUSURV_INDICATOR,
+                ],
+                # Every one takes its locations from the main Location(s) dropdown.
                 "covidCastGeographicValues": {
-                    "nation": [{"id": "nation:US", "text": "U.S. National", "geoType": "nation"}]
+                    "nation": [{"id": "nation:US", "text": "U.S. National", "geoType": "nation"}],
+                    "taiwan-region": [_geo("taiwan-region:taipei", "Taiwan: Taipei region")],
+                    "FluSurv-Net site": [_geo("FluSurv-Net site:network_all", "Entire Network")],
                 },
-                "nidssFluLocations": [{"id": "taipei"}],
-                "nidssDengueLocations": [{"id": "taipei"}],
-                "flusurvLocations": [{"id": "network_all"}],
             }
         )
         self.assertEqual(response.status_code, 200)
@@ -3544,15 +3549,17 @@ class QueryCodeViewEpiweekOrderingTests(TestCase):
             ],
         )
 
+    @patch("indicatorsets.utils.epidata.get_v5_source", new=lambda indicator: None)
     def test_unselected_sources_are_skipped(self):
         response = self._post(
             {
                 "start_date": "2024-01-01",
                 "end_date": "2024-02-01",
-                "indicators": [],
-                "covidCastGeographicValues": {},
-                "fluviewLocations": [],
-                "flusurvLocations": [{"id": "network_all"}],
+                "indicators": [FLUSURV_INDICATOR],
+                "covidCastGeographicValues": {
+                    "taiwan-region": [_geo("taiwan-region:taipei", "Taiwan: Taipei region")],
+                    "FluSurv-Net site": [_geo("FluSurv-Net site:network_all", "Entire Network")],
+                },
             }
         )
         self.assertEqual(response.status_code, 200)
@@ -4340,14 +4347,18 @@ class ExportViewEpiweekOrderingTests(TestCase):
             {
                 "start_date": "2024-01-01",
                 "end_date": "2024-02-01",
-                "indicators": [FLUVIEW_V4_INDICATOR],
-                # fluview takes its locations from the main Location(s) dropdown
+                "indicators": [
+                    FLUVIEW_V4_INDICATOR,
+                    NIDSS_FLU_INDICATOR,
+                    NIDSS_DENGUE_INDICATOR,
+                    FLUSURV_INDICATOR,
+                ],
+                # Every one takes its locations from the main Location(s) dropdown.
                 "covidCastGeographicValues": {
-                    "nation": [{"id": "nation:US", "text": "U.S. National", "geoType": "nation"}]
+                    "nation": [{"id": "nation:US", "text": "U.S. National", "geoType": "nation"}],
+                    "taiwan-region": [_geo("taiwan-region:taipei", "Taiwan: Taipei region")],
+                    "FluSurv-Net site": [_geo("FluSurv-Net site:network_all", "Entire Network")],
                 },
-                "nidssFluLocations": [{"id": "taipei"}],
-                "nidssDengueLocations": [{"id": "taipei"}],
-                "flusurvLocations": [{"id": "network_all"}],
                 "dataFormat": "csv",
             }
         )
@@ -4367,10 +4378,11 @@ class ExportViewEpiweekOrderingTests(TestCase):
             {
                 "start_date": "2024-01-01",
                 "end_date": "2024-02-01",
-                "indicators": [],
-                "covidCastGeographicValues": {},
-                "fluviewLocations": [],
-                "nidssDengueLocations": [{"id": "taipei"}],
+                "indicators": [NIDSS_DENGUE_INDICATOR],
+                "covidCastGeographicValues": {
+                    "taiwan-region": [_geo("taiwan-region:taipei", "Taiwan: Taipei region")],
+                    "FluSurv-Net site": [_geo("FluSurv-Net site:network_all", "Entire Network")],
+                },
                 "dataFormat": "csv",
             }
         )
@@ -5817,7 +5829,10 @@ from indicatorsets.utils.locations import (  # noqa: E402
     FLUVIEW_ONLY_LEVELS,
     pophive_locations,
     split_locations,
+    to_flusurv_location,
     to_fluview_region,
+    to_nidss_dengue_location,
+    to_nidss_flu_location,
     to_pophive_location,
     use_main_locations,
 )
@@ -5885,6 +5900,276 @@ class SplitLocationsTests(TestCase):
         for empty in ({}, [], None):
             with self.subTest(empty=empty):
                 self.assertEqual(split_locations(empty), ({}, []))
+
+
+FLUSURV_INDICATOR = {"_endpoint": "flusurv", "data_source": "flusurv", "indicator": "rate_overall", "time_type": "week"}
+NIDSS_FLU_INDICATOR = {"_endpoint": "nidss_flu", "data_source": "nidss_flu", "indicator": "ili", "time_type": "week"}
+NIDSS_DENGUE_INDICATOR = {"_endpoint": "nidss_dengue", "data_source": "nidss_dengue", "indicator": "count", "time_type": "week"}
+
+
+class ToFlusurvLocationTests(TestCase):
+    """FluSurv's location ids for the main dropdown's places."""
+
+    def test_networks_states_and_new_york_sites(self):
+        cases = {
+            "FluSurv-Net site:network_all": "network_all",
+            "FluSurv-Net site:network_eip": "network_eip",
+            "state:CA": "CA",
+            "state:ut": "UT",
+            "msa:10580": "NY_albany",
+            "msa:40380": "NY_rochester",
+        }
+        for location_id, expected in cases.items():
+            with self.subTest(location_id):
+                self.assertEqual(to_flusurv_location(location_id), expected)
+
+    def test_places_flusurv_has_no_location_for(self):
+        for location_id in ("state:PA", "msa:22380", "nation:US", "county:42003", "", None):
+            with self.subTest(location_id):
+                self.assertIsNone(to_flusurv_location(location_id))
+
+
+class ToNidssLocationTests(TestCase):
+    def test_flu_takes_taiwan_regions_only(self):
+        self.assertEqual(to_nidss_flu_location("taiwan-region:nationwide"), "nationwide")
+        self.assertEqual(to_nidss_flu_location("taiwan-region:taipei"), "taipei")
+        self.assertIsNone(to_nidss_flu_location("taiwan-county:taipei_city"))
+
+    def test_dengue_takes_regions_and_counties(self):
+        self.assertEqual(to_nidss_dengue_location("taiwan-region:central"), "central")
+        self.assertEqual(to_nidss_dengue_location("taiwan-county:taipei_city"), "taipei_city")
+
+    def test_places_outside_taiwan(self):
+        for translate in (to_nidss_flu_location, to_nidss_dengue_location):
+            for location_id in ("state:PA", "nation:US", "", None):
+                with self.subTest(translate=translate.__name__, location_id=location_id):
+                    self.assertIsNone(translate(location_id))
+
+
+class UseMainLocationsForFlusurvAndNidssTests(TestCase):
+    GEOS = {
+        "state": [_geo("state:CA", "California"), _geo("state:PA", "Pennsylvania")],
+        "msa": [_geo("msa:10580", "Albany")],
+        "FluSurv-Net site": [_geo("FluSurv-Net site:network_all", "Entire Network")],
+        "taiwan-region": [_geo("taiwan-region:nationwide", "Taiwan (national)")],
+        "taiwan-county": [_geo("taiwan-county:taipei_city", "Taipei City, Taiwan")],
+    }
+
+    def _rewritten(self, indicators):
+        return use_main_locations(
+            {
+                "indicators": indicators,
+                "covidCastGeographicValues": self.GEOS,
+                # A stale page still sends the old pickers' picks.
+                "flusurvLocations": [{"id": "OR", "text": "OR"}],
+                "nidssFluLocations": [{"id": "eastern", "text": "Eastern"}],
+                "nidssDengueLocations": [{"id": "eastern", "text": "Eastern"}],
+            }
+        )
+
+    def test_each_source_gets_its_own_places_from_the_main_dropdown(self):
+        rewritten = self._rewritten(
+            [FLUSURV_INDICATOR, NIDSS_FLU_INDICATOR, NIDSS_DENGUE_INDICATOR]
+        )
+        self.assertEqual(
+            rewritten["flusurvLocations"],
+            [
+                {"id": "CA", "text": "California", "location_id": "state:CA"},
+                {"id": "NY_albany", "text": "Albany", "location_id": "msa:10580"},
+                {
+                    "id": "network_all",
+                    "text": "Entire Network",
+                    "location_id": "FluSurv-Net site:network_all",
+                },
+            ],
+        )
+        self.assertEqual(
+            [g["id"] for g in rewritten["nidssFluLocations"]], ["nationwide"]
+        )
+        self.assertEqual(
+            [g["id"] for g in rewritten["nidssDengueLocations"]],
+            ["nationwide", "taipei_city"],
+        )
+
+    def test_covidcast_never_gets_flusurv_or_taiwan_places(self):
+        covidcast = self._rewritten([FLUSURV_INDICATOR, NIDSS_FLU_INDICATOR])[
+            "covidCastGeographicValues"
+        ]
+        self.assertEqual(sorted(covidcast), ["msa", "state"])
+
+    def test_a_source_without_selected_indicators_gets_nothing(self):
+        rewritten = self._rewritten([NIDSS_FLU_INDICATOR])
+        self.assertEqual(rewritten["flusurvLocations"], [])
+        self.assertEqual(rewritten["nidssDengueLocations"], [])
+
+
+class FormViewsGiveFlusurvAndNidssMainLocationsTests(TestCase):
+    PAYLOAD = {
+        "indicators": [FLUSURV_INDICATOR, NIDSS_DENGUE_INDICATOR],
+        "covidCastGeographicValues": {
+            "state": [_geo("state:CA", "California")],
+            "taiwan-county": [_geo("taiwan-county:taipei_city", "Taipei City, Taiwan")],
+        },
+        "flusurvLocations": [{"id": "OR", "text": "OR"}],  # stale page
+        "start_date": "2016-01-01",
+        "end_date": "2016-03-01",
+    }
+
+    def _geos_by_source(self, view, target, returns):
+        with patch(target, return_value=returns) as mock_fn:
+            self.client.post(
+                reverse(view), data=json.dumps(self.PAYLOAD), content_type="application/json"
+            )
+        return {
+            call.args[0].key: [g["id"] for g in call.args[1]]
+            for call in mock_fn.call_args_list
+        }
+
+    def test_export_preview_and_query_code_get_the_translated_places(self):
+        cases = {
+            "export": ("indicatorsets.views.generate_epiweek_export_url", []),
+            "preview_data": ("indicatorsets.views.preview_epiweek_data", []),
+            "create_query_code": ("indicatorsets.views.generate_query_code_epiweek", ([], [])),
+        }
+        for view, (target, returns) in cases.items():
+            with self.subTest(view):
+                self.assertEqual(
+                    self._geos_by_source(view, target, returns),
+                    {"flusurv": ["CA"], "nidss_dengue": ["taipei_city"]},
+                )
+
+    def test_plot_gets_the_translated_places(self):
+        with patch(
+            "indicatorsets.views.generate_epiweek_dataset_epivis", return_value=[]
+        ) as mock_plot:
+            self.client.post(
+                reverse("epivis"), data=json.dumps(self.PAYLOAD), content_type="application/json"
+            )
+        self.assertEqual(
+            {call.args[0].key: [g["id"] for g in call.args[2]] for call in mock_plot.call_args_list},
+            {"flusurv": ["CA"], "nidss_dengue": ["taipei_city"]},
+        )
+
+
+class AvailableGeosOfferFlusurvAndNidssPlacesTests(TestCase):
+    def setUp(self):
+        from base.models import Geography, GeographyUnit
+
+        units = {
+            "state": ["CA", "PA"],
+            "msa": ["10580", "40380", "22380"],
+            "FluSurv-Net site": ["network_all", "network_eip"],
+            "taiwan-region": ["nationwide", "central"],
+            "taiwan-county": ["taipei_city"],
+        }
+        for level, geo_ids in units.items():
+            geography = Geography.objects.create(name=level, display_name=f"{level} level")
+            for geo_id in geo_ids:
+                GeographyUnit.objects.create(
+                    geo_id=geo_id, name=geo_id, display_name=geo_id, level=1, geo_level=geography
+                )
+
+    def _ids(self, indicators):
+        with patch("indicatorsets.views.requests.get") as mock_get:
+            mock_get.return_value = MagicMock(status_code=200, json=lambda: {"epidata": []})
+            response = self.client.post(
+                reverse("get_available_geos"),
+                data=json.dumps({"indicators": indicators}),
+                content_type="application/json",
+            )
+        return sorted(
+            child["id"]
+            for group in response.json()["geographic_granularities"]
+            for child in group["children"]
+        )
+
+    def test_flusurv_offers_its_networks_states_and_new_york_sites(self):
+        self.assertEqual(
+            self._ids([FLUSURV_INDICATOR]),
+            [
+                "FluSurv-Net site:network_all",
+                "FluSurv-Net site:network_eip",
+                "msa:10580",
+                "msa:40380",
+                "state:CA",
+            ],
+        )
+
+    def test_nidss_flu_offers_taiwan_regions(self):
+        self.assertEqual(
+            self._ids([NIDSS_FLU_INDICATOR]),
+            ["taiwan-region:central", "taiwan-region:nationwide"],
+        )
+
+    def test_nidss_dengue_offers_taiwan_regions_and_counties(self):
+        self.assertEqual(
+            self._ids([NIDSS_DENGUE_INDICATOR]),
+            ["taiwan-county:taipei_city", "taiwan-region:central", "taiwan-region:nationwide"],
+        )
+
+    def test_other_sources_never_offer_them(self):
+        self.assertEqual(
+            self._ids([{"_endpoint": "covidcast", "data_source": "src", "indicator": "sig"}]), []
+        )
+
+    def test_each_place_names_the_sources_that_take_it(self):
+        """The modal preselects and warns per source, so it needs to know."""
+        with patch("indicatorsets.views.requests.get") as mock_get:
+            mock_get.return_value = MagicMock(
+                status_code=200, json=lambda: {"epidata": ["state:CA"]}
+            )
+            response = self.client.post(
+                reverse("get_available_geos"),
+                data=json.dumps(
+                    {
+                        "indicators": [
+                            FLUSURV_INDICATOR,
+                            NIDSS_FLU_INDICATOR,
+                            {"_endpoint": "covidcast", "data_source": "src", "indicator": "sig"},
+                        ]
+                    }
+                ),
+                content_type="application/json",
+            )
+        endpoints = {
+            child["id"]: child["endpoints"]
+            for group in response.json()["geographic_granularities"]
+            for child in group["children"]
+        }
+        self.assertEqual(
+            endpoints,
+            {
+                "state:CA": ["covidcast", "flusurv"],
+                "msa:10580": ["flusurv"],
+                "msa:40380": ["flusurv"],
+                "FluSurv-Net site:network_all": ["flusurv"],
+                "FluSurv-Net site:network_eip": ["flusurv"],
+                "taiwan-region:nationwide": ["nidss_flu"],
+                "taiwan-region:central": ["nidss_flu"],
+            },
+        )
+
+    def test_only_covidcast_indicators_are_asked_of_v4_geo_coverage(self):
+        """It only knows covidcast sources; the others list their places here."""
+        with patch("indicatorsets.views.requests.get") as mock_get:
+            mock_get.return_value = MagicMock(status_code=200, json=lambda: {"epidata": []})
+            self.client.post(
+                reverse("get_available_geos"),
+                data=json.dumps(
+                    {
+                        "indicators": [
+                            FLUSURV_INDICATOR,
+                            NIDSS_FLU_INDICATOR,
+                            {"_endpoint": "fluview", "data_source": "fluview", "indicator": "wili"},
+                            {"_endpoint": "covidcast", "data_source": "src", "indicator": "sig"},
+                        ]
+                    }
+                ),
+                content_type="application/json",
+            )
+        self.assertEqual(
+            [call.kwargs["params"]["data_source"] for call in mock_get.call_args_list], ["src"]
+        )
 
 
 class UseMainLocationsTests(TestCase):

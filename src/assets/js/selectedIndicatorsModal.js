@@ -39,11 +39,6 @@ function addSelectedIndicator(element) {
             element.dataset.indicatorSet,
             element.dataset.indicator
         );
-        if (!MAIN_LOCATION_ENDPOINTS.includes(element.dataset.endpoint) && !indicatorHandler.nonCovidcastIndicatorSets.includes(element.dataset.indicatorSet)) {
-            indicatorHandler.nonCovidcastIndicatorSets.push(
-                element.dataset.indicatorSet
-            );
-        }
     } else {
         checkedIndicatorMembers = checkedIndicatorMembers.filter(
             (indicator) => indicator.indicator !== element.dataset.indicator
@@ -53,15 +48,6 @@ function addSelectedIndicator(element) {
                 `${element.dataset.datasource}_${element.dataset.indicator}`
             )
             .remove();
-        const indicatorSet = element.dataset.indicatorSet;
-        const stillExist = checkedIndicatorMembers.some(
-            (indicator) => indicator.indicator_set === indicatorSet
-        );
-        if (!stillExist && indicatorHandler.nonCovidcastIndicatorSets.includes(indicatorSet)) {
-            indicatorHandler.nonCovidcastIndicatorSets = indicatorHandler.nonCovidcastIndicatorSets.filter(
-                (set) => set !== indicatorSet
-            );
-        }
     }
 
     indicatorHandler.indicators = checkedIndicatorMembers;
@@ -112,12 +98,26 @@ const V5_ENDPOINTS = typeof v5Endpoints !== "undefined" ? v5Endpoints : [];
 const COVIDCAST_ENDPOINTS =
     typeof covidcastEndpoints !== "undefined" ? covidcastEndpoints : ["covidcast"];
 
-// Endpoints whose locations come from the main Location(s) dropdown rather
-// than a dropdown of their own.
-const MAIN_LOCATION_ENDPOINTS = [...COVIDCAST_ENDPOINTS, "fluview", "pophive", "nwss"];
+// Endpoints whose locations come from the main Location(s) dropdown: all of
+// them.
+const MAIN_LOCATION_ENDPOINTS = [
+    ...COVIDCAST_ENDPOINTS,
+    "fluview",
+    "flusurv",
+    "nidss_flu",
+    "nidss_dengue",
+    "pophive",
+    "nwss",
+];
 
-// Preselected in the main Location(s) dropdown when nothing else is.
+// Preselected in the main Location(s) dropdown when nothing else is: one
+// whole-area place per kind of source selected, the nation unless named here.
 const DEFAULT_LOCATION_ID = "nation:US";
+const DEFAULT_LOCATION_IDS = {
+    flusurv: "FluSurv-Net site:network_all",
+    nidss_flu: "taiwan-region:nationwide",
+    nidss_dengue: "taiwan-region:nationwide",
+};
 
 function isV5Indicator(indicator) {
     return (
@@ -344,6 +344,55 @@ async function runCoverageCheck(check, geoId, window) {
     }
 }
 
+/* The kind of source an indicator takes its locations for, as
+ * get_available_geos tags each place: every covidcast-shaped endpoint is
+ * "covidcast". */
+function locationSource(indicator) {
+    return COVIDCAST_ENDPOINTS.includes(indicator["_endpoint"])
+        ? "covidcast"
+        : indicator["_endpoint"];
+}
+
+/* One whole-area place per kind of source selected, among those offered and
+ * taken by that source: the nation, FluSurv-NET's entire network, Taiwan. */
+function defaultLocationIds(availableGeos) {
+    const places = availableGeos.flatMap((group) => group.children);
+    const ids = [];
+    new Set(checkedIndicatorMembers.map(locationSource)).forEach((source) => {
+        const id = DEFAULT_LOCATION_IDS[source] || DEFAULT_LOCATION_ID;
+        const place = places.find((p) => p.id === id);
+        if (place && (place.endpoints || []).includes(source) && !ids.includes(id)) {
+            ids.push(id);
+        }
+    });
+    return ids;
+}
+
+/* Warns about each kind of source none of the picked locations is for: its
+ * indicators would be left out of the submission. */
+function warnAboutSourcesWithoutLocation() {
+    $("#warning-alert .location-alert").remove();
+    if (!$("#geographic_value").hasClass("select2-hidden-accessible")) {
+        return;
+    }
+    const picked = selectedGeos();
+    const setsBySource = {};
+    checkedIndicatorMembers.forEach((indicator) => {
+        const source = locationSource(indicator);
+        setsBySource[source] = setsBySource[source] || new Set();
+        setsBySource[source].add(indicator.indicator_set);
+    });
+    const messages = Object.entries(setsBySource)
+        .filter(([source]) => !picked.some((geo) => (geo.endpoints || []).includes(source)))
+        .map(
+            ([, sets]) =>
+                `No location selected for ${[...sets].join(", ")}. Pick one of its locations, or it will be left out.`
+        );
+    if (messages.length > 0) {
+        appendAlert(messages.join(" <br>"), "warning").classList.add("location-alert");
+    }
+}
+
 function selectedGeos() {
     if (!$("#geographic_value").hasClass("select2-hidden-accessible")) {
         return [];
@@ -431,9 +480,11 @@ function recheckCoverageIfChanged() {
 
 $("#geographic_value").on("select2:select", function (e) {
     warnIfGeoNotCovered(e.params.data);
+    warnAboutSourcesWithoutLocation();
 });
 
 $("#geographic_value").on("select2:unselect", function (e) {
+    warnAboutSourcesWithoutLocation();
     const geoId = e.params.data.id;
     $("#warning-alert .coverage-alert")
         .filter((_, alert) => alert.dataset.geo === geoId)
@@ -478,52 +529,6 @@ async function getAvailableGeos(indicators) {
     }
 }
 
-function showNIDSSFluLocationSelect() {
-    if (indicatorHandler.getNIDSSFluIndicators().length > 0) {
-        if (document.getElementsByName("nidssFluLocations").length === 0) {
-            indicatorHandler.showNIDSSFluLocations();
-        } else {
-            // IF code goes here, we assume that otherEndpointLocationWarning & nidssRegion selector is already on the page, but is just hidden, so we should just show it.
-            $("#nidssFluDiv").show();
-        }
-    } else {
-        // If there are no non-covidcast indicators selected then hide otherEndpointLocationWarning & nidssFluLocations selector.
-        $("#nidssFluLocations").val(null).trigger("change");
-        $("#nidssFluDiv").hide();
-    }
-}
-
-function showNIDSSDengueLocationSelect() {
-    if (indicatorHandler.getNIDSSDengueIndicators().length > 0) {
-        if (document.getElementsByName("nidssDengueLocations").length === 0) {
-            indicatorHandler.showNIDSSDengueLocations();
-        } else {
-            // IF code goes here, we assume that otherEndpointLocationWarning & nidssRegion selector is already on the page, but is just hidden, so we should just show it.
-            $("#nidssDengueDiv").show();
-        }
-    } else {
-        // If there are no non-covidcast indicators selected then hide otherEndpointLocationWarning & nidssDengueLocations selector.
-        $("#nidssDengueLocations").val(null).trigger("change");
-        $("#nidssDengueDiv").hide();
-    }
-}
-
-function showFlusurvLocationSelect() {
-    if (indicatorHandler.getFlusurvIndicators().length > 0) {
-        if (document.getElementsByName("flusurvLocations").length === 0) {
-            indicatorHandler.showFlusurvLocations();
-        } else {
-            // IF code goes here, we assume that otherEndpointLocationWarning & flusurvRegion selector is already on the page, but is just hidden, so we should just show it.
-            $("#flusurvDiv").show();
-        }
-    } else {
-        // If there are no non-covidcast indicators selected then hide otherEndpointLocationWarning & flusurvLocations selector.
-        $("#flusurvLocations").val(null).trigger("change");
-        $("#flusurvDiv").hide();
-    }
-}
-
-
 // Cosmos (pophive) indicators get an age group control below the main
 // Location(s) dropdown; their locations come from that dropdown.
 function showPophiveAgeGroupSelect() {
@@ -553,25 +558,14 @@ function showNwssFieldsSelect() {
     }
 }
 
-function showNonDelphiIndicatorSetsLocations() {
-    const hasOwnLocationMenus = indicatorHandler.nonCovidcastIndicatorSets.length > 0;
-    if (hasOwnLocationMenus) {
-        var otherEndpointIndicatorSetsLocationMessage = `<div class="alert alert-info" data-mdb-alert-init role="alert">For indicator set(s): ${indicatorHandler.nonCovidcastIndicatorSets.join(", ")}, instead of the Location(s) menu, please use the Geographic Value menu below.</div>`
-        $("#differentLocationNote").html(otherEndpointIndicatorSetsLocationMessage);
-    } else {
-        $("#differentLocationNote").html("");
-    }
+// Every source takes its locations from the main Location(s) dropdown; only
+// the Cosmos age group and the NWSS source need controls of their own.
+function showSourceControls() {
     // Each of these shows its control when its indicators are selected and
     // hides it otherwise.
-    showNIDSSFluLocationSelect();
-    showNIDSSDengueLocationSelect();
-    showFlusurvLocationSelect();
     showPophiveAgeGroupSelect();
     showNwssFieldsSelect();
-    // The Cosmos age group and the NWSS source sit in this section too, though
-    // both use the main Location(s) dropdown.
     if (
-        hasOwnLocationMenus ||
         indicatorHandler.getPophiveIndicators().length > 0 ||
         indicatorHandler.getNwssIndicators().length > 0
     ) {
@@ -584,7 +578,7 @@ function showNonDelphiIndicatorSetsLocations() {
 
 
 $("#showSelectedIndicatorsButton").click(async function () {
-    showNonDelphiIndicatorSetsLocations();
+    showSourceControls();
     updateFillMethodVisibility();
     alertPlaceholder.innerHTML = "";
 
@@ -616,10 +610,10 @@ $("#showSelectedIndicatorsButton").click(async function () {
     const preservedIds = prevSelectedIds.filter(id => availableGeoIds.includes(id));
 
     let selectedGeos = [...locationIds, ...preservedIds];
-    // Default to the nation when nothing was picked in the filter panel or on
-    // an earlier open, and the selected indicators offer it.
-    if (selectedGeos.length === 0 && availableGeoIds.includes(DEFAULT_LOCATION_ID)) {
-        selectedGeos = [DEFAULT_LOCATION_ID];
+    // When nothing was picked in the filter panel or on an earlier open,
+    // start with a whole-area place for each kind of source selected.
+    if (selectedGeos.length === 0) {
+        selectedGeos = defaultLocationIds(availableGeos);
     }
     $('#geographic_value').val(selectedGeos).trigger('change');
     if (!indicatorHandler.usesMainLocations()) {
@@ -629,6 +623,7 @@ $("#showSelectedIndicatorsButton").click(async function () {
         $("#geographic_value").prop("disabled", false);
     }
     recheckCoverage();
+    warnAboutSourcesWithoutLocation();
 });
 
 
@@ -718,10 +713,6 @@ window.addEventListener('load', function() {
                         ind.indicator_set,
                         ind.indicator
                      );
-                     
-                     if (!MAIN_LOCATION_ENDPOINTS.includes(ind._endpoint) && !indicatorHandler.nonCovidcastIndicatorSets.includes(ind.indicator_set)) {
-                        indicatorHandler.nonCovidcastIndicatorSets.push(ind.indicator_set);
-                     }
                  });
                  
                  indicatorHandler.indicators = checkedIndicatorMembers;

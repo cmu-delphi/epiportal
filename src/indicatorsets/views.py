@@ -37,8 +37,13 @@ from indicatorsets.utils.geos import (
     v5_location_levels,
 )
 from indicatorsets.utils.locations import (
+    FLUSURV_MSAS,
+    FLUSURV_NETWORK_LEVEL,
+    FLUSURV_STATES,
     FLUVIEW_LOCATION_LEVELS,
     POPHIVE_LOCATION_LEVELS,
+    TAIWAN_COUNTY_LEVEL,
+    TAIWAN_REGION_LEVEL,
     POPHIVE_STATES_WITHOUT_DATA,
     nwss_counties,
     use_main_locations,
@@ -748,14 +753,16 @@ def get_available_geos(request):
         include_nwss_places = any(
             indicator.get("_endpoint") == "nwss" for indicator in indicators
         )
+        selected_endpoints = {indicator.get("_endpoint") for indicator in indicators}
         # Covidcast signals v5 serves are listed from v5, which cannot list
         # geo values: every unit at the levels v5 says their source has. Only
-        # the rest still ask v4 which geos it has.
+        # the rest still ask v4 which geos it has; v4's geo coverage only
+        # knows covidcast, and the other endpoints add their places below.
         v5_levels = v5_location_levels(indicators)
         indicators = [
             indicator
             for indicator in indicators
-            if not (is_covidcast_indicator(indicator) and get_v5_source(indicator))
+            if is_covidcast_indicator(indicator) and not get_v5_source(indicator)
         ]
         grouped_indicators = group_by_property(indicators, "data_source")
         for data_source, indicators in grouped_indicators.items():
@@ -782,14 +789,19 @@ def get_available_geos(request):
         unique_values = set(geo_values)
         geo_levels = set([el.split(":")[0] for el in unique_values])
         geo_unit_ids = set([geo_value.split(":")[1] for geo_value in unique_values])
-        units_query = Q(geo_level__name__in=geo_levels, geo_id__in=geo_unit_ids)
-        if v5_levels:
-            units_query |= Q(geo_level__name__in=v5_levels)
+        # The places each kind of source takes, keyed the way the modal
+        # groups indicators: every covidcast-shaped endpoint is "covidcast".
+        source_queries = {
+            "covidcast": Q(geo_level__name__in=geo_levels, geo_id__in=geo_unit_ids)
+            | Q(geo_level__name__in=v5_levels)
+        }
         if include_fluview_places:
-            units_query |= Q(geo_level__name__in=FLUVIEW_LOCATION_LEVELS)
+            source_queries["fluview"] = Q(geo_level__name__in=FLUVIEW_LOCATION_LEVELS)
         if include_pophive_places:
             # Pophive (Cosmos) too, minus the territories it has no data for.
-            units_query |= Q(geo_level__name__in=POPHIVE_LOCATION_LEVELS) & ~Q(
+            source_queries["pophive"] = Q(
+                geo_level__name__in=POPHIVE_LOCATION_LEVELS
+            ) & ~Q(
                 geo_level__name="state",
                 geo_id__in=[
                     *POPHIVE_STATES_WITHOUT_DATA,
@@ -798,17 +810,48 @@ def get_available_geos(request):
             )
         if include_nwss_places:
             # NWSS, at the counties some sewershed serves.
-            units_query |= Q(
+            source_queries["nwss"] = Q(
                 geo_level__name="county", geo_id__in=nwss_counties()
             )
+        if "flusurv" in selected_endpoints:
+            # FluSurv-NET's networks, the states it covers and its two New
+            # York sites, which are MSAs.
+            source_queries["flusurv"] = (
+                Q(geo_level__name=FLUSURV_NETWORK_LEVEL)
+                | Q(
+                    geo_level__name="state",
+                    geo_id__in=[
+                        *FLUSURV_STATES,
+                        *(geo_id.lower() for geo_id in FLUSURV_STATES),
+                    ],
+                )
+                | Q(geo_level__name="msa", geo_id__in=list(FLUSURV_MSAS))
+            )
+        if "nidss_flu" in selected_endpoints:
+            source_queries["nidss_flu"] = Q(geo_level__name=TAIWAN_REGION_LEVEL)
+        if "nidss_dengue" in selected_endpoints:
+            source_queries["nidss_dengue"] = Q(
+                geo_level__name__in=[TAIWAN_REGION_LEVEL, TAIWAN_COUNTY_LEVEL]
+            )
+        units_by_source = {
+            source: set(GeographyUnit.objects.filter(query).values_list("pk", flat=True))
+            for source, query in source_queries.items()
+        }
         geographic_granularities = [
             {
                 "id": f"{geo_unit.geo_level.name}:{geo_unit.geo_id}",
                 "geoType": geo_unit.geo_level.name,
                 "text": geo_unit.display_name,
                 "geoTypeDisplayName": geo_unit.geo_level.display_name,
+                "endpoints": [
+                    source
+                    for source, units in units_by_source.items()
+                    if geo_unit.pk in units
+                ],
             }
-            for geo_unit in GeographyUnit.objects.filter(units_query)
+            for geo_unit in GeographyUnit.objects.filter(
+                pk__in=set().union(*units_by_source.values())
+            )
             .prefetch_related("geo_level")
             .order_by("level")
         ]
