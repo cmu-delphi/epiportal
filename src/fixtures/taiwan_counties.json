@@ -1,0 +1,310 @@
+[
+    {
+        "model": "base.GeographyUnit",
+        "pk": 4966,
+        "fields": {
+            "geo_id": "changhua_county",
+            "name": "Changhua County",
+            "display_name": "Changhua County, Taiwan",
+            "level": 105,
+            "geo_level": [
+                "taiwan-county",
+                "indicators"
+            ]
+        }
+    },
+    {
+        "model": "base.GeographyUnit",
+        "pk": 4967,
+        "fields": {
+            "geo_id": "chiayi_city",
+            "name": "Chiayi City",
+            "display_name": "Chiayi City, Taiwan",
+            "level": 105,
+            "geo_level": [
+                "taiwan-county",
+                "indicators"
+            ]
+        }
+    },
+    {
+        "model": "base.GeographyUnit",
+        "pk": 4968,
+        "fields": {
+            "geo_id": "chiayi_county",
+            "name": "Chiayi County",
+            "display_name": "Chiayi County, Taiwan",
+            "level": 105,
+            "geo_level": [
+                "taiwan-county",
+                "indicators"
+            ]
+        }
+    },
+    {
+        "model": "base.GeographyUnit",
+        "pk": 4969,
+        "fields": {
+            "geo_id": "hsinchu_city",
+            "name": "Hsinchu City",
+            "display_name": "Hsinchu City, Taiwan",
+            "level": 105,
+            "geo_level": [
+                "taiwan-county",
+                "indicators"
+            ]
+        }
+    },
+    {
+        "model": "base.GeographyUnit",
+        "pk": 4970,
+        "fields": {
+            "geo_id": "hsinchu_county",
+            "name": "Hsinchu County",
+            "display_name": "Hsinchu County, Taiwan",
+            "level": 105,
+            "geo_level": [
+                "taiwan-county",
+                "indicators"
+            ]
+        }
+    },
+    {
+        "model": "base.GeographyUnit",
+        "pk": 4971,
+        "fields": {
+            "geo_id": "hualien_county",
+            "name": "Hualien County",
+            "display_name": "Hualien County, Taiwan",
+            "level": 105,
+            "geo_level": [
+                "taiwan-county",
+                "indicators"
+            ]
+        }
+    },
+    {
+        "model": "base.GeographyUnit",
+        "pk": 4972,
+        "fields": {
+            "geo_id": "kaohsiung_city",
+            "name": "Kaohsiung City",
+            "display_name": "Kaohsiung City, Taiwan",
+            "level": 105,
+            "geo_level": [
+                "taiwan-county",
+                "indicators"
+            ]
+        }
+    },
+    {
+        "model": "base.GeographyUnit",
+        "pk": 4973,
+        "fields": {
+            "geo_id": "keelung_city",
+            "name": "Keelung City",
+            "display_name": "Keelung City, Taiwan",
+            "level": 105,
+            "geo_level": [
+                "taiwan-county",
+                "indicators"
+            ]
+        }
+    },
+    {
+        "model": "base.GeographyUnit",
+        "pk": 4974,
+        "fields": {
+            "geo_id": "kinmen_county",
+            "name": "Kinmen County",
+            "display_name": "Kinmen County, Taiwan",
+            "level": 105,
+            "geo_level": [
+                "taiwan-county",
+                "indicators"
+            ]
+        }
+    },
+    {
+        "model": "base.GeographyUnit",
+        "pk": 4975,
+        "fields": {
+            "geo_id": "lienchiang_county",
+            "name": "Lienchiang County",
+            "display_name": "Lienchiang County, Taiwan",
+            "level": 105,
+            "geo_level": [
+                "taiwan-county",
+                "indicators"
+            ]
+        }
+    },
+    {
+        "model": "base.GeographyUnit",
+        "pk": 4976,
+        "fields": {
+            "geo_id": "miaoli_county",
+            "name": "Miaoli County",
+            "display_name": "Miaoli County, Taiwan",
+            "level": 105,
+            "geo_level": [
+                "taiwan-county",
+                "indicators"
+            ]
+        }
+    },
+    {
+        "model": "base.GeographyUnit",
+        "pk": 4977,
+        "fields": {
+            "geo_id": "nantou_county",
+            "name": "Nantou County",
+            "display_name": "Nantou County, Taiwan",
+            "level": 105,
+            "geo_level": [
+                "taiwan-county",
+                "indicators"
+            ]
+        }
+    },
+    {
+        "model": "base.GeographyUnit",
+        "pk": 4978,
+        "fields": {
+            "geo_id": "new_taipei_city",
+            "name": "New Taipei City",
+            "display_name": "New Taipei City, Taiwan",
+            "level": 105,
+            "geo_level": [
+                "taiwan-county",
+                "indicators"
+            ]
+        }
+    },
+    {
+        "model": "base.GeographyUnit",
+        "pk": 4979,
+        "fields": {
+            "geo_id": "penghu_county",
+            "name": "Penghu County",
+            "display_name": "Penghu County, Taiwan",
+            "level": 105,
+            "geo_level": [
+                "taiwan-county",
+                "indicators"
+            ]
+        }
+    },
+    {
+        "model": "base.GeographyUnit",
+        "pk": 4980,
+        "fields": {
+            "geo_id": "pingtung_county",
+            "name": "Pingtung County",
+            "display_name": "Pingtung County, Taiwan",
+            "level": 105,
+            "geo_level": [
+                "taiwan-county",
+                "indicators"
+            ]
+        }
+    },
+    {
+        "model": "base.GeographyUnit",
+        "pk": 4981,
+        "fields": {
+            "geo_id": "taichung_city",
+            "name": "Taichung City",
+            "display_name": "Taichung City, Taiwan",
+            "level": 105,
+            "geo_level": [
+                "taiwan-county",
+                "indicators"
+            ]
+        }
+    },
+    {
+        "model": "base.GeographyUnit",
+        "pk": 4982,
+        "fields": {
+            "geo_id": "tainan_city",
+            "name": "Tainan City",
+            "display_name": "Tainan City, Taiwan",
+            "level": 105,
+            "geo_level": [
+                "taiwan-county",
+                "indicators"
+            ]
+        }
+    },
+    {
+        "model": "base.GeographyUnit",
+        "pk": 4983,
+        "fields": {
+            "geo_id": "taipei_city",
+            "name": "Taipei City",
+            "display_name": "Taipei City, Taiwan",
+            "level": 105,
+            "geo_level": [
+                "taiwan-county",
+                "indicators"
+            ]
+        }
+    },
+    {
+        "model": "base.GeographyUnit",
+        "pk": 4984,
+        "fields": {
+            "geo_id": "taitung_county",
+            "name": "Taitung County",
+            "display_name": "Taitung County, Taiwan",
+            "level": 105,
+            "geo_level": [
+                "taiwan-county",
+                "indicators"
+            ]
+        }
+    },
+    {
+        "model": "base.GeographyUnit",
+        "pk": 4985,
+        "fields": {
+            "geo_id": "taoyuan_city",
+            "name": "Taoyuan City",
+            "display_name": "Taoyuan City, Taiwan",
+            "level": 105,
+            "geo_level": [
+                "taiwan-county",
+                "indicators"
+            ]
+        }
+    },
+    {
+        "model": "base.GeographyUnit",
+        "pk": 4986,
+        "fields": {
+            "geo_id": "yilan_county",
+            "name": "Yilan County",
+            "display_name": "Yilan County, Taiwan",
+            "level": 105,
+            "geo_level": [
+                "taiwan-county",
+                "indicators"
+            ]
+        }
+    },
+    {
+        "model": "base.GeographyUnit",
+        "pk": 4987,
+        "fields": {
+            "geo_id": "yunlin_county",
+            "name": "Yunlin County",
+            "display_name": "Yunlin County, Taiwan",
+            "level": 105,
+            "geo_level": [
+                "taiwan-county",
+                "indicators"
+            ]
+        }
+    }
+]

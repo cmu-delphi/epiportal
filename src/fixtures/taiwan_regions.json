@@ -1,0 +1,100 @@
+[
+    {
+        "model": "base.GeographyUnit",
+        "pk": 4959,
+        "fields": {
+            "geo_id": "nationwide",
+            "name": "Taiwan",
+            "display_name": "Taiwan (national)",
+            "level": 104,
+            "geo_level": [
+                "taiwan-region",
+                "indicators"
+            ]
+        }
+    },
+    {
+        "model": "base.GeographyUnit",
+        "pk": 4960,
+        "fields": {
+            "geo_id": "central",
+            "name": "Central",
+            "display_name": "Taiwan: Central region",
+            "level": 104,
+            "geo_level": [
+                "taiwan-region",
+                "indicators"
+            ]
+        }
+    },
+    {
+        "model": "base.GeographyUnit",
+        "pk": 4961,
+        "fields": {
+            "geo_id": "eastern",
+            "name": "Eastern",
+            "display_name": "Taiwan: Eastern region",
+            "level": 104,
+            "geo_level": [
+                "taiwan-region",
+                "indicators"
+            ]
+        }
+    },
+    {
+        "model": "base.GeographyUnit",
+        "pk": 4962,
+        "fields": {
+            "geo_id": "kaoping",
+            "name": "Kaoping",
+            "display_name": "Taiwan: Kaoping region",
+            "level": 104,
+            "geo_level": [
+                "taiwan-region",
+                "indicators"
+            ]
+        }
+    },
+    {
+        "model": "base.GeographyUnit",
+        "pk": 4963,
+        "fields": {
+            "geo_id": "northern",
+            "name": "Northern",
+            "display_name": "Taiwan: Northern region",
+            "level": 104,
+            "geo_level": [
+                "taiwan-region",
+                "indicators"
+            ]
+        }
+    },
+    {
+        "model": "base.GeographyUnit",
+        "pk": 4964,
+        "fields": {
+            "geo_id": "southern",
+            "name": "Southern",
+            "display_name": "Taiwan: Southern region",
+            "level": 104,
+            "geo_level": [
+                "taiwan-region",
+                "indicators"
+            ]
+        }
+    },
+    {
+        "model": "base.GeographyUnit",
+        "pk": 4965,
+        "fields": {
+            "geo_id": "taipei",
+            "name": "Taipei",
+            "display_name": "Taiwan: Taipei region",
+            "level": 104,
+            "geo_level": [
+                "taiwan-region",
+                "indicators"
+            ]
+        }
+    }
+]

@@ -168,5 +168,25 @@
             "used_in": "indicators",
             "short_name": "NY (minus NYC)"
         }
+    },
+    {
+        "model": "base.Geography",
+        "fields": {
+            "name": "taiwan-region",
+            "display_name": "Taiwan Region",
+            "display_order_number": 18,
+            "used_in": "indicators",
+            "short_name": "Taiwan Region"
+        }
+    },
+    {
+        "model": "base.Geography",
+        "fields": {
+            "name": "taiwan-county",
+            "display_name": "Taiwan County/City",
+            "display_order_number": 19,
+            "used_in": "indicators",
+            "short_name": "Taiwan County/City"
+        }
     }
 ]
