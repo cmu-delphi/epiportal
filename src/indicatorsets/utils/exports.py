@@ -444,6 +444,8 @@ def generate_pophive_export_url(
     data_export_commands = []
     for indicator in indicators:
         if indicator["_endpoint"] == "pophive":
+            if pophive_age_group:
+                pophive_age_group_str = pophive_age_group[0]['id']
             for geo in pophive_geos:
                 label = f"{indicator.get('display_name') or indicator['indicator']} ({geo['text']})"
                 check_params = {
@@ -452,7 +454,7 @@ def generate_pophive_export_url(
                     "geo_type": geo["geo_type"],
                     "geo_value": geo["id"],
                     "reference_times": f"{start_date}:{end_date}",
-                    "extra_keys": f"age_group:{pophive_age_group[0]['id']}",
+                    "extra_keys": f"age_group:{pophive_age_group_str}",
                 }
                 if api_key:
                     check_params["token"] = api_key
@@ -479,7 +481,7 @@ def generate_pophive_export_url(
                     "geo_type": geo["geo_type"],
                     "geo_value": geo["id"],
                     "reference_times": f"{start_date}:{end_date}",
-                    "extra_keys": f"age_group:{pophive_age_group[0]['id']}",
+                    "extra_keys": f"age_group:{pophive_age_group_str}",
                     "format": data_format,
                     "header": "true" if data_format == "csv" else "false",
                     "filename": filename,

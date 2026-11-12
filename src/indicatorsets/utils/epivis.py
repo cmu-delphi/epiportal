@@ -114,6 +114,8 @@ def generate_epiweek_dataset_epivis(source, indicator, geos):
 
 def generate_pophive_dataset_epivis(indicator, pophive_geos, pophive_age_group):
     datasets = []
+    if pophive_age_group:
+        pophive_age_group_str = pophive_age_group[0]['id']
     for geo in pophive_geos:
         datasets.append(
             {
@@ -128,9 +130,9 @@ def generate_pophive_dataset_epivis(indicator, pophive_geos, pophive_age_group):
                     "custom_title": generate_epivis_custom_title(
                         indicator,
                         geo["text"],
-                        f"age_group:{pophive_age_group[0]['id']}",
+                        f"age_group:{pophive_age_group_str}",
                     ),
-                    "extra_keys": f"age_group:{pophive_age_group[0]['id']}",
+                    "extra_keys": f"age_group:{pophive_age_group_str}",
                 },
             }
         )

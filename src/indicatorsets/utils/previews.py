@@ -462,6 +462,8 @@ def preview_pophive_data(
     preview_data = []
     for indicator in indicators:
         if indicator["_endpoint"] == "pophive":
+            if pophive_age_group:
+                pophive_age_group_str = pophive_age_group[0]['id']
             for geo in pophive_geos:
                 params = {
                     "source": "pophive",
@@ -469,7 +471,7 @@ def preview_pophive_data(
                     "geo_type": geo["geo_type"],
                     "geo_value": geo["id"],
                     "reference_times": f"{start_date}:{end_date}",
-                    "extra_keys": f"age_group:{pophive_age_group[0]['id']}",
+                    "extra_keys": f"age_group:{pophive_age_group_str}",
                     "format": data_format,
                     "header": "true" if data_format == "csv" else "false",
                 }
