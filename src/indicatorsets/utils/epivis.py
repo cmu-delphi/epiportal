@@ -79,8 +79,13 @@ def generate_epiweek_dataset_epivis(source, indicator, geos):
 
     Covers the endpoints whose payload is fully generic (nidss_flu,
     nidss_dengue, flusurv). fluview has its own builder because it maps
-    indicator names to display titles, skips geos the indicator does not cover,
-    and falls back to the fluview_clinical endpoint.
+    indicator names to display titles and falls back to the
+    fluview_clinical endpoint.
+
+    Locations the modal found no data for are left out, as for covidcast and
+    fluview: EpiVis would only warn about each empty series. The modal
+    records them by main-dropdown id, which each geo carries as
+    ``location_id``.
 
     Args:
         source: The :class:`EpiweekSource` supplying the geo parameter name.
@@ -89,6 +94,8 @@ def generate_epiweek_dataset_epivis(source, indicator, geos):
     """
     datasets = []
     for geo in geos:
+        if geo.get("location_id", geo["id"]) in indicator.get("notCoveredGeos", []):
+            continue
         datasets.append(
             {
                 "color": generate_random_color(),
@@ -107,6 +114,8 @@ def generate_epiweek_dataset_epivis(source, indicator, geos):
 
 def generate_pophive_dataset_epivis(indicator, pophive_geos, pophive_age_group):
     datasets = []
+    if pophive_age_group:
+        pophive_age_group_str = pophive_age_group[0]['id']
     for geo in pophive_geos:
         datasets.append(
             {
@@ -121,9 +130,9 @@ def generate_pophive_dataset_epivis(indicator, pophive_geos, pophive_age_group):
                     "custom_title": generate_epivis_custom_title(
                         indicator,
                         geo["text"],
-                        f"age_group:{pophive_age_group[0]['id']}",
+                        f"age_group:{pophive_age_group_str}",
                     ),
-                    "extra_keys": f"age_group:{pophive_age_group[0]['id']}",
+                    "extra_keys": f"age_group:{pophive_age_group_str}",
                 },
             }
         )
@@ -136,11 +145,27 @@ def generate_nwss_dataset_epivis(
     geographic_value,
     source,
     fill_method,
+    sewersheds_with_values=None,
 ):
+    """Build one EpiVis dataset per (sewershed, NWSS source) for ``indicator``.
+
+    ``sewersheds_with_values`` maps a source id to ``{signal: {sewershed
+    ids}}`` (see ``get_nwss_sewersheds_with_values``). EpiVis warns once per
+    series it finds no data for, and most counties have sewersheds a given
+    source does not report, so only the sewersheds listed there are plotted.
+    A source mapped to ``None``, or no mapping at all, means unknown: every
+    sewershed is kept rather than dropping data that may exist.
+    """
     datasets = []
     geo_values = ",".join(geographic_value).replace(" ", "").split(",")
     for geo_value in geo_values:
         for s in source:
+            if sewersheds_with_values is not None:
+                with_values = sewersheds_with_values.get(s["id"])
+                if with_values is not None and geo_value not in with_values.get(
+                    indicator["indicator"], set()
+                ):
+                    continue
             params = {
                 "_endpoint": indicator["_endpoint"],
                 "source": "nwss",

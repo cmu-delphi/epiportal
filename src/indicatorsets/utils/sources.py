@@ -13,6 +13,7 @@ from indicatorsets.utils.epidata import (
     map_fluview_geo_to_v5,
     map_flusurv_geo_to_v5,
 )
+from indicatorsets.utils.helpers import is_filled_fill_method
 
 
 @dataclass(frozen=True)
@@ -34,12 +35,35 @@ class EpiweekSource:
             geo type into the id itself, and every endpoint spells that
             differently, so the mapping lives with the source rather than
             being shared.
+        falls_back_to_v4: Whether a location v5 has no values for, for some
+            selected migrated signal, is served from v4 instead, as covidcast
+            does per geo. Only where v4 still has what v5 lacks (fluview: v5
+            has no state-level wILI).
     """
 
     key: str
     geo_param: str
     form_key: str
     v5_geo_mapper: Optional[Callable[[str], tuple[str, str]]] = None
+    falls_back_to_v4: bool = False
+
+    def can_fall_back_to_v4(self, fill_method):
+        """Whether to use the v4 fallback for ``fill_method``.
+
+        v4 cannot fill, so a filled series stays on v5 even where it is empty.
+        """
+        return self.falls_back_to_v4 and not is_filled_fill_method(fill_method)
+
+    def pair_geos_by_v5_type(self, geos):
+        """Like :meth:`group_geos_by_v5_type`, but each v5 geo_value comes
+        with the geo it was mapped from, so a v4 fallback can use its v4 id."""
+        if self.v5_geo_mapper is None:
+            return {}
+        grouped = {}
+        for geo in geos:
+            geo_type, geo_value = self.v5_geo_mapper(geo["id"])
+            grouped.setdefault(geo_type, []).append((geo_value, geo))
+        return grouped
 
     def group_geos_by_v5_type(self, geos):
         """Bucket ``geos`` into ``{v5 geo_type: [v5 geo_values]}`` for this endpoint.
@@ -55,7 +79,13 @@ class EpiweekSource:
 EPIWEEK_SOURCES = {
     source.key: source
     for source in (
-        EpiweekSource("fluview", "regions", "fluviewLocations", map_fluview_geo_to_v5),
+        EpiweekSource(
+            "fluview",
+            "regions",
+            "fluviewLocations",
+            map_fluview_geo_to_v5,
+            falls_back_to_v4=True,
+        ),
         EpiweekSource("nidss_flu", "regions", "nidssFluLocations"),
         EpiweekSource("nidss_dengue", "locations", "nidssDengueLocations"),
         EpiweekSource(

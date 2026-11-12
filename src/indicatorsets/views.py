@@ -2,7 +2,6 @@ from delphi_utils.logger import LoggerThread
 import base64
 import json
 import sys
-from datetime import datetime
 from textwrap import dedent
 
 import requests
@@ -10,8 +9,8 @@ from delphi_utils import get_structured_logger
 from django.conf import settings
 from django.db.models import Case, IntegerField, Q, Value, When
 from django.http import JsonResponse
+from django.views.decorators.http import require_POST
 from django.views.generic import ListView
-from epiweeks import Week
 
 from base.models import GeographyUnit
 from indicatorsets.filters import IndicatorSetFilter
@@ -29,15 +28,25 @@ from indicatorsets.utils.epidata import (
     get_v5_source,
     is_covidcast_indicator,
 )
-from indicatorsets.utils.geos import v5_location_levels
+from indicatorsets.utils.geos import (
+    InvalidDateWindowError,
+    get_epiweek_geo_coverage,
+    get_nwss_geo_coverage,
+    get_nwss_sewersheds_with_values,
+    get_pophive_geo_coverage,
+    parse_date_window,
+    v5_location_levels,
+)
 from indicatorsets.utils.locations import (
+    FLUSURV_MSAS,
+    FLUSURV_NETWORK_LEVEL,
+    FLUSURV_STATES,
     FLUVIEW_LOCATION_LEVELS,
     POPHIVE_LOCATION_LEVELS,
+    TAIWAN_COUNTY_LEVEL,
+    TAIWAN_REGION_LEVEL,
     POPHIVE_STATES_WITHOUT_DATA,
     nwss_counties,
-    to_fluview_region,
-    to_nwss_sewersheds,
-    to_pophive_location,
     use_main_locations,
 )
 from indicatorsets.utils.sources import EPIWEEK_SOURCES
@@ -383,424 +392,484 @@ class IndicatorSetListView(ListView):
         return context
 
 
+def get_nwss_plot_sewersheds(indicators, sewersheds, nwss_sources, fill_method):
+    """Per selected NWSS source, the sewersheds each NWSS signal has values at.
+
+    Plot sends EpiVis one series per (sewershed, source), and EpiVis warns for
+    every empty one, so the empty ones are dropped first. EpiVis plots the
+    whole series, so no dates. ``None`` when there is nothing to plot.
+    """
+    signals = [i["indicator"] for i in indicators if i.get("_endpoint") == "nwss"]
+    if not signals or not sewersheds or not nwss_sources:
+        return None
+    return {
+        source["id"]: get_nwss_sewersheds_with_values(
+            source["id"], signals, sewersheds, fill_method
+        )
+        for source in nwss_sources
+    }
+
+
+@require_POST
 def epivis(request):
-    if request.method == "POST":
-        datasets = []
-        data = json.loads(request.body)
-        # Fluview's locations come from the main Location(s) dropdown.
-        data = use_main_locations(data)
-        indicators = data.get("indicators", [])
-        covidcast_geos = data.get("covidCastGeographicValues", [])
-        fluview_geos = data.get("fluviewLocations", [])
-        pophive_geos = data.get("pophiveLocations", [])
-        pophive_age_group = data.get("pophiveAgeGroup", [])
-        nwss_source = data.get("nwssSource", [])
-        nwss_geographic_value = data.get("nwssGeographicValue", "")
-        fill_method = normalize_fill_method(data.get("fillMethod"))
-        log_form_stats(request, data, "epivis")
-        log_form_data(request, data, "epivis")
-        for indicator in indicators:
-            if is_covidcast_indicator(indicator):
-                datasets.extend(
-                    generate_covidcast_dataset_epivis(indicator, covidcast_geos)
-                )
-            elif indicator["_endpoint"] == "fluview":
-                datasets.extend(
-                    generate_fluview_dataset_epivis(indicator, fluview_geos)
-                )
-            elif indicator["_endpoint"] in EPIWEEK_SOURCES:
-                # fluview is matched by its own branch above; anything left in
-                # the registry uses the generic epiweek payload.
-                source = EPIWEEK_SOURCES[indicator["_endpoint"]]
-                datasets.extend(
-                    generate_epiweek_dataset_epivis(
-                        source, indicator, data.get(source.form_key, [])
-                    )
-                )
-            elif indicator["_endpoint"] == "pophive":
-                datasets.extend(
-                    generate_pophive_dataset_epivis(
-                        indicator, pophive_geos, pophive_age_group
-                    )
-                )
-            elif indicator["_endpoint"] == "nwss":
-                datasets.extend(
-                    generate_nwss_dataset_epivis(
-                        indicator,
-                        "sewershed",
-                        nwss_geographic_value,
-                        nwss_source,
-                        fill_method,
-                    )
-                )
-        if datasets:
-            datasets_json = json.dumps({"datasets": datasets})
-            datasets_b64 = base64.b64encode(datasets_json.encode("ascii")).decode(
-                "ascii"
+    datasets = []
+    data = json.loads(request.body)
+    # Fluview's locations come from the main Location(s) dropdown.
+    data = use_main_locations(data)
+    indicators = data.get("indicators", [])
+    covidcast_geos = data.get("covidCastGeographicValues", [])
+    fluview_geos = data.get("fluviewLocations", [])
+    pophive_geos = data.get("pophiveLocations", [])
+    pophive_age_group = data.get("pophiveAgeGroup", [])
+    nwss_source = data.get("nwssSource", [])
+    nwss_geographic_value = data.get("nwssGeographicValue", "")
+    fill_method = normalize_fill_method(data.get("fillMethod"))
+    log_form_stats(request, data, "epivis")
+    log_form_data(request, data, "epivis")
+    nwss_sewersheds_with_values = get_nwss_plot_sewersheds(
+        indicators, nwss_geographic_value, nwss_source, fill_method
+    )
+    for indicator in indicators:
+        if is_covidcast_indicator(indicator):
+            datasets.extend(
+                generate_covidcast_dataset_epivis(indicator, covidcast_geos)
             )
-            return JsonResponse({"epivis_url": f"{settings.EPIVIS_URL}#{datasets_b64}"})
-        else:
-            return JsonResponse({"epivis_url": settings.EPIVIS_URL})
+        elif indicator["_endpoint"] == "fluview":
+            datasets.extend(
+                generate_fluview_dataset_epivis(indicator, fluview_geos)
+            )
+        elif indicator["_endpoint"] in EPIWEEK_SOURCES:
+            # fluview is matched by its own branch above; anything left in
+            # the registry uses the generic epiweek payload.
+            source = EPIWEEK_SOURCES[indicator["_endpoint"]]
+            datasets.extend(
+                generate_epiweek_dataset_epivis(
+                    source, indicator, data.get(source.form_key, [])
+                )
+            )
+        elif indicator["_endpoint"] == "pophive":
+            datasets.extend(
+                generate_pophive_dataset_epivis(
+                    indicator, pophive_geos, pophive_age_group
+                )
+            )
+        elif indicator["_endpoint"] == "nwss":
+            datasets.extend(
+                generate_nwss_dataset_epivis(
+                    indicator,
+                    "sewershed",
+                    nwss_geographic_value,
+                    nwss_source,
+                    fill_method,
+                    sewersheds_with_values=nwss_sewersheds_with_values,
+                )
+            )
+    if datasets:
+        datasets_json = json.dumps({"datasets": datasets})
+        datasets_b64 = base64.b64encode(datasets_json.encode("ascii")).decode(
+            "ascii"
+        )
+        return JsonResponse({"epivis_url": f"{settings.EPIVIS_URL}#{datasets_b64}"})
+    else:
+        return JsonResponse({"epivis_url": settings.EPIVIS_URL})
 
 
+@require_POST
 def generate_export_data_url(request):
-    if request.method == "POST":
-        data_export_block = "To download data, please click on the link or copy/paste command(s) into your terminal: <br>{}"
-        data_export_commands = []
-        data = json.loads(request.body)
-        # Fluview's locations come from the main Location(s) dropdown.
-        data = use_main_locations(data)
-        start_date = data.get("start_date", "")
-        end_date = data.get("end_date", "")
-        indicators = data.get("indicators", [])
-        covidcast_geos = data.get("covidCastGeographicValues", [])
-        api_key = data.get("apiKey", None)
+    data_export_block = "To download data, please click on the link or copy/paste command(s) into your terminal: <br>{}"
+    data_export_commands = []
+    data = json.loads(request.body)
+    # Fluview's locations come from the main Location(s) dropdown.
+    data = use_main_locations(data)
+    start_date = data.get("start_date", "")
+    end_date = data.get("end_date", "")
+    indicators = data.get("indicators", [])
+    covidcast_geos = data.get("covidCastGeographicValues", [])
+    api_key = data.get("apiKey", None)
 
-        pophive_geos = data.get("pophiveLocations", [])
-        pophive_age_group = data.get("pophiveAgeGroup", [])
-        nwss_geographic_value = data.get("nwssGeographicValue", "")
-        nwss_source = data.get("nwssSource", [])
-        fill_method = normalize_fill_method(data.get("fillMethod"))
-        data_format = data.get("dataFormat", "json")
+    pophive_geos = data.get("pophiveLocations", [])
+    pophive_age_group = data.get("pophiveAgeGroup", [])
+    nwss_geographic_value = data.get("nwssGeographicValue", "")
+    nwss_source = data.get("nwssSource", [])
+    fill_method = normalize_fill_method(data.get("fillMethod"))
+    data_format = data.get("dataFormat", "json")
 
-        log_form_stats(request, data, "export")
-        log_form_data(request, data, "export")
-        try:
-            data_export_commands.extend(
-                generate_covidcast_indicators_export_url(
-                    indicators,
-                    start_date,
-                    end_date,
-                    covidcast_geos,
-                    api_key,
-                    data_format,
-                    fill_method,
-                )
+    log_form_stats(request, data, "export")
+    log_form_data(request, data, "export")
+    try:
+        data_export_commands.extend(
+            generate_covidcast_indicators_export_url(
+                indicators,
+                start_date,
+                end_date,
+                covidcast_geos,
+                api_key,
+                data_format,
+                fill_method,
             )
-            for source in EPIWEEK_SOURCES.values():
-                geos = data.get(source.form_key, [])
-                if geos:
-                    data_export_commands.extend(
-                        generate_epiweek_export_url(
-                            source,
-                            geos,
-                            start_date,
-                            end_date,
-                            api_key,
-                            data_format,
-                            indicators,
-                            fill_method,
-                        )
-                    )
-            if pophive_geos:
-                data_export_commands.extend(
-                    generate_pophive_export_url(
-                        indicators,
-                        start_date,
-                        end_date,
-                        pophive_geos,
-                        pophive_age_group,
-                        api_key,
-                        data_format,
-                        fill_method,
-                    )
-                )
-            if nwss_geographic_value:
-                data_export_commands.extend(
-                    generate_nwss_export_url(
-                        indicators,
-                        start_date,
-                        end_date,
-                        nwss_geographic_value,
-                        nwss_source,
-                        fill_method,
-                        api_key,
-                        data_format
-                    )
-                )
-        except InvalidApiKeyError as e:
-            return JsonResponse(
-                {"epidata": [], "result": -2, "message": str(e)},
-                safe=False,
-                status=401,
-            )
-        data_export_block = data_export_block.format("<br>".join(data_export_commands))
-        response = {
-            "data_export_block": data_export_block,
-            "data_export_commands": data_export_commands,
-        }
-        return JsonResponse(response)
-
-
-def preview_data(request):
-    if request.method == "POST":
-        data = json.loads(request.body)
-        # Fluview's locations come from the main Location(s) dropdown.
-        data = use_main_locations(data)
-        log_form_stats(request, data, "preview")
-        log_form_data(request, data, "preview")
-        start_date = data.get("start_date", "")
-        end_date = data.get("end_date", "")
-        indicators = data.get("indicators", [])
-        covidcast_geos = data.get("covidCastGeographicValues", {})
-        pophive_geos = data.get("pophiveLocations", [])
-        pophive_age_group = data.get("pophiveAgeGroup", [])
-        nwss_source = data.get("nwssSource", [])
-        nwss_geographic_value = data.get("nwssGeographicValue", "")
-        fill_method = normalize_fill_method(data.get("fillMethod"))
-        api_key = data.get("apiKey", None)
-        data_format = data.get("dataFormat", "json")
-
-        preview_data = []
-        try:
-            preview_data.extend(
-                preview_covidcast_data(
-                    indicators,
-                    start_date,
-                    end_date,
-                    covidcast_geos,
-                    api_key,
-                    data_format,
-                    fill_method,
-                )
-            )
-            for source in EPIWEEK_SOURCES.values():
-                geos = data.get(source.form_key, [])
-                if geos:
-                    preview_data.extend(
-                        preview_epiweek_data(
-                            source,
-                            geos,
-                            start_date,
-                            end_date,
-                            api_key,
-                            data_format,
-                            indicators,
-                            fill_method,
-                        )
-                    )
-            if pophive_geos and pophive_age_group:
-                preview_data.extend(
-                    preview_pophive_data(
-                        indicators,
-                        start_date,
-                        end_date,
-                        pophive_geos,
-                        pophive_age_group,
-                        api_key,
-                        data_format,
-                        fill_method,
-                    )
-                )
-            if nwss_geographic_value:
-                preview_data.extend(
-                    preview_nwss_data(
-                        indicators,
-                        start_date,
-                        end_date,
-                        nwss_geographic_value,
-                        nwss_source,
-                        fill_method,
-                        api_key,
-                        data_format
-                    )
-                )
-        except InvalidApiKeyError as e:
-            return JsonResponse(
-                {"epidata": [], "result": -2, "message": str(e)},
-                safe=False,
-                status=401,
-            )
-        if not preview_data:
-            preview_data = [{"message": NO_DATA_MESSAGE}]
-        return JsonResponse(preview_data, safe=False)
-
-
-def create_query_code(request):
-    if request.method == "POST":
-        data = json.loads(request.body)
-        # Fluview's locations come from the main Location(s) dropdown.
-        data = use_main_locations(data)
-        log_form_stats(request, data, "code")
-        log_form_data(request, data, "code")
-        start_date = data.get("start_date", "")
-        end_date = data.get("end_date", "")
-        indicators = data.get("indicators", [])
-        covidcast_geos = data.get("covidCastGeographicValues", {})
-        pophive_geos = data.get("pophiveLocations", [])
-        pophive_age_group = data.get("pophiveAgeGroup", [])
-        nwss_source = data.get("nwssSource", [])
-        nwss_geographic_value = data.get("nwssGeographicValue", "")
-        fill_method = normalize_fill_method(data.get("fillMethod"))
-        python_code_blocks = [
-            dedent(
-                """\
-                <pre class="code-block">
-                <code>from epidatpy import CovidcastEpidata, EpiDataContext, EpiRange
-
-                # All calls using the `epidata` object will now be cached for 7 days
-                epidata = EpiDataContext(use_cache=True, cache_max_age_days=7)
-            """
-            )
-        ]
-        r_code_blocks = [
-            dedent(
-                """\
-                <pre class="code-block">
-                <code>library(epidatr)
-            """
-            )
-        ]
-        all_indicators = indicators
-        grouped_indicators = group_by_property(indicators, "data_source")
-        for data_source, indicators in grouped_indicators.items():
-            indicators_str = ",".join(
-                [indicator["indicator"] for indicator in indicators]
-            )
-            if is_covidcast_indicator(indicators[0]):
-                python_code_block, r_code_block = generate_query_code_covidcast(
-                    indicators,
-                    covidcast_geos,
-                    start_date,
-                    end_date,
-                    data_source,
-                    indicators_str,
-                    fill_method,
-                )
-                python_code_blocks.extend(python_code_block)
-                r_code_blocks.extend(r_code_block)
+        )
         for source in EPIWEEK_SOURCES.values():
             geos = data.get(source.form_key, [])
             if geos:
-                python_code_block, r_code_block = generate_query_code_epiweek(
-                    source, geos, start_date, end_date, all_indicators, fill_method
+                data_export_commands.extend(
+                    generate_epiweek_export_url(
+                        source,
+                        geos,
+                        start_date,
+                        end_date,
+                        api_key,
+                        data_format,
+                        indicators,
+                        fill_method,
+                    )
                 )
-                python_code_blocks.extend(python_code_block)
-                r_code_blocks.extend(r_code_block)
-        if pophive_geos and pophive_age_group:
-            python_code_block, r_code_block = generate_query_code_pophive(
-                all_indicators,
-                start_date,
-                end_date,
-                pophive_geos,
-                pophive_age_group,
-                fill_method,
+        if pophive_geos:
+            data_export_commands.extend(
+                generate_pophive_export_url(
+                    indicators,
+                    start_date,
+                    end_date,
+                    pophive_geos,
+                    pophive_age_group,
+                    api_key,
+                    data_format,
+                    fill_method,
+                )
             )
-            python_code_blocks.extend(python_code_block)
-            r_code_blocks.extend(r_code_block)
         if nwss_geographic_value:
-            python_code_block, r_code_block = generate_query_code_nwss(
-                all_indicators,
+            data_export_commands.extend(
+                generate_nwss_export_url(
+                    indicators,
+                    start_date,
+                    end_date,
+                    nwss_geographic_value,
+                    nwss_source,
+                    fill_method,
+                    api_key,
+                    data_format
+                )
+            )
+    except InvalidApiKeyError as e:
+        return JsonResponse(
+            {"epidata": [], "result": -2, "message": str(e)},
+            safe=False,
+            status=401,
+        )
+    data_export_block = data_export_block.format("<br>".join(data_export_commands))
+    response = {
+        "data_export_block": data_export_block,
+        "data_export_commands": data_export_commands,
+    }
+    return JsonResponse(response)
+
+
+@require_POST
+def preview_data(request):
+    data = json.loads(request.body)
+    # Fluview's locations come from the main Location(s) dropdown.
+    data = use_main_locations(data)
+    log_form_stats(request, data, "preview")
+    log_form_data(request, data, "preview")
+    start_date = data.get("start_date", "")
+    end_date = data.get("end_date", "")
+    indicators = data.get("indicators", [])
+    covidcast_geos = data.get("covidCastGeographicValues", {})
+    pophive_geos = data.get("pophiveLocations", [])
+    pophive_age_group = data.get("pophiveAgeGroup", [])
+    nwss_source = data.get("nwssSource", [])
+    nwss_geographic_value = data.get("nwssGeographicValue", "")
+    fill_method = normalize_fill_method(data.get("fillMethod"))
+    api_key = data.get("apiKey", None)
+    data_format = data.get("dataFormat", "json")
+
+    preview_data = []
+    try:
+        preview_data.extend(
+            preview_covidcast_data(
+                indicators,
                 start_date,
                 end_date,
-                nwss_geographic_value,
-                nwss_source,
+                covidcast_geos,
+                api_key,
+                data_format,
+                fill_method,
+            )
+        )
+        for source in EPIWEEK_SOURCES.values():
+            geos = data.get(source.form_key, [])
+            if geos:
+                preview_data.extend(
+                    preview_epiweek_data(
+                        source,
+                        geos,
+                        start_date,
+                        end_date,
+                        api_key,
+                        data_format,
+                        indicators,
+                        fill_method,
+                    )
+                )
+        if pophive_geos and pophive_age_group:
+            preview_data.extend(
+                preview_pophive_data(
+                    indicators,
+                    start_date,
+                    end_date,
+                    pophive_geos,
+                    pophive_age_group,
+                    api_key,
+                    data_format,
+                    fill_method,
+                )
+            )
+        if nwss_geographic_value:
+            preview_data.extend(
+                preview_nwss_data(
+                    indicators,
+                    start_date,
+                    end_date,
+                    nwss_geographic_value,
+                    nwss_source,
+                    fill_method,
+                    api_key,
+                    data_format
+                )
+            )
+    except InvalidApiKeyError as e:
+        return JsonResponse(
+            {"epidata": [], "result": -2, "message": str(e)},
+            safe=False,
+            status=401,
+        )
+    if not preview_data:
+        preview_data = [{"message": NO_DATA_MESSAGE}]
+    return JsonResponse(preview_data, safe=False)
+
+
+@require_POST
+def create_query_code(request):
+    data = json.loads(request.body)
+    # Fluview's locations come from the main Location(s) dropdown.
+    data = use_main_locations(data)
+    log_form_stats(request, data, "code")
+    log_form_data(request, data, "code")
+    start_date = data.get("start_date", "")
+    end_date = data.get("end_date", "")
+    indicators = data.get("indicators", [])
+    covidcast_geos = data.get("covidCastGeographicValues", {})
+    pophive_geos = data.get("pophiveLocations", [])
+    pophive_age_group = data.get("pophiveAgeGroup", [])
+    nwss_source = data.get("nwssSource", [])
+    nwss_geographic_value = data.get("nwssGeographicValue", "")
+    fill_method = normalize_fill_method(data.get("fillMethod"))
+    python_code_blocks = [
+        dedent(
+            """\
+            <pre class="code-block">
+            <code>from epidatpy import CovidcastEpidata, EpiDataContext, EpiRange
+
+            # All calls using the `epidata` object will now be cached for 7 days
+            epidata = EpiDataContext(use_cache=True, cache_max_age_days=7)
+        """
+        )
+    ]
+    r_code_blocks = [
+        dedent(
+            """\
+            <pre class="code-block">
+            <code>library(epidatr)
+        """
+        )
+    ]
+    all_indicators = indicators
+    grouped_indicators = group_by_property(indicators, "data_source")
+    for data_source, indicators in grouped_indicators.items():
+        indicators_str = ",".join(
+            [indicator["indicator"] for indicator in indicators]
+        )
+        if is_covidcast_indicator(indicators[0]):
+            python_code_block, r_code_block = generate_query_code_covidcast(
+                indicators,
+                covidcast_geos,
+                start_date,
+                end_date,
+                data_source,
+                indicators_str,
                 fill_method,
             )
             python_code_blocks.extend(python_code_block)
             r_code_blocks.extend(r_code_block)
-        python_code_blocks.append("</code></pre>")
-        r_code_blocks.append("</code></pre>")
-        return JsonResponse(
-            {"python_code_blocks": python_code_blocks, "r_code_blocks": r_code_blocks},
-            safe=False,
-        )
-
-
-def get_available_geos(request):
-    if request.method == "POST":
-        geo_values = []
-        data = json.loads(request.body)
-        indicators = data.get("indicators", [])
-        # Fluview takes its locations from this dropdown too. Read it from the
-        # request now: ``data`` and ``indicators`` are reused below.
-        include_fluview_places = any(
-            indicator.get("_endpoint") == "fluview" for indicator in indicators
-        )
-        include_pophive_places = any(
-            indicator.get("_endpoint") == "pophive" for indicator in indicators
-        )
-        include_nwss_places = any(
-            indicator.get("_endpoint") == "nwss" for indicator in indicators
-        )
-        # Covidcast signals v5 serves are listed from v5, which cannot list
-        # geo values: every unit at the levels v5 says their source has. Only
-        # the rest still ask v4 which geos it has.
-        v5_levels = v5_location_levels(indicators)
-        indicators = [
-            indicator
-            for indicator in indicators
-            if not (is_covidcast_indicator(indicator) and get_v5_source(indicator))
-        ]
-        grouped_indicators = group_by_property(indicators, "data_source")
-        for data_source, indicators in grouped_indicators.items():
-            indicators_str = ",".join(
-                indicator["indicator"] for indicator in indicators
+    for source in EPIWEEK_SOURCES.values():
+        geos = data.get(source.form_key, [])
+        if geos:
+            python_code_block, r_code_block = generate_query_code_epiweek(
+                source, geos, start_date, end_date, all_indicators, fill_method
             )
-            try:
-                response = requests.get(
-                    f"{settings.EPIDATA_URL}covidcast/geo_indicator_coverage",
-                    params={"data_source": data_source, "signals": indicators_str},
-                    auth=epidata_auth(),
-                    timeout=(5, 30),
-                )
-                response.raise_for_status()
-            except requests.RequestException:
-                logger.exception(
-                    "Error getting geo indicator coverage",
-                    extra={"data_source": data_source, "signals": indicators_str},
-                )
-                continue
-            data = response.json()
-            if len(data["epidata"]):
-                geo_values.extend(data["epidata"])
-        unique_values = set(geo_values)
-        geo_levels = set([el.split(":")[0] for el in unique_values])
-        geo_unit_ids = set([geo_value.split(":")[1] for geo_value in unique_values])
-        units_query = Q(geo_level__name__in=geo_levels, geo_id__in=geo_unit_ids)
-        if v5_levels:
-            units_query |= Q(geo_level__name__in=v5_levels)
-        if include_fluview_places:
-            units_query |= Q(geo_level__name__in=FLUVIEW_LOCATION_LEVELS)
-        if include_pophive_places:
-            # Pophive (Cosmos) too, minus the territories it has no data for.
-            units_query |= Q(geo_level__name__in=POPHIVE_LOCATION_LEVELS) & ~Q(
+            python_code_blocks.extend(python_code_block)
+            r_code_blocks.extend(r_code_block)
+    if pophive_geos and pophive_age_group:
+        python_code_block, r_code_block = generate_query_code_pophive(
+            all_indicators,
+            start_date,
+            end_date,
+            pophive_geos,
+            pophive_age_group,
+            fill_method,
+        )
+        python_code_blocks.extend(python_code_block)
+        r_code_blocks.extend(r_code_block)
+    if nwss_geographic_value:
+        python_code_block, r_code_block = generate_query_code_nwss(
+            all_indicators,
+            start_date,
+            end_date,
+            nwss_geographic_value,
+            nwss_source,
+            fill_method,
+        )
+        python_code_blocks.extend(python_code_block)
+        r_code_blocks.extend(r_code_block)
+    python_code_blocks.append("</code></pre>")
+    r_code_blocks.append("</code></pre>")
+    return JsonResponse(
+        {"python_code_blocks": python_code_blocks, "r_code_blocks": r_code_blocks},
+        safe=False,
+    )
+
+
+@require_POST
+def get_available_geos(request):
+    geo_values = []
+    data = json.loads(request.body)
+    indicators = data.get("indicators", [])
+    # Fluview takes its locations from this dropdown too. Read it from the
+    # request now: ``data`` and ``indicators`` are reused below.
+    include_fluview_places = any(
+        indicator.get("_endpoint") == "fluview" for indicator in indicators
+    )
+    include_pophive_places = any(
+        indicator.get("_endpoint") == "pophive" for indicator in indicators
+    )
+    include_nwss_places = any(
+        indicator.get("_endpoint") == "nwss" for indicator in indicators
+    )
+    selected_endpoints = {indicator.get("_endpoint") for indicator in indicators}
+    # Covidcast signals v5 serves are listed from v5, which cannot list
+    # geo values: every unit at the levels v5 says their source has. Only
+    # the rest still ask v4 which geos it has; v4's geo coverage only
+    # knows covidcast, and the other endpoints add their places below.
+    v5_levels = v5_location_levels(indicators)
+    indicators = [
+        indicator
+        for indicator in indicators
+        if is_covidcast_indicator(indicator) and not get_v5_source(indicator)
+    ]
+    grouped_indicators = group_by_property(indicators, "data_source")
+    for data_source, indicators in grouped_indicators.items():
+        indicators_str = ",".join(
+            indicator["indicator"] for indicator in indicators
+        )
+        try:
+            response = requests.get(
+                f"{settings.EPIDATA_URL}covidcast/geo_indicator_coverage",
+                params={"data_source": data_source, "signals": indicators_str},
+                auth=epidata_auth(),
+                timeout=(5, 30),
+            )
+            response.raise_for_status()
+        except requests.RequestException:
+            logger.exception(
+                "Error getting geo indicator coverage",
+                extra={"data_source": data_source, "signals": indicators_str},
+            )
+            continue
+        data = response.json()
+        if len(data["epidata"]):
+            geo_values.extend(data["epidata"])
+    unique_values = set(geo_values)
+    geo_levels = set([el.split(":")[0] for el in unique_values])
+    geo_unit_ids = set([geo_value.split(":")[1] for geo_value in unique_values])
+    # The places each kind of source takes, keyed the way the modal
+    # groups indicators: every covidcast-shaped endpoint is "covidcast".
+    source_queries = {
+        "covidcast": Q(geo_level__name__in=geo_levels, geo_id__in=geo_unit_ids)
+        | Q(geo_level__name__in=v5_levels)
+    }
+    if include_fluview_places:
+        source_queries["fluview"] = Q(geo_level__name__in=FLUVIEW_LOCATION_LEVELS)
+    if include_pophive_places:
+        # Pophive (Cosmos) too, minus the territories it has no data for.
+        source_queries["pophive"] = Q(
+            geo_level__name__in=POPHIVE_LOCATION_LEVELS
+        ) & ~Q(
+            geo_level__name="state",
+            geo_id__in=[
+                *POPHIVE_STATES_WITHOUT_DATA,
+                *(geo_id.upper() for geo_id in POPHIVE_STATES_WITHOUT_DATA),
+            ],
+        )
+    if include_nwss_places:
+        # NWSS, at the counties some sewershed serves.
+        source_queries["nwss"] = Q(
+            geo_level__name="county", geo_id__in=nwss_counties()
+        )
+    if "flusurv" in selected_endpoints:
+        # FluSurv-NET's networks, the states it covers and its two New
+        # York sites, which are MSAs.
+        source_queries["flusurv"] = (
+            Q(geo_level__name=FLUSURV_NETWORK_LEVEL)
+            | Q(
                 geo_level__name="state",
                 geo_id__in=[
-                    *POPHIVE_STATES_WITHOUT_DATA,
-                    *(geo_id.upper() for geo_id in POPHIVE_STATES_WITHOUT_DATA),
+                    *FLUSURV_STATES,
+                    *(geo_id.lower() for geo_id in FLUSURV_STATES),
                 ],
             )
-        if include_nwss_places:
-            # NWSS, at the counties some sewershed serves.
-            units_query |= Q(
-                geo_level__name="county", geo_id__in=nwss_counties()
-            )
-        geographic_granularities = [
+            | Q(geo_level__name="msa", geo_id__in=list(FLUSURV_MSAS))
+        )
+    if "nidss_flu" in selected_endpoints:
+        source_queries["nidss_flu"] = Q(geo_level__name=TAIWAN_REGION_LEVEL)
+    if "nidss_dengue" in selected_endpoints:
+        source_queries["nidss_dengue"] = Q(
+            geo_level__name__in=[TAIWAN_REGION_LEVEL, TAIWAN_COUNTY_LEVEL]
+        )
+    units_by_source = {
+        source: set(GeographyUnit.objects.filter(query).values_list("pk", flat=True))
+        for source, query in source_queries.items()
+    }
+    geographic_granularities = [
+        {
+            "id": f"{geo_unit.geo_level.name}:{geo_unit.geo_id}",
+            "geoType": geo_unit.geo_level.name,
+            "text": geo_unit.display_name,
+            "geoTypeDisplayName": geo_unit.geo_level.display_name,
+            "endpoints": [
+                source
+                for source, units in units_by_source.items()
+                if geo_unit.pk in units
+            ],
+        }
+        for geo_unit in GeographyUnit.objects.filter(
+            pk__in=set().union(*units_by_source.values())
+        )
+        .prefetch_related("geo_level")
+        .order_by("level")
+    ]
+    grouped_geographic_granularities = group_by_property(
+        geographic_granularities, "geoTypeDisplayName"
+    )
+    geographic_granularities = []
+    for key, value in grouped_geographic_granularities.items():
+        geographic_granularities.append(
             {
-                "id": f"{geo_unit.geo_level.name}:{geo_unit.geo_id}",
-                "geoType": geo_unit.geo_level.name,
-                "text": geo_unit.display_name,
-                "geoTypeDisplayName": geo_unit.geo_level.display_name,
+                "text": key,
+                "children": value,
             }
-            for geo_unit in GeographyUnit.objects.filter(units_query)
-            .prefetch_related("geo_level")
-            .order_by("level")
-        ]
-        grouped_geographic_granularities = group_by_property(
-            geographic_granularities, "geoTypeDisplayName"
         )
-        geographic_granularities = []
-        for key, value in grouped_geographic_granularities.items():
-            geographic_granularities.append(
-                {
-                    "text": key,
-                    "children": value,
-                }
-            )
-        return JsonResponse(
-            {"geographic_granularities": geographic_granularities}, safe=False
-        )
+    return JsonResponse(
+        {"geographic_granularities": geographic_granularities}, safe=False
+    )
 
 
 def get_table_stats_info(request):
@@ -846,139 +915,63 @@ def get_related_indicators_json(request):
     return JsonResponse({"related_indicators": related_indicators})
 
 
-def check_fluview_geo_coverage(request):
-    null_data_indicators = []
-    if request.method == "GET":
-        # The modal sends main-dropdown ids; fluview takes region ids.
-        geo_value = to_fluview_region(request.GET.get("geo"))
-        indicators = request.GET.get("indicators")
-        start_date = 199740
-        end_date = Week.fromdate(datetime.today())
-        end_date = f"{end_date.year}{end_date.week if end_date.week >= 10 else '0' + str(end_date.week)}"
-        indicators = json.loads(indicators)
-        if geo_value is None:
-            # A place fluview has no region for (e.g. a county): nothing
-            # selected here is covered, and there is nothing to ask Epidata.
-            return JsonResponse(
-                {
-                    "not_covered_indicators": [
-                        indicator
-                        for indicator in indicators
-                        if indicator["data_source"] in ("fluview", "fluview_clinical")
-                    ]
-                }
-            )
-
-        fluview_indicators = {}
-        fluview_clinical_indicators = {}
-        for indicator in indicators:
-            if indicator["data_source"] == "fluview":
-                fluview_indicators[indicator["indicator"]] = 0
-            elif indicator["data_source"] == "fluview_clinical":
-                fluview_clinical_indicators[indicator["indicator"]] = 0
-
-        params = {
-            "regions": geo_value,
-            "epiweeks": f"{start_date}-{end_date}",
-        }
-
-        if fluview_indicators:
-            try:
-                response = requests.get(
-                    f"{settings.EPIDATA_URL}fluview",
-                    params=params,
-                    auth=epidata_auth(),
-                    timeout=(5, 30),
-                )
-                response.raise_for_status()
-            except requests.RequestException:
-                logger.exception(
-                    "Error getting fluview data", extra={"geo_value": geo_value}
-                )
-            else:
-                data = response.json()
-                if len(data["epidata"]):
-                    for el in data["epidata"]:
-                        for indicator in fluview_indicators.keys():
-                            fluview_indicators[indicator] += (
-                                el[indicator] if el[indicator] else 0
-                            )
-        if fluview_clinical_indicators:
-            try:
-                response = requests.get(
-                    f"{settings.EPIDATA_URL}fluview_clinical",
-                    params=params,
-                    auth=epidata_auth(),
-                    timeout=(5, 30),
-                )
-                response.raise_for_status()
-            except requests.RequestException:
-                logger.exception(
-                    "Error getting fluview clinical data",
-                    extra={"geo_value": geo_value},
-                )
-            else:
-                data = response.json()
-                if len(data["epidata"]):
-                    for el in data["epidata"]:
-                        for indicator in fluview_clinical_indicators.keys():
-                            fluview_clinical_indicators[indicator] += el[indicator]
-
-        for indicator in fluview_indicators.keys():
-            if fluview_indicators[indicator] == 0:
-                null_data_indicators.append(indicator)
-        for indicator in fluview_clinical_indicators.keys():
-            if fluview_clinical_indicators[indicator] == 0:
-                null_data_indicators.append(indicator)
-        not_covered_indicators = [
-            indicator
-            for indicator in indicators
-            if indicator["indicator"] in null_data_indicators
-        ]
-        return JsonResponse(
-            {"not_covered_indicators": not_covered_indicators}, safe=False
-        )
-
-
-def check_pophive_geo_coverage(request):
-    """Tell the selected-indicators modal which pophive (Cosmos) indicators
-    have no data for one main-dropdown location.
-
-    Expects a JSON body ``{"geo": "geo_type:geo_value", "indicators": [...]}``.
-    Pophive has every signal at every nation, HHS and state location, so the
-    answer follows from the location alone and Epidata is never asked.
-    """
-    if request.method != "POST":
-        return JsonResponse({"error": "POST required"}, status=405)
+def _epiweek_coverage_response(request, source_key=None):
     try:
         data = json.loads(request.body)
     except ValueError:
         return JsonResponse({"error": "Invalid JSON body"}, status=400)
+    source_key = source_key or data.get("source")
+    if source_key not in EPIWEEK_SOURCES:
+        return JsonResponse({"error": "Unknown epiweek source"}, status=400)
     indicators = data.get("indicators") or []
     if not isinstance(indicators, list):
         return JsonResponse({"error": "Expected indicators"}, status=400)
-    covered = to_pophive_location(data.get("geo") or "") is not None
+    try:
+        window = parse_date_window(data.get("start_date"), data.get("end_date"))
+    except InvalidDateWindowError as e:
+        return JsonResponse({"error": str(e)}, status=400)
     return JsonResponse(
         {
-            "not_covered_indicators": [
-                indicator
-                for indicator in indicators
-                if indicator.get("_endpoint") == "pophive" and not covered
-            ]
+            "coverage": get_epiweek_geo_coverage(
+                source_key,
+                data.get("geo") or "",
+                indicators,
+                fill_method=normalize_fill_method(data.get("fill_method")),
+                window=window,
+            )
         }
     )
 
 
-def check_nwss_geo_coverage(request):
-    """Tell the selected-indicators modal which NWSS indicators have no data
+@require_POST
+def check_fluview_geo_coverage(request):
+    """Tell the selected-indicators modal which fluview indicators have data
     for one main-dropdown location.
 
-    Expects a JSON body ``{"geo": "geo_type:geo_value", "indicators": [...]}``.
-    NWSS is offered at counties some sewershed serves; the crosswalk answers
-    that, so ``/viz`` is never asked.
+    Expects a JSON body ``{"geo": "geo_type:geo_value", "indicators": [...]}``,
+    plus optional ``fill_method`` and ``start_date``/``end_date`` (no dates
+    means all time). See ``get_epiweek_geo_coverage`` for the answer.
     """
-    if request.method != "POST":
-        return JsonResponse({"error": "POST required"}, status=405)
+    return _epiweek_coverage_response(request, "fluview")
+
+
+@require_POST
+def check_epiweek_geo_coverage(request):
+    """The same for any epiweek endpoint (FluSurv, NIDSS), named by the
+    body's ``source``: one of ``EPIWEEK_SOURCES``."""
+    return _epiweek_coverage_response(request)
+
+
+@require_POST
+def check_pophive_geo_coverage(request):
+    """Tell the selected-indicators modal which Cosmos (pophive) indicators
+    have data for one main-dropdown location.
+
+    Expects a JSON body ``{"geo": "geo_type:geo_value", "indicators": [...],
+    "age_group": "..."}``, plus optional ``fill_method`` and
+    ``start_date``/``end_date`` (no dates means all time), since exports ask
+    ``/viz/`` with all of them. See ``get_pophive_geo_coverage`` for the answer.
+    """
     try:
         data = json.loads(request.body)
     except ValueError:
@@ -986,27 +979,68 @@ def check_nwss_geo_coverage(request):
     indicators = data.get("indicators") or []
     if not isinstance(indicators, list):
         return JsonResponse({"error": "Expected indicators"}, status=400)
-    nwss_indicators = [
-        indicator for indicator in indicators if indicator.get("_endpoint") == "nwss"
-    ]
-    covered = bool(nwss_indicators) and bool(
-        to_nwss_sewersheds(data.get("geo") or "")
-    )
+    try:
+        window = parse_date_window(data.get("start_date"), data.get("end_date"))
+    except InvalidDateWindowError as e:
+        return JsonResponse({"error": str(e)}, status=400)
     return JsonResponse(
-        {"not_covered_indicators": [] if covered else nwss_indicators}
+        {
+            "coverage": get_pophive_geo_coverage(
+                data.get("geo") or "",
+                indicators,
+                data.get("age_group") or "",
+                fill_method=normalize_fill_method(data.get("fill_method")),
+                window=window,
+            )
+        }
     )
 
 
+@require_POST
+def check_nwss_geo_coverage(request):
+    """Tell the selected-indicators modal which NWSS indicators have data for
+    one main-dropdown location, per selected NWSS source.
+
+    Expects a JSON body ``{"geo": "geo_type:geo_value", "indicators": [...],
+    "nwss_sources": [...]}``, plus optional ``fill_method`` and
+    ``start_date``/``end_date`` (no dates means all time), since exports ask
+    ``/viz/`` with all of them. See ``get_nwss_geo_coverage`` for the answer.
+    """
+    try:
+        data = json.loads(request.body)
+    except ValueError:
+        return JsonResponse({"error": "Invalid JSON body"}, status=400)
+    indicators = data.get("indicators") or []
+    nwss_sources = data.get("nwss_sources") or []
+    if not isinstance(indicators, list) or not isinstance(nwss_sources, list):
+        return JsonResponse({"error": "Expected indicators and nwss_sources"}, status=400)
+    try:
+        window = parse_date_window(data.get("start_date"), data.get("end_date"))
+    except InvalidDateWindowError as e:
+        return JsonResponse({"error": str(e)}, status=400)
+    return JsonResponse(
+        {
+            "coverage": get_nwss_geo_coverage(
+                data.get("geo") or "",
+                indicators,
+                nwss_sources,
+                fill_method=normalize_fill_method(data.get("fill_method")),
+                window=window,
+            )
+        }
+    )
+
+
+@require_POST
 def check_covidcast_geo_coverage(request):
     """Tell the selected-indicators modal which covidcast indicators have data
     for one geo, and whether v5 or v4 will serve them.
 
     Expects a JSON body ``{"geo": "geo_type:geo_value", "indicators": [...]}``,
     plus an optional ``fill_method``: exports only fall back to v4 for the
-    ``source`` one, so the answer depends on it.
+    ``source`` one, so the answer depends on it. Optional ``start_date`` and
+    ``end_date`` limit the check to those dates; none means all time.
     """
-    if request.method != "POST":
-        return JsonResponse({"error": "POST required"}, status=405)
     try:
         data = json.loads(request.body)
     except ValueError:
@@ -1016,10 +1050,14 @@ def check_covidcast_geo_coverage(request):
     if ":" not in geo or not isinstance(indicators, list):
         return JsonResponse({"error": "Expected geo and indicators"}, status=400)
     fill_method = normalize_fill_method(data.get("fill_method"))
+    try:
+        window = parse_date_window(data.get("start_date"), data.get("end_date"))
+    except InvalidDateWindowError as e:
+        return JsonResponse({"error": str(e)}, status=400)
     return JsonResponse(
         {
             "coverage": get_covidcast_geo_coverage(
-                geo, indicators, fill_method=fill_method
+                geo, indicators, fill_method=fill_method, window=window
             )
         }
     )

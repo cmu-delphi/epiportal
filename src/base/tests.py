@@ -84,6 +84,45 @@ class FixtureLoadingTests(TestCase):
         nation = GeographyUnit.objects.get(geo_id="US")
         self.assertEqual(nation.geo_level.natural_key(), ("nation", "indicatorsets"))
 
+    def _unit_ids(self, level):
+        return set(
+            GeographyUnit.objects.filter(geo_level__name=level).values_list(
+                "geo_id", flat=True
+            )
+        )
+
+    def test_flusurv_and_nidss_places_carry_their_epidata_ids(self):
+        """NIDSS and FluSurv pick from the main Location(s) dropdown, so it
+        has their places, under the ids their Epidata endpoints take."""
+        call_command("loaddata", *self.paths, verbosity=0)
+        self.assertEqual(
+            self._unit_ids("FluSurv-Net site"),
+            {"network_all", "network_eip", "network_ihsp"},
+        )
+        nidss_regions = {
+            "nationwide", "central", "eastern", "kaoping", "northern", "southern", "taipei",
+        }
+        self.assertEqual(self._unit_ids("taiwan-region"), nidss_regions)
+        self.assertEqual(
+            self._unit_ids("taiwan-county"),
+            {
+                "changhua_county", "chiayi_city", "chiayi_county", "hsinchu_city",
+                "hsinchu_county", "hualien_county", "kaohsiung_city", "keelung_city",
+                "kinmen_county", "lienchiang_county", "miaoli_county", "nantou_county",
+                "new_taipei_city", "penghu_county", "pingtung_county", "taichung_city",
+                "tainan_city", "taipei_city", "taitung_county", "taoyuan_city",
+                "yilan_county", "yunlin_county",
+            },
+        )
+        # Taiwan stays out of the filter panel, which lists indicator set levels.
+        for level in ("taiwan-region", "taiwan-county"):
+            self.assertEqual(Geography.objects.get(name=level).used_in, "indicators")
+        # FluSurv's states and New York sites are places the dropdown has.
+        self.assertTrue(
+            GeographyUnit.objects.filter(geo_level__name="msa", geo_id__in=["10580", "40380"]).count()
+            == 2
+        )
+
 
 class GeographicMappingTests(TestCase):
     def test_get_geographic_mapping_by_key(self):

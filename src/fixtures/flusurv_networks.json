@@ -1,0 +1,44 @@
+[
+    {
+        "model": "base.GeographyUnit",
+        "pk": 4956,
+        "fields": {
+            "geo_id": "network_all",
+            "name": "Entire Network",
+            "display_name": "FluSurv-NET: Entire Network",
+            "level": 103,
+            "geo_level": [
+                "FluSurv-Net site",
+                "indicatorsets"
+            ]
+        }
+    },
+    {
+        "model": "base.GeographyUnit",
+        "pk": 4957,
+        "fields": {
+            "geo_id": "network_eip",
+            "name": "EIP Network",
+            "display_name": "FluSurv-NET: EIP Network",
+            "level": 103,
+            "geo_level": [
+                "FluSurv-Net site",
+                "indicatorsets"
+            ]
+        }
+    },
+    {
+        "model": "base.GeographyUnit",
+        "pk": 4958,
+        "fields": {
+            "geo_id": "network_ihsp",
+            "name": "IHSP Network",
+            "display_name": "FluSurv-NET: IHSP Network",
+            "level": 103,
+            "geo_level": [
+                "FluSurv-Net site",
+                "indicatorsets"
+            ]
+        }
+    }
+]
