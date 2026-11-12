@@ -58,7 +58,6 @@ function getSelectedPophiveAgeGroup() {
 class IndicatorHandler {
     constructor() {
         this.indicators = {};
-        this.nonCovidcastIndicatorSets = [];
     }
 
     fluviewIndicatorsMapping = {
@@ -66,78 +65,11 @@ class IndicatorHandler {
         ili: "%ILI",
     };
 
-    flusurvLocations = [
-        { id: "network_all", text: "Entire Network" },
-        { id: "network_eip", text: "EIP Netowrk" },
-        { id: "network_ihsp", text: "IHSP Network" },
-        { id: "CA", text: "CA" },
-        { id: "CO", text: "CO" },
-        { id: "CT", text: "CT" },
-        { id: "GA", text: "GA" },
-        { id: "IA", text: "IA" },
-        { id: "ID", text: "ID" },
-        { id: "MD", text: "MD" },
-        { id: "MI", text: "MI" },
-        { id: "MN", text: "MN" },
-        { id: "NM", text: "NM" },
-        { id: "NY_albany", text: "NY (Albany)" },
-        { id: "NY_rochester", text: "NY (Rochester)" },
-        { id: "OH", text: "OH" },
-        { id: "OK", text: "OK" },
-        { id: "OR", text: "OR" },
-        { id: "RI", text: "RI" },
-        { id: "SD", text: "SD" },
-        { id: "TN", text: "TN" },
-        { id: "UT", text: "UT" },
-    ];
-
-    nidssFluLocations = [
-        { id: 'nationwide', text: 'Taiwan National' },
-        { id: 'central', text: 'Central' },
-        { id: 'eastern', text: 'Eastern' },
-        { id: 'kaoping', text: 'Kaoping' },
-        { id: 'northern', text: 'Northern' },
-        { id: 'southern', text: 'Southern' },
-        { id: 'taipei', text: 'Taipei' },
-    ];
-
-    nidssDengueLocations = [
-        { id: 'nationwide', text: 'Taiwan National' },
-        { id: 'central', text: 'Central' },
-        { id: 'eastern', text: 'Eastern' },
-        { id: 'kaoping', text: 'Kaoping' },
-        { id: 'northern', text: 'Northern' },
-        { id: 'southern', text: 'Southern' },
-        { id: 'taipei', text: 'Taipei' },
-        { id: 'changhua_county', text: 'Changhua County' },
-        { id: 'chiayi_city', text: 'Chiayi City' },
-        { id: 'chiayi_county', text: 'Chiayi County' },
-        { id: 'hsinchu_city', text: 'Hsinchu City' },
-        { id: 'hsinchu_county', text: 'Hsinchu County' },
-        { id: 'hualien_county', text: 'Hualien County' },
-        { id: 'kaohsiung_city', text: 'Kaohsiung City' },
-        { id: 'keelung_city', text: 'Keelung City' },
-        { id: 'kinmen_county', text: 'Kinmen County' },
-        { id: 'lienchiang_county', text: 'Lienchiang County' },
-        { id: 'miaoli_county', text: 'Miaoli County' },
-        { id: 'nantou_county', text: 'Nantou County' },
-        { id: 'new_taipei_city', text: 'New taipei City' },
-        { id: 'penghu_county', text: 'Penghu County' },
-        { id: 'pingtung_county', text: 'Pingtung County' },
-        { id: 'taichung_city', text: 'Taichung City' },
-        { id: 'tainan_city', text: 'Tainan City' },
-        { id: 'taipei_city', text: 'Taipei City' },
-        { id: 'taitung_county', text: 'Taitung County' },
-        { id: 'taoyuan_city', text: 'Taoyuan City' },
-        { id: 'yilan_county', text: 'Yilan County' },
-        { id: 'yunlin_county', text: 'Yunlin County' },
-    ];
-
     nwssSources = ['CDC_Biobot', 'CDC_Verily', 'State_Territory', 'WastewaterSCAN'];
 
-    // Covidcast (and the v5-only sources sharing its paths), fluview,
-    // pophive (Cosmos) and nwss take their locations from the main
-    // Location(s) dropdown.
+    // Every source takes its locations from the main Location(s) dropdown:
+    // covidcast (and the v5-only sources sharing its paths), fluview,
+    // FluSurv, NIDSS, pophive (Cosmos) and nwss.
     usesMainLocations() {
         return this.indicators.some((indicator) =>
             MAIN_LOCATION_ENDPOINTS.includes(indicator["_endpoint"])
@@ -249,106 +181,12 @@ class IndicatorHandler {
                     ));
             payload.covidcastGeoValues = covidcastGeoValues;
         }
-        var nidssFluGeoValues = $("#nidssFluLocations").select2("data")
-        if (nidssFluGeoValues !== undefined && nidssFluGeoValues !== null) {
-            nidssFluGeoValues = Object.values(
-                nidssFluGeoValues
-                    .flat()
-                    .map(({ id }) => id
-                    ));
-            payload.nidssFluGeoValues = nidssFluGeoValues;
-        }
-        var nidssDengueGeoValues = $("#nidssDengueLocations").select2("data")
-        if (nidssDengueGeoValues !== undefined && nidssDengueGeoValues !== null) {
-            nidssDengueGeoValues = Object.values(
-                nidssDengueGeoValues
-                    .flat()
-                    .map(({ id }) => id
-                    ));
-            payload.nidssDengueGeoValues = nidssDengueGeoValues;
-        }
-        var flusurvGeoValues = $("#flusurvLocations").select2("data")
-        if (flusurvGeoValues !== undefined && flusurvGeoValues !== null) {
-            flusurvGeoValues = Object.values(
-                flusurvGeoValues
-                    .flat()
-                    .map(({ id }) => id
-                    ));
-            payload.flusurvGeoValues = flusurvGeoValues;
-        }
-
         var pophiveAgeGroupData = getSelectedPophiveAgeGroup();
         if (pophiveAgeGroupData.length > 0) {
             payload.pophiveAgeGroup = pophiveAgeGroupData[0].id;
         }
         return payload;
 
-    }
-
-    showNIDSSFluLocations() {
-        var nidssFluLocationselect = `
-        <hr>
-        <div class="row margin-top-1rem" id="nidssFluDiv">
-            <div class="col-2">
-                <label for="nidssFluLocations" class="col-form-label">Taiwanese ILI Location(s):</label>
-            </div>
-            <div class="col-10">
-                <select id="nidssFluLocations" name="nidssFluLocations" class="form-select" multiple="multiple"></select>
-            </div>
-        </div><hr>`;
-        if ($("#otherEndpointLocations").length) {
-            $("#otherEndpointLocations").append(nidssFluLocationselect);
-            $("#nidssFluLocations").select2({
-                placeholder: "Select Taiwanese ILI Location(s)",
-                data: this.nidssFluLocations,
-                allowClear: true,
-                width: "100%",
-            });
-        }
-    }
-
-    showNIDSSDengueLocations() {
-        var nidssDengueLocationselect = `
-        <hr>
-        <div class="row margin-top-1rem" id="nidssDengueDiv">
-            <div class="col-2">
-                <label for="nidssDengueLocations" class="col-form-label">Taiwanese Dengue Cases Location(s):</label>
-            </div>
-            <div class="col-10">
-                <select id="nidssDengueLocations" name="nidssDengueLocations" class="form-select" multiple="multiple"></select>
-            </div>
-        </div><hr>`;
-        if ($("#otherEndpointLocations").length) {
-            $("#otherEndpointLocations").append(nidssDengueLocationselect);
-            $("#nidssDengueLocations").select2({
-                placeholder: "Select Taiwanese Dengue Cases Location(s)",
-                data: this.nidssDengueLocations,
-                allowClear: true,
-                width: "100%",
-            });
-        }
-    }
-
-    showFlusurvLocations() {
-        var flusurvLocationselect = `
-        <hr>
-        <div class="row margin-top-1rem" id="flusurvDiv">
-            <div class="col-2">
-                <label for="flusurvLocations" class="col-form-label">FluSurv Location(s):</label>
-            </div>
-            <div class="col-10">
-                <select id="flusurvLocations" name="flusurvLocations" class="form-select" multiple="multiple"></select>
-            </div>
-        </div><hr>`;
-        if ($("#otherEndpointLocations").length) {
-            $("#otherEndpointLocations").append(flusurvLocationselect);
-            $("#flusurvLocations").select2({
-                placeholder: "Select FluSurv Location(s)",
-                data: this.flusurvLocations,
-                allowClear: true,
-                width: "100%",
-            });
-        }
     }
 
     // Cosmos (pophive) takes its locations from the main Location(s)
@@ -433,17 +271,11 @@ class IndicatorHandler {
             $("#geographic_value").select2("data"),
             ({ geoType }) => [geoType]
         );
-        const nidssFluLocations = $("#nidssFluLocations").select2("data");
-        const nidssDengueLocations = $("#nidssDengueLocations").select2("data");
-        const flusurvLocations = $("#flusurvLocations").select2("data");
         const pophiveAgeGroup = getSelectedPophiveAgeGroup();
         const nwssSource = $("#nwssSource").select2("data");
         const submitData = {
             indicators: this.indicators,
             covidCastGeographicValues: covidCastGeographicValues,
-            nidssFluLocations: nidssFluLocations,
-            nidssDengueLocations: nidssDengueLocations,
-            flusurvLocations: flusurvLocations,
             pophiveAgeGroup: pophiveAgeGroup,
             nwssSource: nwssSource,
             fillMethod: getFillMethod(),
@@ -502,9 +334,6 @@ class IndicatorHandler {
     }
 
     exportData() {
-        const nidssFluLocations = $("#nidssFluLocations").select2("data");
-        const nidssDengueLocations = $("#nidssDengueLocations").select2("data");
-        const flusurvLocations = $("#flusurvLocations").select2("data");
         const pophiveAgeGroup = getSelectedPophiveAgeGroup();
         const nwssSource = $("#nwssSource").select2("data");
         let dataFormat = 'csv';
@@ -520,9 +349,6 @@ class IndicatorHandler {
             end_date: document.getElementById("end_date").value,
             indicators: this.indicators,
             covidCastGeographicValues: covidCastGeographicValues,
-            nidssFluLocations: nidssFluLocations,
-            nidssDengueLocations: nidssDengueLocations,
-            flusurvLocations: flusurvLocations,
             pophiveAgeGroup: pophiveAgeGroup,
             nwssSource: nwssSource,
             fillMethod: getFillMethod(),
@@ -592,9 +418,6 @@ class IndicatorHandler {
 
     previewData() {
         $('#loader').show();
-        const nidssFluLocations = $("#nidssFluLocations").select2("data");
-        const nidssDengueLocations = $("#nidssDengueLocations").select2("data");
-        const flusurvLocations = $("#flusurvLocations").select2("data");
         const pophiveAgeGroup = getSelectedPophiveAgeGroup();
         const nwssSource = $("#nwssSource").select2("data");
         const covidCastGeographicValues = Object.groupBy(
@@ -610,9 +433,6 @@ class IndicatorHandler {
             end_date: document.getElementById("end_date").value,
             indicators: this.indicators,
             covidCastGeographicValues: covidCastGeographicValues,
-            nidssFluLocations: nidssFluLocations,
-            nidssDengueLocations: nidssDengueLocations,
-            flusurvLocations: flusurvLocations,
             pophiveAgeGroup: pophiveAgeGroup,
             nwssSource: nwssSource,
             fillMethod: getFillMethod(),
@@ -646,9 +466,6 @@ class IndicatorHandler {
     }
 
     createQueryCode() {
-        const nidssFluLocations = $("#nidssFluLocations").select2("data");
-        const nidssDengueLocations = $("#nidssDengueLocations").select2("data");
-        const flusurvLocations = $("#flusurvLocations").select2("data");
         const pophiveAgeGroup = getSelectedPophiveAgeGroup();
         const nwssSource = $("#nwssSource").select2("data");
         const covidCastGeographicValues = Object.groupBy(
@@ -661,9 +478,6 @@ class IndicatorHandler {
             end_date: document.getElementById("end_date").value,
             indicators: this.indicators,
             covidCastGeographicValues: covidCastGeographicValues,
-            nidssFluLocations: nidssFluLocations,
-            nidssDengueLocations: nidssDengueLocations,
-            flusurvLocations: flusurvLocations,
             pophiveAgeGroup: pophiveAgeGroup,
             nwssSource: nwssSource,
             fillMethod: getFillMethod(),
