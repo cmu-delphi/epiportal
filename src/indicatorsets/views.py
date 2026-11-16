@@ -307,6 +307,7 @@ class IndicatorSetListView(ListView):
                     "license": indicator_set.license,
                     "dataset_location": indicator_set.dataset_location,
                     "documentation_link": indicator_set.documentation_link,
+                    "external_source_link": indicator_set.external_source_link,
                     "kind": indicator_set.kind,
                     "is_top_priority": indicator_set.is_top_priority,
                     "delphi_hosted": "Yes" if indicator_set.delphi_hosted else "No",

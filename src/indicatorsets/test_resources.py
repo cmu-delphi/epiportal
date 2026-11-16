@@ -16,7 +16,7 @@ SETS_HEADER = (
     "ongoing,reporting_cadence,update_day,reporting_lag,revision_cadence,"
     "population,population_stratifiers,surveillance_categories,censoring,"
     "missingness,dua_required,data_use_terms,dataset_location,data_format,"
-    "documentation_link"
+    "documentation_link,external_source_link"
 ).split(",")
 
 ROW_DEFAULTS = {
@@ -74,6 +74,7 @@ class IndicatorSetResourceTests(TestCase):
                     "data_use_terms": "CC BY",
                     "dataset_location": "Delphi",
                     "documentation_link": "https://example.com",
+                    "external_source_link": "https://example.org/source",
                 }
             )
         )
@@ -124,6 +125,9 @@ class IndicatorSetResourceTests(TestCase):
         self.assertEqual(indicator_set.license, "CC BY")
         self.assertEqual(indicator_set.dataset_location, "Delphi")
         self.assertEqual(indicator_set.documentation_link, "https://example.com")
+        self.assertEqual(
+            indicator_set.external_source_link, "https://example.org/source"
+        )
 
     def test_dua_required_true(self):
         run_import(sets_dataset({"indicator_set": "Restricted", "dua_required": "TRUE"}))
