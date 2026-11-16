@@ -205,6 +205,12 @@
             button.className = "btn btn-primary";
             footer.appendChild(button);
         }
+        var externalSource = clean(row.external_source_link);
+        if (/^https?:\/\//i.test(externalSource)) {
+            var button = externalLink(externalSource, "External source ↗");
+            button.className = "btn btn-secondary";
+            footer.appendChild(button);
+        }
         footer.hidden = !footer.children.length;
     }
 

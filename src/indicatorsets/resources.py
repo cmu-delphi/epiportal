@@ -117,6 +117,9 @@ class IndicatorSetResource(CustomModelResource):
     documentation_link = Field(
         attribute="documentation_link", column_name="documentation_link"
     )
+    external_source_link = Field(
+        attribute="external_source_link", column_name="external_source_link"
+    )
 
     class Meta:
         model = IndicatorSet
@@ -155,6 +158,7 @@ class IndicatorSetResource(CustomModelResource):
             "license",
             "dataset_location",
             "documentation_link",
+            "external_source_link",
         )
 
     def __init__(self, **kwargs):
