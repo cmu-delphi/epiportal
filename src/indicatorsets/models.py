@@ -218,6 +218,13 @@ class IndicatorSet(models.Model):
         help_text="Who hosts the Indicator Set",
     )
 
+    external_source_link: models.CharField = models.CharField(
+        verbose_name="External Source Link",
+        max_length=500,
+        blank=True,
+        help_text="Link to the external source for the Indicator Set",
+    )
+
     class Meta:
         verbose_name = "Indicator Set"
         verbose_name_plural = "Indicator Sets"
