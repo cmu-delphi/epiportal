@@ -523,18 +523,20 @@ def get_nwss_sewersheds_with_values(
     """Return ``{signal: {sewershed ids with a real value}}`` for one NWSS source.
 
     Asks ``/viz/`` the way exports do: every signal in one request, with the
-    same ``fill_method`` and dates. A signal with no values anywhere is
-    missing from the result. ``None`` when the lookup failed, so the caller
-    can tell "no data" apart from "could not check".
+    same ``fill_method`` and dates. ``nwss_source`` ``None`` asks every source
+    at once. A signal with no values anywhere is missing from the result.
+    ``None`` when the lookup failed, so the caller can tell "no data" apart
+    from "could not check".
     """
     params = {
         "source": "nwss",
         "signal": ",".join(signals),
         "geo_type": "sewershed",
         "geo_value": ",".join(sewersheds),
-        "extra_keys": f"nwss_source:{nwss_source}",
         "token": settings.EPIDATA_API_KEY,
     }
+    if nwss_source:
+        params["extra_keys"] = f"nwss_source:{nwss_source}"
     if fill_method:
         params["fill_method"] = fill_method
     reference_times = v5_reference_times(window)
@@ -562,8 +564,8 @@ def get_nwss_geo_coverage(
     source (``extra_keys=nwss_source:<id>``), every selected signal at once,
     with the same ``fill_method`` and dates. Only real values count, so a
     signal a source reports for the county with nothing but nulls is not
-    covered. Nothing is selected until a source is, so no source means no
-    answer.
+    covered. No source selected means every source: one unfiltered request,
+    answered with ``nwss_source`` ``None``.
 
     ``geo`` is a ``"geo_type:geo_value"`` id. Returns one dict per (indicator,
     source) with ``data_source``, ``indicator`` and ``nwss_source``, plus
@@ -574,12 +576,12 @@ def get_nwss_geo_coverage(
     nwss_indicators = [
         indicator for indicator in indicators if indicator.get("_endpoint") == "nwss"
     ]
-    if not nwss_indicators or not nwss_sources:
+    if not nwss_indicators:
         return []
     sewersheds = to_nwss_sewersheds(geo)
     signals = [indicator["indicator"] for indicator in nwss_indicators]
     coverage = []
-    for nwss_source in nwss_sources:
+    for nwss_source in nwss_sources or [None]:
         # sewershed ids with a value, per signal; None when unknown.
         with_values = (
             get_nwss_sewersheds_with_values(

@@ -9,6 +9,7 @@ from indicatorsets.utils.epidata import (
 )
 from indicatorsets.utils.helpers import get_epiweek
 from indicatorsets.utils.locations import group_covidcast_geos
+from indicatorsets.utils.nwss import nwss_source_ids
 
 
 def _python_snapshot_call(variable, args):
@@ -414,7 +415,8 @@ def generate_query_code_nwss(
     covidcast branch batches its signals. ``fill_method`` is a native
     parameter on both clients. epidatr filters ``nwss_source`` server-side
     via its named extra-key argument; epidatpy's client has no such argument
-    yet, so the Python snippet filters the returned dataframe locally.
+    yet, so the Python snippet filters the returned dataframe locally. No
+    source selected means every source: one unfiltered call.
     """
     python_code_blocks = []
     r_code_blocks = []
@@ -424,34 +426,30 @@ def generate_query_code_nwss(
     signals_list = ", ".join(f'"{i["indicator"]}"' for i in nwss_indicators)
     geo_values_list = ", ".join(f'"{geo}"' for geo in nwss_geographic_value)
     fill = _fill_method_literal(fill_method)
-    for source in nwss_source:
-        name = f"nwss_source_{source['id']}"
-        python_code_blocks.append(
-            _python_snapshot_call(
-                f"{name}_df",
-                [
-                    ("source", '"nwss"'),
-                    ("signals", f"[{signals_list}]"),
-                    ("geo_type", '"sewershed"'),
-                    ("geo_values", f"[{geo_values_list}]"),
-                    ("reference_time", f'EpiRange("{start_date}", "{end_date}")'),
-                    ("fill_method", fill),
-                ],
-            )
-            + f'{name}_df = {name}_df[{name}_df["nwss_source"] == "{source["id"]}"]\n'
+    for source_id in nwss_source_ids(nwss_source):
+        name = f"nwss_source_{source_id}" if source_id else "nwss"
+        python_code = _python_snapshot_call(
+            f"{name}_df",
+            [
+                ("source", '"nwss"'),
+                ("signals", f"[{signals_list}]"),
+                ("geo_type", '"sewershed"'),
+                ("geo_values", f"[{geo_values_list}]"),
+                ("reference_time", f'EpiRange("{start_date}", "{end_date}")'),
+                ("fill_method", fill),
+            ],
         )
-        r_code_blocks.append(
-            _r_snapshot_call(
-                f"epidata_{name}",
-                [
-                    ("source", '"nwss"'),
-                    ("signals", f"c({signals_list})"),
-                    ("geo_type", '"sewershed"'),
-                    ("geo_values", f"c({geo_values_list})"),
-                    ("reference_time", f'epirange("{start_date}", "{end_date}")'),
-                    ("fill_method", fill),
-                    ("nwss_source", f'"{source["id"]}"'),
-                ],
-            )
-        )
+        r_args = [
+            ("source", '"nwss"'),
+            ("signals", f"c({signals_list})"),
+            ("geo_type", '"sewershed"'),
+            ("geo_values", f"c({geo_values_list})"),
+            ("reference_time", f'epirange("{start_date}", "{end_date}")'),
+            ("fill_method", fill),
+        ]
+        if source_id:
+            python_code += f'{name}_df = {name}_df[{name}_df["nwss_source"] == "{source_id}"]\n'
+            r_args.append(("nwss_source", f'"{source_id}"'))
+        python_code_blocks.append(python_code)
+        r_code_blocks.append(_r_snapshot_call(f"epidata_{name}", r_args))
     return python_code_blocks, r_code_blocks

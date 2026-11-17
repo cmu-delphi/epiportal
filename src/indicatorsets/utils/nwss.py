@@ -18,6 +18,24 @@ logger = get_structured_logger("indicatorsets.utils")
 NWSS_CROSSWALK_CACHE_KEY = "nwss_county_sewersheds"
 NWSS_CROSSWALK_CACHE_TIME = 60 * 60 * 24
 
+# Every source v5 has NWSS data from, as the NWSS Source dropdown lists them.
+NWSS_SOURCES = ["CDC_Biobot", "CDC_Verily", "State_Territory", "WastewaterSCAN"]
+
+
+def nwss_source_ids(nwss_source):
+    """The ids of the selected NWSS sources, or ``[None]`` when none is.
+
+    No source selected means every source: one request with no
+    ``nwss_source`` filter, whose rows each name their source.
+    """
+    return [source["id"] for source in nwss_source] or [None]
+
+
+def nwss_source_label(indicator, source_id):
+    """How messages name ``indicator`` for one source (``None``: every source)."""
+    name = indicator.get("display_name") or indicator["indicator"]
+    return f"{name} (source: {source_id})" if source_id else name
+
 
 def nwss_county_sewersheds():
     """Return ``{county fips: [sewershed ids]}``, or ``{}`` when v5 can't be reached.

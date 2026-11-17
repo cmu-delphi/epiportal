@@ -49,6 +49,7 @@ from indicatorsets.utils.locations import (
     nwss_counties,
     use_main_locations,
 )
+from indicatorsets.utils.nwss import NWSS_SOURCES
 from indicatorsets.utils.sources import EPIWEEK_SOURCES
 from indicatorsets.utils import (
     InvalidApiKeyError,
@@ -422,7 +423,9 @@ def epivis(request):
     fluview_geos = data.get("fluviewLocations", [])
     pophive_geos = data.get("pophiveLocations", [])
     pophive_age_group = data.get("pophiveAgeGroup", [])
-    nwss_source = data.get("nwssSource", [])
+    # EpiVis needs one series per source, so no source selected means one
+    # series per known source rather than one that mixes them.
+    nwss_source = data.get("nwssSource") or [{"id": s} for s in NWSS_SOURCES]
     nwss_geographic_value = data.get("nwssGeographicValue", "")
     fill_method = normalize_fill_method(data.get("fillMethod"))
     log_form_stats(request, data, "epivis")
