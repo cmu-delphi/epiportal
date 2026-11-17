@@ -27,6 +27,7 @@ from indicatorsets.utils.epidata import (
 from indicatorsets.utils.exceptions import InvalidApiKeyError
 from indicatorsets.utils.helpers import get_epiweek
 from indicatorsets.utils.locations import group_covidcast_geos
+from indicatorsets.utils.nwss import nwss_source_ids, nwss_source_label
 
 logger = get_structured_logger("indicatorsets.utils")
 
@@ -520,7 +521,7 @@ def preview_nwss_data(
     preview_data = []
     geo_value = ",".join(nwss_geographic_value)
     for indicator in indicators:
-        for source in nwss_source:
+        for source_id in nwss_source_ids(nwss_source):
             if indicator["_endpoint"] == "nwss":
                 params = {
                     "source": "nwss",
@@ -528,10 +529,11 @@ def preview_nwss_data(
                     "geo_type": "sewershed",
                     "geo_value": geo_value,
                     "reference_times": f"{start_date}:{end_date}",
-                    "extra_keys": f"nwss_source:{source['id']}",
                     "format": data_format,
                     "header": "true" if data_format == "csv" else "false",
                 }
+                if source_id:
+                    params["extra_keys"] = f"nwss_source:{source_id}"
                 if api_key:
                     params["token"] = api_key
                 if fill_method:
@@ -552,10 +554,7 @@ def preview_nwss_data(
                         },
                     )
                     continue
-                label = (
-                    f"{indicator.get('display_name') or indicator['indicator']} "
-                    f"(source: {source['id']})"
-                )
+                label = nwss_source_label(indicator, source_id)
                 preview_data.append(
                     get_preview_data(
                         response,

@@ -256,10 +256,10 @@ function getSelectedNwssSources() {
 
 /* One entry per kind of source the main dropdown serves. Each picks its
  * indicators and adds what its server check needs beyond the shared geo, fill
- * method and dates, or null when there is nothing to check yet (no NWSS
- * source, no Cosmos age group). skipsInPlot marks the ones Plot leaves an
- * uncovered location out for, via the indicator's notCoveredGeos; NWSS drops
- * empty sewersheds on the server instead. */
+ * method and dates, or null when there is nothing to check yet (no Cosmos age
+ * group; no NWSS source means every source). skipsInPlot marks the ones Plot
+ * leaves an uncovered location out for, via the indicator's notCoveredGeos;
+ * NWSS drops empty sewersheds on the server instead. */
 const COVERAGE_CHECKS = [
     {
         url: "check_covidcast_geo_coverage/",
@@ -292,12 +292,13 @@ const COVERAGE_CHECKS = [
     {
         url: "check_nwss_geo_coverage/",
         indicators: () => checkedIndicatorMembers.filter((i) => i["_endpoint"] === "nwss"),
-        params: () => {
-            const sources = getSelectedNwssSources();
-            return sources.length > 0 ? { nwss_sources: sources } : null;
-        },
-        // One answer per selected NWSS source, so name it.
-        label: (indicator, entry) => `${indicator.display_name} (source: ${entry.nwss_source})`,
+        params: () => ({ nwss_sources: getSelectedNwssSources() }),
+        // One answer per selected NWSS source, so name it; none selected
+        // gets one answer for every source (nwss_source null).
+        label: (indicator, entry) =>
+            entry.nwss_source
+                ? `${indicator.display_name} (source: ${entry.nwss_source})`
+                : indicator.display_name,
     },
 ];
 
