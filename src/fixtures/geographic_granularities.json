@@ -122,11 +122,31 @@
     {
         "model": "base.Geography",
         "fields": {
-            "name": "facility",
-            "display_name": "Facility",
+            "name": "other_substate_region",
+            "display_name": "Other Substate Region",
             "display_order_number": 13,
             "used_in": "indicatorsets",
+            "short_name": "Other Substate Region"
+        }
+    },
+    {
+        "model": "base.Geography",
+        "fields": {
+            "name": "facility",
+            "display_name": "Facility",
+            "display_order_number": 15,
+            "used_in": "indicatorsets",
             "short_name": "Facility"
+        }
+    },
+    {
+        "model": "base.Geography",
+        "fields": {
+            "name": "lat_long",
+            "display_name": "Lat/Long",
+            "display_order_number": 16,
+            "used_in": "indicatorsets",
+            "short_name": "Lat/Long"
         }
     },
     {
@@ -144,7 +164,7 @@
         "fields": {
             "name": "N/A",
             "display_name": "N/A",
-            "display_order_number": 18,
+            "display_order_number": 17,
             "used_in": "indicatorsets",
             "short_name": "N/A"
         }

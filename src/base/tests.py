@@ -167,6 +167,23 @@ class GeographicMappingTests(TestCase):
             get_geographic_mapping_by_name("U.S. Census Division")[0], "census-division"
         )
 
+    def test_fixture_has_every_mapped_level_in_the_mapping_order(self):
+        """The import sets a level's order only when it creates the row, so
+        the fixture loaded on every boot is what keeps existing rows in order."""
+        from base.resources import GEOGRAPHIC_GRANULARITY_MAPPING
+
+        with open(settings.BASE_DIR / "fixtures" / "geographic_granularities.json") as f:
+            fixture = {
+                o["fields"]["name"]: o["fields"]
+                for o in json.load(f)
+                if o["fields"]["used_in"] == "indicatorsets"
+            }
+        for name, mapping in GEOGRAPHIC_GRANULARITY_MAPPING.items():
+            with self.subTest(name):
+                self.assertIn(name, fixture)
+                for key in ("display_name", "display_order_number", "short_name"):
+                    self.assertEqual(fixture[name][key], mapping[key], key)
+
     def test_mapping_display_order_is_unique(self):
         from base.resources import GEOGRAPHIC_GRANULARITY_MAPPING
 
