@@ -220,6 +220,28 @@ class AvailableGeosFromV5Tests(V5MetadataMixin, TestCase):
         )
         self.assertEqual(fake.calls, [])
 
+    def test_units_listed_in_name_order_with_numbers_as_numbers(self):
+        division = Geography.objects.get(name="census-division")
+        for geo_id in ("10", "2"):
+            GeographyUnit.objects.create(
+                geo_id=geo_id, name=geo_id, display_name=f"Division {geo_id}",
+                level=1, geo_level=division,
+            )
+        fake = FakeEpidata()
+        with patch("requests.get", side_effect=fake):
+            response = self.client.post(
+                reverse("get_available_geos"),
+                data=json.dumps({"indicators": [SLEEPCYCLE]}),
+                content_type="application/json",
+            )
+        children = {
+            group["text"]: [child["text"] for child in group["children"]]
+            for group in response.json()["geographic_granularities"]
+        }
+        self.assertEqual(
+            children["census-division level"], ["1", "Division 2", "Division 10"]
+        )
+
     def test_migrated_signal_lists_from_v5_not_v4(self):
         ids, fake = self._ids([NSSP])
         self.assertEqual(ids, ["county:42003", "nation:US", "state:PA"])

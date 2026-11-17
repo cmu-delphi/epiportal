@@ -443,6 +443,20 @@ class GeographyUnitModelTests(TestCase):
         )
         self.assertEqual(str(unit), "Pennsylvania")
 
+    def test_dropdown_order_is_level_then_name_with_numbers_as_numbers(self):
+        units = [
+            GeographyUnit(geo_id="WY", display_name="Wyoming", level=5),
+            GeographyUnit(geo_id="10", display_name="HHS Region 10", level=2),
+            GeographyUnit(geo_id="AL", display_name="alabama", level=5),
+            GeographyUnit(geo_id="2", display_name="HHS Region 2", level=2),
+            GeographyUnit(geo_id="x", display_name="Unlevelled", level=None),
+            GeographyUnit(geo_id="US", display_name="United States", level=1),
+        ]
+        self.assertEqual(
+            [u.display_name for u in sorted(units, key=GeographyUnit.dropdown_sort_key)],
+            ["United States", "HHS Region 2", "HHS Region 10", "alabama", "Wyoming", "Unlevelled"],
+        )
+
 
 class TemplateTagTests(TestCase):
     def test_split_filter_splits_string(self):

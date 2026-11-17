@@ -45,10 +45,12 @@ def get_available_geos(indicators):
                 "text": geo_unit.display_name,
                 "geoTypeDisplayName": geo_unit.geo_level.display_name,
             }
-            for geo_unit in GeographyUnit.objects.filter(geo_level__name__in=geo_levels)
-            .filter(geo_id__in=geo_unit_ids)
-            .prefetch_related("geo_level")
-            .order_by("level")
+            for geo_unit in sorted(
+                GeographyUnit.objects.filter(geo_level__name__in=geo_levels)
+                .filter(geo_id__in=geo_unit_ids)
+                .select_related("geo_level"),
+                key=GeographyUnit.dropdown_sort_key,
+            )
         ]
         if "fluview" in sources:
             geographic_granularities.extend(
@@ -59,16 +61,17 @@ def get_available_geos(indicators):
                         "text": geo_unit.display_name,
                         "geoTypeDisplayName": geo_unit.geo_level.display_name,
                     }
-                    for geo_unit in GeographyUnit.objects.filter(
-                        geo_level__name__in=[
-                            "census-division",
-                            "us-territory",
-                            "us-city",
-                            "ny_minus_jfk",
-                        ]
+                    for geo_unit in sorted(
+                        GeographyUnit.objects.filter(
+                            geo_level__name__in=[
+                                "census-division",
+                                "us-territory",
+                                "us-city",
+                                "ny_minus_jfk",
+                            ]
+                        ).select_related("geo_level"),
+                        key=GeographyUnit.dropdown_sort_key,
                     )
-                    .prefetch_related("geo_level")
-                    .order_by("level")
                 ]
             )
     else:
@@ -79,9 +82,10 @@ def get_available_geos(indicators):
                 "text": geo_unit.display_name,
                 "geoTypeDisplayName": geo_unit.geo_level.display_name,
             }
-            for geo_unit in GeographyUnit.objects.all()
-            .prefetch_related("geo_level")
-            .order_by("level")
+            for geo_unit in sorted(
+                GeographyUnit.objects.select_related("geo_level"),
+                key=GeographyUnit.dropdown_sort_key,
+            )
         ]
         # Group by geoTypeDisplayName to match the expected format
     grouped_geographic_granularities = group_by_property(
