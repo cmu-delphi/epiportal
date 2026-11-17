@@ -161,7 +161,7 @@ def generate_query_code_covidcast(
             [indicator["indicator"] for indicator in v4_indicators]
         )
     time_type = v4_indicators[0].get("time_type") if v4_indicators else None
-    # Census divisions only exist on v5, so v4 gets its own, smaller grouping.
+    # Census regions and divisions only exist on v5, so v4 gets its own, smaller grouping.
     v4_geos = group_covidcast_geos(covidcast_geos)
     geos = group_covidcast_geos(covidcast_geos, on_v5=bool(v5_indicators))
     for geo_type, geo_values in geos.items():

@@ -18,7 +18,7 @@ def generate_covidcast_dataset_epivis(indicator, covidcast_geos):
 
     v5-only sources go out as ``covidcast`` too: EpiVis's covidcast importer
     reads a ``data_source`` from v5 whenever v5's metadata lists the signal.
-    Census divisions only exist there, so they are sent only for such signals.
+    Census regions and divisions only exist there, so they are sent only for such signals.
     """
     datasets = []
     on_v5 = bool(get_v5_source(indicator))

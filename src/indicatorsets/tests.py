@@ -685,6 +685,20 @@ class GeoCoverageUtilsTests(TestCase):
             ],
         )
 
+    @patch("indicatorsets.utils.geos.requests.get")
+    def test_census_locations_ask_only_v5_with_its_geo_types(self, mock_get):
+        mock_get.return_value = _json_response({"values": []})
+        get_list_of_indicators_filtered_by_geo(
+            "['census-region:1', 'census-division:9', 'us-city:jfk']"
+        )
+        calls = [(c.args[0], c.kwargs["params"]) for c in mock_get.call_args_list]
+        self.assertEqual(
+            [(params["geo_type"], params["geo_value"]) for _, params in calls],
+            [("census_region", "1"), ("census_division", "9")],
+        )
+        for url, _ in calls:
+            self.assertTrue(url.endswith("/v5/metadata/geo_signals/"), url)
+
     @patch("indicatorsets.utils.geos.requests.get", side_effect=requests.RequestException)
     def test_get_list_of_indicators_filtered_by_geo_handles_errors(self, _mock_get):
         result = get_list_of_indicators_filtered_by_geo("['state:pa']")

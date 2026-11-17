@@ -2,7 +2,7 @@
 
 Covers v5-only sources (sleepcycle), which v4 does not have at all, and
 migrated sources (nssp), which keep their v4 fallback wherever v4 can answer:
-everything but census divisions, a v5-only geo_type.
+everything but census regions and divisions, geo_types only v5 has.
 """
 
 import json
@@ -128,6 +128,7 @@ class RoutingTests(V5MetadataMixin, TestCase):
         self.assertTrue(can_fall_back_to_v4(NSSP, "county", "source"))
         self.assertFalse(can_fall_back_to_v4(NSSP, "county", "ave"))
         self.assertFalse(can_fall_back_to_v4(NSSP, "census_division", ""))
+        self.assertFalse(can_fall_back_to_v4(NSSP, "census_region", ""))
         self.assertFalse(can_fall_back_to_v4(SLEEPCYCLE, "state", ""))
 
 
@@ -138,8 +139,11 @@ class CovidcastGeoMappingTests(TestCase):
         )
         self.assertIsNone(to_covidcast_geo("census-division:3"))
 
-    def test_census_regions_never_on_v4(self):
-        self.assertIsNone(to_covidcast_geo("census-region:1"))
+    def test_census_regions_only_on_v5(self):
+        self.assertEqual(
+            to_covidcast_geo("census-region:2", on_v5=True), ("census_region", "2")
+        )
+        self.assertIsNone(to_covidcast_geo("census-region:2"))
 
     def test_other_levels(self):
         self.assertEqual(to_covidcast_geo("state:PA", on_v5=True), ("state", "pa"))
@@ -150,6 +154,7 @@ class CovidcastGeoMappingTests(TestCase):
 
 class UseMainLocationsCensusTests(V5MetadataMixin, TestCase):
     payload = {
+        "census-region": [_geo("census-region:1")],
         "census-division": [_geo("census-division:1")],
         "state": [_geo("state:PA")],
     }
@@ -160,6 +165,7 @@ class UseMainLocationsCensusTests(V5MetadataMixin, TestCase):
                 data = use_main_locations(
                     {"indicators": [indicator], "covidCastGeographicValues": self.payload}
                 )
+                self.assertIn("census-region", data["covidCastGeographicValues"])
                 self.assertIn("census-division", data["covidCastGeographicValues"])
 
     def test_dropped_for_v4_signals(self):
@@ -174,12 +180,15 @@ class AvailableGeosFromV5Tests(V5MetadataMixin, TestCase):
         super().setUp()
         levels = {
             name: Geography.objects.create(name=name, display_name=f"{name} level")
-            for name in ("nation", "state", "county", "census-division", "us-city")
+            for name in (
+                "nation", "state", "county", "census-region", "census-division", "us-city",
+            )
         }
         for level, geo_id in (
             ("nation", "US"),
             ("state", "PA"),
             ("county", "42003"),
+            ("census-region", "1"),
             ("census-division", "1"),
             ("us-city", "jfk"),
         ):
@@ -206,7 +215,9 @@ class AvailableGeosFromV5Tests(V5MetadataMixin, TestCase):
 
     def test_v5_only_source_lists_units_at_its_v5_levels(self):
         ids, fake = self._ids([SLEEPCYCLE])
-        self.assertEqual(ids, ["census-division:1", "nation:US", "state:PA"])
+        self.assertEqual(
+            ids, ["census-division:1", "census-region:1", "nation:US", "state:PA"]
+        )
         self.assertEqual(fake.calls, [])
 
     def test_migrated_signal_lists_from_v5_not_v4(self):
@@ -233,6 +244,19 @@ class CoverageTests(V5MetadataMixin, TestCase):
         self.assertEqual((coverage[0]["covered"], coverage[0]["route"]), (True, "v5"))
         self.assertEqual(fake.v5_calls()[0]["geo_type"], "census_division")
         self.assertEqual(fake.v5_calls()[0]["geo_value"], "3")
+
+    def test_census_region_asks_v5_with_its_spelling(self):
+        fake = self.fake_epidata(v5_rows=[{"signal": SLEEPCYCLE["indicator"], "value": 3}])
+        coverage = get_covidcast_geo_coverage("census-region:2", [SLEEPCYCLE])
+        self.assertEqual((coverage[0]["covered"], coverage[0]["route"]), (True, "v5"))
+        self.assertEqual(fake.v5_calls()[0]["geo_type"], "census_region")
+        self.assertEqual(fake.v5_calls()[0]["geo_value"], "2")
+
+    def test_v4_signal_has_no_census_regions(self):
+        fake = self.fake_epidata()
+        coverage = get_covidcast_geo_coverage("census-region:2", [DOCTOR_VISITS])
+        self.assertEqual(coverage[0]["covered"], False)
+        self.assertEqual(fake.calls, [])
 
     def test_migrated_signal_keeps_v4_fallback(self):
         fake = self.fake_epidata(v5_rows=[], v4_rows=[{"signal": NSSP["indicator"], "value": 1}])
@@ -287,9 +311,19 @@ class PreviewAndExportTests(V5MetadataMixin, TestCase):
         self.assertIn("geo_type=census_division", commands[0])
         self.assertIn("source=sleepcycle", commands[0])
 
+    def test_export_census_region_goes_to_v5(self):
+        self.fake_epidata(v5_rows=[{"geo_value": "4", "value": 1}])
+        commands = generate_covidcast_indicators_export_url(
+            [SLEEPCYCLE], "2026-01-01", "2026-02-01",
+            {"census-region": [_geo("census-region:4")]}, "", "csv",
+        )
+        self.assertEqual(len(commands), 1)
+        self.assertIn("geo_type=census_region", commands[0])
+
 
 class EpivisTests(V5MetadataMixin, TestCase):
     geos = {
+        "census-region": [_geo("census-region:1", "Region 1")],
         "census-division": [_geo("census-division:2", "Division 2")],
         "state": [_geo("state:PA", "Pennsylvania")],
     }
@@ -300,7 +334,7 @@ class EpivisTests(V5MetadataMixin, TestCase):
         self.assertEqual({p["_endpoint"] for p in params}, {"covidcast"})
         self.assertEqual(
             [(p["geo_type"], p["geo_value"]) for p in params],
-            [("census_division", "2"), ("state", "pa")],
+            [("census_region", "1"), ("census_division", "2"), ("state", "pa")],
         )
 
     def test_v4_signal_skips_census_divisions(self):
@@ -311,6 +345,7 @@ class EpivisTests(V5MetadataMixin, TestCase):
 class QueryCodeTests(V5MetadataMixin, TestCase):
     def test_census_division_only_in_the_v5_snippet(self):
         geos = {
+            "census-region": [_geo("census-region:1")],
             "census-division": [_geo("census-division:1")],
             "state": [_geo("state:PA")],
         }
@@ -320,5 +355,6 @@ class QueryCodeTests(V5MetadataMixin, TestCase):
         )
         code = "".join(python_blocks)
         self.assertIn('geo_type="census_division"', code)
+        self.assertIn('geo_type="census_region"', code)
         self.assertEqual(code.count("pub_covidcast("), 1)
         self.assertIn('geo_type="state"', code)

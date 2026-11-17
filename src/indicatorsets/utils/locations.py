@@ -36,7 +36,8 @@ TAIWAN_REGION_LEVEL = "taiwan-region"
 TAIWAN_COUNTY_LEVEL = "taiwan-county"
 
 # Levels v4 covidcast has no data for. Census regions are not fluview's
-# either: its "cen1".."cen9" are the census divisions.
+# either: its "cen1".."cen9" are the census divisions. Both census levels are
+# v5's (``V5_COVIDCAST_EXTRA_LEVELS``).
 NON_COVIDCAST_LEVELS = FLUVIEW_ONLY_LEVELS | {
     "census-region",
     FLUSURV_NETWORK_LEVEL,
@@ -56,8 +57,13 @@ FLUSURV_MSAS = {"10580": "NY_albany", "40380": "NY_rochester"}
 
 
 # Levels v4 covidcast lacks that covidcast-shaped sources have on v5:
-# "census-division:N" is v5's census_division N.
-V5_COVIDCAST_EXTRA_LEVELS = frozenset({"census-division"})
+# "census-region:N" and "census-division:N" are v5's census_region N and
+# census_division N.
+V5_COVIDCAST_EXTRA_LEVELS = frozenset({"census-region", "census-division"})
+V5_CENSUS_GEO_TYPES = {
+    "census-region": "census_region",
+    "census-division": "census_division",
+}
 
 
 # Levels pophive has data for, and the "states" among them it has none for.
@@ -170,16 +176,16 @@ def to_covidcast_geo(location_id, on_v5=False):
     or ``None`` when a covidcast-shaped source has no such level.
 
     ``state:PA`` -> ``("state", "pa")``; other levels keep their ``geo_id``.
-    Census divisions exist only for signals served from v5 (``on_v5``):
-    ``census-division:3`` -> ``("census_division", "3")``.
+    Census regions and divisions exist only for signals served from v5
+    (``on_v5``): ``census-division:3`` -> ``("census_division", "3")``.
     """
     if not location_id or ":" not in location_id:
         return None
     level, geo_id = location_id.split(":", 1)
     if not geo_id:
         return None
-    if level == "census-division":
-        return ("census_division", geo_id) if on_v5 else None
+    if level in V5_CENSUS_GEO_TYPES:
+        return (V5_CENSUS_GEO_TYPES[level], geo_id) if on_v5 else None
     if level in NON_COVIDCAST_LEVELS:
         return None
     return level, geo_id.lower() if level in ("nation", "state") else geo_id
@@ -328,7 +334,7 @@ def use_main_locations(data):
         is_covidcast_indicator(indicator) and get_v5_source(indicator)
         for indicator in data.get("indicators") or []
     ):
-        # Signals served from v5 have census divisions; the covidcast paths
+        # Signals served from v5 have census regions and divisions; the covidcast paths
         # drop them again for every v4 one.
         for level in V5_COVIDCAST_EXTRA_LEVELS:
             geos = data["covidCastGeographicValues"].get(level)
