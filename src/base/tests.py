@@ -134,6 +134,17 @@ class GeographicMappingTests(TestCase):
         result = get_geographic_mapping_by_name("State/ADM 1")
         self.assertEqual(result[0], "state")
 
+    def test_census_division_display_name_maps_to_its_key(self):
+        self.assertEqual(
+            get_geographic_mapping_by_name("U.S. Census Division")[0], "census-division"
+        )
+
+    def test_mapping_display_order_is_unique(self):
+        from base.resources import GEOGRAPHIC_GRANULARITY_MAPPING
+
+        orders = [m["display_order_number"] for m in GEOGRAPHIC_GRANULARITY_MAPPING.values()]
+        self.assertEqual(len(orders), len(set(orders)))
+
     def test_get_geographic_mapping_unknown_returns_none(self):
         self.assertIsNone(get_geographic_mapping_by_name("not-a-real-granularity"))
 
