@@ -132,7 +132,7 @@ def get_indicators_based_on_geo_epidata_v5(geos):
 
 
 # v5 geo_types whose main-dropdown level is spelled differently.
-V5_GEO_TYPE_LEVELS = {"census_division": "census-region"}
+V5_GEO_TYPE_LEVELS = {"census_division": "census-division"}
 
 
 def v5_location_levels(indicators):

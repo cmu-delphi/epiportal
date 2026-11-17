@@ -5852,7 +5852,7 @@ class ToFluviewRegionTests(TestCase):
             "hhs:3": "hhs3",
             "state:PA": "PA",
             "state:pa": "pa",
-            "census-region:cen1": "cen1",
+            "census-division:1": "cen1",
             "us-city:jfk": "jfk",
             "us-territory:pr": "pr",
             "ny_minus_jfk:ny_minus_jfk": "ny_minus_jfk",
@@ -5862,7 +5862,9 @@ class ToFluviewRegionTests(TestCase):
                 self.assertEqual(to_fluview_region(location_id), region)
 
     def test_levels_fluview_does_not_have(self):
-        for location_id in ("county:42003", "msa:38300", "hrr:357", "", "pa", None):
+        for location_id in (
+            "county:42003", "msa:38300", "hrr:357", "census-region:1", "", "pa", None,
+        ):
             with self.subTest(location_id):
                 self.assertIsNone(to_fluview_region(location_id))
 
@@ -5878,7 +5880,7 @@ class SplitLocationsTests(TestCase):
 
     def test_fluview_only_levels_leave_the_covidcast_share(self):
         geos = {
-            "census-region": [_geo("census-region:cen1", "Census Region 1")],
+            "census-division": [_geo("census-division:1", "Census Division 1")],
             "us-city": [_geo("us-city:jfk", "New York City")],
             "nation": [_geo("nation:US", "United States")],
         }
@@ -6535,7 +6537,7 @@ class FilterPanelIncludesFluviewTests(TestCase):
     def test_census_division_and_city_include_fluview_sets(self):
         from indicatorsets.filters import IndicatorSetFilter
 
-        for location in ("census-region:cen1", "us-city:jfk", "state:PA"):
+        for location in ("census-division:1", "us-city:jfk", "state:PA"):
             with self.subTest(location):
                 self.assertTrue(IndicatorSetFilter.include_fluview(str([location])))
         self.assertFalse(IndicatorSetFilter.include_fluview(str(["county:42003"])))
@@ -6980,7 +6982,7 @@ class ToPophiveLocationTests(TestCase):
     def test_places_pophive_has_no_data_for(self):
         for location_id in (
             "state:PR", "state:AS", "state:GU", "state:MP", "state:VI",
-            "us-territory:pr", "county:42003", "census-region:cen1", "us-city:jfk",
+            "us-territory:pr", "county:42003", "census-division:1", "us-city:jfk",
             "", "pa", None,
         ):
             with self.subTest(location_id):

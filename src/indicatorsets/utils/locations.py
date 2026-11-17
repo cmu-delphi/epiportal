@@ -17,7 +17,7 @@ FLUVIEW_LOCATION_LEVELS = frozenset(
         "nation",
         "hhs",
         "state",
-        "census-region",
+        "census-division",
         "us-city",
         "us-territory",
         "ny_minus_jfk",
@@ -25,7 +25,7 @@ FLUVIEW_LOCATION_LEVELS = frozenset(
 )
 # Of those, the levels covidcast has no data for.
 FLUVIEW_ONLY_LEVELS = frozenset(
-    {"census-region", "us-city", "us-territory", "ny_minus_jfk"}
+    {"census-division", "us-city", "us-territory", "ny_minus_jfk"}
 )
 
 
@@ -35,8 +35,10 @@ FLUSURV_NETWORK_LEVEL = "FluSurv-Net site"
 TAIWAN_REGION_LEVEL = "taiwan-region"
 TAIWAN_COUNTY_LEVEL = "taiwan-county"
 
-# Levels only some other endpoint has, never covidcast.
+# Levels v4 covidcast has no data for. Census regions are not fluview's
+# either: its "cen1".."cen9" are the census divisions.
 NON_COVIDCAST_LEVELS = FLUVIEW_ONLY_LEVELS | {
+    "census-region",
     FLUSURV_NETWORK_LEVEL,
     TAIWAN_REGION_LEVEL,
     TAIWAN_COUNTY_LEVEL,
@@ -53,10 +55,9 @@ FLUSURV_STATES = frozenset(
 FLUSURV_MSAS = {"10580": "NY_albany", "40380": "NY_rochester"}
 
 
-# Fluview-only levels that covidcast-shaped sources have on v5. Our
-# "census-region" units (cen1..cen9) are the nine census divisions, which v5
-# calls census_division 1..9.
-V5_COVIDCAST_EXTRA_LEVELS = frozenset({"census-region"})
+# Levels v4 covidcast lacks that covidcast-shaped sources have on v5:
+# "census-division:N" is v5's census_division N.
+V5_COVIDCAST_EXTRA_LEVELS = frozenset({"census-division"})
 
 
 # Levels pophive has data for, and the "states" among them it has none for.
@@ -67,8 +68,9 @@ POPHIVE_STATES_WITHOUT_DATA = frozenset({"as", "gu", "mp", "pr", "vi"})
 def to_fluview_region(location_id):
     """Return fluview's region id for a main-dropdown location, or ``None``.
 
-    ``nation:US`` -> ``nat``, ``hhs:3`` -> ``hhs3``; any other fluview level
-    is its ``geo_id`` (``state:PA`` -> ``PA``, ``us-city:jfk`` -> ``jfk``).
+    ``nation:US`` -> ``nat``, ``hhs:3`` -> ``hhs3``, ``census-division:4``
+    -> ``cen4``; any other fluview level is its ``geo_id`` (``state:PA`` ->
+    ``PA``, ``us-city:jfk`` -> ``jfk``).
     """
     if not location_id or ":" not in location_id:
         return None
@@ -79,6 +81,8 @@ def to_fluview_region(location_id):
         return "nat"
     if level == "hhs":
         return f"hhs{geo_id}"
+    if level == "census-division":
+        return f"cen{geo_id}"
     return geo_id
 
 
@@ -167,17 +171,15 @@ def to_covidcast_geo(location_id, on_v5=False):
 
     ``state:PA`` -> ``("state", "pa")``; other levels keep their ``geo_id``.
     Census divisions exist only for signals served from v5 (``on_v5``):
-    ``census-region:cen3`` -> ``("census_division", "3")``.
+    ``census-division:3`` -> ``("census_division", "3")``.
     """
     if not location_id or ":" not in location_id:
         return None
     level, geo_id = location_id.split(":", 1)
     if not geo_id:
         return None
-    if level == "census-region":
-        if on_v5 and geo_id.lower().startswith("cen"):
-            return "census_division", geo_id[len("cen") :]
-        return None
+    if level == "census-division":
+        return ("census_division", geo_id) if on_v5 else None
     if level in NON_COVIDCAST_LEVELS:
         return None
     return level, geo_id.lower() if level in ("nation", "state") else geo_id

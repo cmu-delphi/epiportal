@@ -61,7 +61,7 @@ def get_available_geos(indicators):
                     }
                     for geo_unit in GeographyUnit.objects.filter(
                         geo_level__name__in=[
-                            "census-region",
+                            "census-division",
                             "us-territory",
                             "us-city",
                             "ny_minus_jfk",
