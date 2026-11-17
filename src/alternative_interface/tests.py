@@ -541,7 +541,7 @@ class CovidcastFluviewLocationsMappingTests(TestCase):
         indicator = {"name": "wili", "data_source": "fluview", "time_type": "week"}
         with patch("alternative_interface.utils.epidata.requests.get") as mock_get:
             mock_get.return_value = MagicMock(status_code=200, json=lambda: {"epidata": []})
-            get_fluview_data(indicator, "census-region:cen4", "2024-01-01", "2024-03-01", None)
+            get_fluview_data(indicator, "census-division:4", "2024-01-01", "2024-03-01", None)
         self.assertEqual(mock_get.call_args.kwargs["params"]["regions"], "cen4")
 
     def test_fluview_request_uses_the_region_id(self):

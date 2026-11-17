@@ -1,3 +1,5 @@
+import re
+
 from django.db import models
 from django.utils import timezone
 from django.utils.html import strip_tags
@@ -208,6 +210,13 @@ class GeographyUnit(models.Model):
 
     def __str__(self):
         return self.display_name if self.display_name else self.name
+
+    def dropdown_sort_key(self):
+        """Order in the Location(s) dropdowns: by level, then by name with
+        numbers compared as numbers, so HHS Region 2 lists before Region 10."""
+        parts = re.split(r"(\d+)", str(self).lower())
+        name = [int(part) if index % 2 else part for index, part in enumerate(parts)]
+        return (self.level is None, self.level or 0, name)
 
 
 BANNER_STYLE_CHOICES = (

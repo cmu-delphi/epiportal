@@ -685,6 +685,20 @@ class GeoCoverageUtilsTests(TestCase):
             ],
         )
 
+    @patch("indicatorsets.utils.geos.requests.get")
+    def test_census_locations_ask_only_v5_with_its_geo_types(self, mock_get):
+        mock_get.return_value = _json_response({"values": []})
+        get_list_of_indicators_filtered_by_geo(
+            "['census-region:1', 'census-division:9', 'us-city:jfk']"
+        )
+        calls = [(c.args[0], c.kwargs["params"]) for c in mock_get.call_args_list]
+        self.assertEqual(
+            [(params["geo_type"], params["geo_value"]) for _, params in calls],
+            [("census_region", "1"), ("census_division", "9")],
+        )
+        for url, _ in calls:
+            self.assertTrue(url.endswith("/v5/metadata/geo_signals/"), url)
+
     @patch("indicatorsets.utils.geos.requests.get", side_effect=requests.RequestException)
     def test_get_list_of_indicators_filtered_by_geo_handles_errors(self, _mock_get):
         result = get_list_of_indicators_filtered_by_geo("['state:pa']")
@@ -5852,7 +5866,7 @@ class ToFluviewRegionTests(TestCase):
             "hhs:3": "hhs3",
             "state:PA": "PA",
             "state:pa": "pa",
-            "census-region:cen1": "cen1",
+            "census-division:1": "cen1",
             "us-city:jfk": "jfk",
             "us-territory:pr": "pr",
             "ny_minus_jfk:ny_minus_jfk": "ny_minus_jfk",
@@ -5862,7 +5876,9 @@ class ToFluviewRegionTests(TestCase):
                 self.assertEqual(to_fluview_region(location_id), region)
 
     def test_levels_fluview_does_not_have(self):
-        for location_id in ("county:42003", "msa:38300", "hrr:357", "", "pa", None):
+        for location_id in (
+            "county:42003", "msa:38300", "hrr:357", "census-region:1", "", "pa", None,
+        ):
             with self.subTest(location_id):
                 self.assertIsNone(to_fluview_region(location_id))
 
@@ -5878,7 +5894,7 @@ class SplitLocationsTests(TestCase):
 
     def test_fluview_only_levels_leave_the_covidcast_share(self):
         geos = {
-            "census-region": [_geo("census-region:cen1", "Census Region 1")],
+            "census-division": [_geo("census-division:1", "Census Division 1")],
             "us-city": [_geo("us-city:jfk", "New York City")],
             "nation": [_geo("nation:US", "United States")],
         }
@@ -6535,7 +6551,7 @@ class FilterPanelIncludesFluviewTests(TestCase):
     def test_census_division_and_city_include_fluview_sets(self):
         from indicatorsets.filters import IndicatorSetFilter
 
-        for location in ("census-region:cen1", "us-city:jfk", "state:PA"):
+        for location in ("census-division:1", "us-city:jfk", "state:PA"):
             with self.subTest(location):
                 self.assertTrue(IndicatorSetFilter.include_fluview(str([location])))
         self.assertFalse(IndicatorSetFilter.include_fluview(str(["county:42003"])))
@@ -6980,7 +6996,7 @@ class ToPophiveLocationTests(TestCase):
     def test_places_pophive_has_no_data_for(self):
         for location_id in (
             "state:PR", "state:AS", "state:GU", "state:MP", "state:VI",
-            "us-territory:pr", "county:42003", "census-region:cen1", "us-city:jfk",
+            "us-territory:pr", "county:42003", "census-division:1", "us-city:jfk",
             "", "pa", None,
         ):
             with self.subTest(location_id):

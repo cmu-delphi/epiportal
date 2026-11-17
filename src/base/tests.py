@@ -91,6 +91,34 @@ class FixtureLoadingTests(TestCase):
             )
         )
 
+    def test_census_regions_and_divisions_are_separate_levels(self):
+        """The 4 census regions and 9 census divisions, keyed like HHS regions
+        by their number, which is also their v5 geo_value."""
+        call_command("loaddata", *self.paths, verbosity=0)
+        regions = GeographyUnit.objects.filter(geo_level__name="census-region")
+        divisions = GeographyUnit.objects.filter(geo_level__name="census-division")
+        self.assertEqual(
+            dict(regions.values_list("geo_id", "name")),
+            {"1": "Northeast", "2": "Midwest", "3": "South", "4": "West"},
+        )
+        self.assertEqual(
+            dict(divisions.values_list("geo_id", "name")),
+            {
+                "1": "New England", "2": "Middle Atlantic", "3": "East North Central",
+                "4": "West North Central", "5": "South Atlantic", "6": "East South Central",
+                "7": "West South Central", "8": "Mountain", "9": "Pacific",
+            },
+        )
+        self.assertEqual(
+            regions.get(geo_id="1").display_name, "Census Region 1: Northeast"
+        )
+        self.assertEqual(
+            divisions.get(geo_id="9").display_name, "Census Division 9: Pacific"
+        )
+        # Ordered between HHS regions (2) and states (5) in the dropdown.
+        self.assertEqual(set(regions.values_list("level", flat=True)), {3})
+        self.assertEqual(set(divisions.values_list("level", flat=True)), {4})
+
     def test_flusurv_and_nidss_places_carry_their_epidata_ids(self):
         """NIDSS and FluSurv pick from the main Location(s) dropdown, so it
         has their places, under the ids their Epidata endpoints take."""
@@ -133,6 +161,34 @@ class GeographicMappingTests(TestCase):
     def test_get_geographic_mapping_by_display_name(self):
         result = get_geographic_mapping_by_name("State/ADM 1")
         self.assertEqual(result[0], "state")
+
+    def test_census_division_display_name_maps_to_its_key(self):
+        self.assertEqual(
+            get_geographic_mapping_by_name("U.S. Census Division")[0], "census-division"
+        )
+
+    def test_fixture_has_every_mapped_level_in_the_mapping_order(self):
+        """The import sets a level's order only when it creates the row, so
+        the fixture loaded on every boot is what keeps existing rows in order."""
+        from base.resources import GEOGRAPHIC_GRANULARITY_MAPPING
+
+        with open(settings.BASE_DIR / "fixtures" / "geographic_granularities.json") as f:
+            fixture = {
+                o["fields"]["name"]: o["fields"]
+                for o in json.load(f)
+                if o["fields"]["used_in"] == "indicatorsets"
+            }
+        for name, mapping in GEOGRAPHIC_GRANULARITY_MAPPING.items():
+            with self.subTest(name):
+                self.assertIn(name, fixture)
+                for key in ("display_name", "display_order_number", "short_name"):
+                    self.assertEqual(fixture[name][key], mapping[key], key)
+
+    def test_mapping_display_order_is_unique(self):
+        from base.resources import GEOGRAPHIC_GRANULARITY_MAPPING
+
+        orders = [m["display_order_number"] for m in GEOGRAPHIC_GRANULARITY_MAPPING.values()]
+        self.assertEqual(len(orders), len(set(orders)))
 
     def test_get_geographic_mapping_unknown_returns_none(self):
         self.assertIsNone(get_geographic_mapping_by_name("not-a-real-granularity"))
@@ -387,6 +443,20 @@ class GeographyUnitModelTests(TestCase):
         )
         self.assertEqual(str(unit), "Pennsylvania")
 
+    def test_dropdown_order_is_level_then_name_with_numbers_as_numbers(self):
+        units = [
+            GeographyUnit(geo_id="WY", display_name="Wyoming", level=5),
+            GeographyUnit(geo_id="10", display_name="HHS Region 10", level=2),
+            GeographyUnit(geo_id="AL", display_name="alabama", level=5),
+            GeographyUnit(geo_id="2", display_name="HHS Region 2", level=2),
+            GeographyUnit(geo_id="x", display_name="Unlevelled", level=None),
+            GeographyUnit(geo_id="US", display_name="United States", level=1),
+        ]
+        self.assertEqual(
+            [u.display_name for u in sorted(units, key=GeographyUnit.dropdown_sort_key)],
+            ["United States", "HHS Region 2", "HHS Region 10", "alabama", "Wyoming", "Unlevelled"],
+        )
+
 
 class TemplateTagTests(TestCase):
     def test_split_filter_splits_string(self):
@@ -596,3 +666,48 @@ class BannerTests(TestCase):
 
         self.assertContains(changelist, "Listed in admin")
         self.assertEqual(add_form.status_code, 200)
+
+
+class MergeStrayCensusDivisionMigrationTests(TestCase):
+    """The import made "U.S. Census Division" rows by display name before the
+    level had a mapping; the migration folds them into ``census-division``."""
+
+    def setUp(self):
+        import importlib
+
+        from django.apps import apps as django_apps
+
+        self.migration = importlib.import_module(
+            "base.migrations.0004_merge_stray_census_division"
+        )
+        self.apps = django_apps
+
+    def test_moves_links_to_census_division_and_deletes_the_stray_row(self):
+        from indicators.models import Indicator
+        from indicatorsets.models import IndicatorSet
+
+        stray = Geography.objects.create(name="U.S. Census Division", used_in="indicators")
+        indicator_set = IndicatorSet.objects.create(name="Set")
+        indicator = Indicator.objects.create(name="sig", indicator_set=indicator_set)
+        indicator.available_geographies.add(stray)
+
+        self.migration.merge_stray_census_division(self.apps, None)
+
+        self.assertFalse(Geography.objects.filter(pk=stray.pk).exists())
+        division = Geography.objects.get(name="census-division", used_in="indicators")
+        self.assertEqual(division.display_name, "U.S. Census Division")
+        self.assertEqual(list(indicator.available_geographies.all()), [division])
+
+    def test_reuses_an_existing_census_division_row(self):
+        division = Geography.objects.create(
+            name="census-division", used_in="indicatorsets", display_name="U.S. Census Division"
+        )
+        Geography.objects.create(name="U.S. Census Division", used_in="indicatorsets")
+
+        self.migration.merge_stray_census_division(self.apps, None)
+
+        self.assertFalse(Geography.objects.filter(name="U.S. Census Division").exists())
+        self.assertEqual(
+            list(Geography.objects.filter(name="census-division").values_list("pk", flat=True)),
+            [division.pk],
+        )

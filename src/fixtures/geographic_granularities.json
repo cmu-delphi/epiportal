@@ -32,9 +32,19 @@
     {
         "model": "base.Geography",
         "fields": {
+            "name": "census-division",
+            "display_name": "U.S. Census Division",
+            "display_order_number": 4,
+            "used_in": "indicatorsets",
+            "short_name": "Census Division"
+        }
+    },
+    {
+        "model": "base.Geography",
+        "fields": {
             "name": "region",
             "display_name": "Other Subnational Region",
-            "display_order_number": 4,
+            "display_order_number": 5,
             "used_in": "indicatorsets",
             "short_name": "Subnational"
         }
@@ -44,7 +54,7 @@
         "fields": {
             "name": "state",
             "display_name": "State/ADM 1",
-            "display_order_number": 5,
+            "display_order_number": 6,
             "used_in": "indicatorsets",
             "short_name": "ADM 1"
         }
@@ -54,7 +64,7 @@
         "fields": {
             "name": "county",
             "display_name": "County/ADM 2",
-            "display_order_number": 6,
+            "display_order_number": 7,
             "used_in": "indicatorsets",
             "short_name": "ADM 2"
         }
@@ -64,7 +74,7 @@
         "fields": {
             "name": "city",
             "display_name": "Municipality/ADM 3",
-            "display_order_number": 7,
+            "display_order_number": 8,
             "used_in": "indicatorsets",
             "short_name": "ADM 3"
         }
@@ -74,7 +84,7 @@
         "fields": {
             "name": "hsa_nci",
             "display_name": "Health Service Area (HSA-NCI)",
-            "display_order_number": 8,
+            "display_order_number": 9,
             "used_in": "indicatorsets",
             "short_name": "HSA-NCI"
         }
@@ -84,7 +94,7 @@
         "fields": {
             "name": "hrr",
             "display_name": "Hospital Referral Region (HRR)",
-            "display_order_number": 9,
+            "display_order_number": 10,
             "used_in": "indicatorsets",
             "short_name": "HRR"
         }
@@ -94,7 +104,7 @@
         "fields": {
             "name": "msa",
             "display_name": "Metropolitan Statistical Area (MSA)",
-            "display_order_number": 10,
+            "display_order_number": 11,
             "used_in": "indicatorsets",
             "short_name": "MSA"
         }
@@ -104,7 +114,7 @@
         "fields": {
             "name": "dma",
             "display_name": "Designated Market Area (DMA)",
-            "display_order_number": 11,
+            "display_order_number": 12,
             "used_in": "indicatorsets",
             "short_name": "DMA"
         }
@@ -112,9 +122,19 @@
     {
         "model": "base.Geography",
         "fields": {
+            "name": "other_substate_region",
+            "display_name": "Other Substate Region",
+            "display_order_number": 13,
+            "used_in": "indicatorsets",
+            "short_name": "Other Substate Region"
+        }
+    },
+    {
+        "model": "base.Geography",
+        "fields": {
             "name": "facility",
             "display_name": "Facility",
-            "display_order_number": 12,
+            "display_order_number": 15,
             "used_in": "indicatorsets",
             "short_name": "Facility"
         }
@@ -122,9 +142,19 @@
     {
         "model": "base.Geography",
         "fields": {
+            "name": "lat_long",
+            "display_name": "Lat/Long",
+            "display_order_number": 16,
+            "used_in": "indicatorsets",
+            "short_name": "Lat/Long"
+        }
+    },
+    {
+        "model": "base.Geography",
+        "fields": {
             "name": "FluSurv-Net site",
             "display_name": "FluSurv-Net site (see documentation)",
-            "display_order_number": 13,
+            "display_order_number": 14,
             "used_in": "indicatorsets",
             "short_name": "FluSurv-Net site"
         }
@@ -144,7 +174,7 @@
         "fields": {
             "name": "us-territory",
             "display_name": "US Territory",
-            "display_order_number": 14,
+            "display_order_number": 15,
             "used_in": "indicators",
             "short_name": "US Territory"
         }
@@ -154,7 +184,7 @@
         "fields": {
             "name": "us-city",
             "display_name": "US City",
-            "display_order_number": 15,
+            "display_order_number": 16,
             "used_in": "indicators",
             "short_name": "US City"
         }
@@ -164,7 +194,7 @@
         "fields": {
             "name": "ny_minus_jfk",
             "display_name": "NY (minus NYC)",
-            "display_order_number": 16,
+            "display_order_number": 17,
             "used_in": "indicators",
             "short_name": "NY (minus NYC)"
         }
@@ -174,7 +204,7 @@
         "fields": {
             "name": "taiwan-region",
             "display_name": "Taiwan Region",
-            "display_order_number": 18,
+            "display_order_number": 19,
             "used_in": "indicators",
             "short_name": "Taiwan Region"
         }
@@ -184,7 +214,7 @@
         "fields": {
             "name": "taiwan-county",
             "display_name": "Taiwan County/City",
-            "display_order_number": 19,
+            "display_order_number": 20,
             "used_in": "indicators",
             "short_name": "Taiwan County/City"
         }

@@ -140,7 +140,7 @@ The `epwebapp` service runs the following steps automatically:
 
 1. **Migrate** the database (`manage.py migrate --noinput`)
 2. **Collect static files** (`manage.py collectstatic --noinput`)
-3. **Load fixture data** (`manage.py loaddata ./fixtures/*.json`) -- 18 JSON fixtures with geographies, indicator types, pathogens, etc.
+3. **Load fixture data** (`manage.py loaddata ./fixtures/*.json`) -- 22 JSON fixtures with geographies, indicator types, pathogens, etc.
 4. **Create admin superuser** (`manage.py initadmin`) -- from `ADMIN_USERNAME`/`ADMIN_EMAIL`/`ADMIN_PASSWORD` env vars
 5. **Start the dev server** on port 8000
 
@@ -266,12 +266,14 @@ EpiPortal supports multiple ways to populate data.
 
 ### Fixtures (Initial/Seed Data)
 
-The `src/fixtures/` directory contains 18 JSON fixture files with geographic definitions, indicator types, pathogens, and other reference data:
+The `src/fixtures/` directory contains 22 JSON fixture files with geographic definitions, indicator types, pathogens, and other reference data:
 
 ```
 src/fixtures/
+├── census_divisions.json
 ├── census_regions.json
 ├── counties.json
+├── flusurv_networks.json
 ├── format_types.json
 ├── geographic_granularities.json
 ├── geographic_scopes.json
@@ -286,6 +288,8 @@ src/fixtures/
 ├── pathogens.json
 ├── severity_pyramid_rungs.json
 ├── state.json
+├── taiwan_counties.json
+├── taiwan_regions.json
 ├── us_cities.json
 └── us_territory.json
 ```
@@ -383,7 +387,7 @@ epiportal/
 │   └── default.conf.template       # Nginx site config
 └── src/
     ├── manage.py                   # Django CLI entry point
-    ├── fixtures/                   # 18 JSON seed data files
+    ├── fixtures/                   # 22 JSON seed data files
     ├── templates/                  # HTML templates
     ├── assets/                     # Static assets (CSS, JS, vendor libs)
     ├── epiportal/                  # Project configuration

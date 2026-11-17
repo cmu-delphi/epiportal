@@ -50,4 +50,4 @@ V5_ONLY_DATASOURCES = {
 COVIDCAST_ENDPOINTS = ("covidcast", *V5_ONLY_DATASOURCES)
 
 # Covidcast geo_types only v5 has, so a geo of one cannot fall back to v4.
-V5_ONLY_GEO_TYPES = frozenset({"census_division"})
+V5_ONLY_GEO_TYPES = frozenset({"census_region", "census_division"})

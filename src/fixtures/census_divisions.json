@@ -1,0 +1,101 @@
+[
+    {
+        "model": "base.GeographyUnit",
+        "fields": {
+            "geo_id": "1",
+            "name": "New England",
+            "display_name": "Census Division 1: New England",
+            "level": 4,
+            "geo_level": ["census-division", "indicatorsets"]
+        },
+        "pk": 4947
+    },
+    {
+        "model": "base.GeographyUnit",
+        "fields": {
+            "geo_id": "2",
+            "name": "Middle Atlantic",
+            "display_name": "Census Division 2: Middle Atlantic",
+            "level": 4,
+            "geo_level": ["census-division", "indicatorsets"]
+        },
+        "pk": 4948
+    },
+    {
+        "model": "base.GeographyUnit",
+        "fields": {
+            "geo_id": "3",
+            "name": "East North Central",
+            "display_name": "Census Division 3: East North Central",
+            "level": 4,
+            "geo_level": ["census-division", "indicatorsets"]
+        },
+        "pk": 4949
+    },
+    {
+        "model": "base.GeographyUnit",
+        "fields": {
+            "geo_id": "4",
+            "name": "West North Central",
+            "display_name": "Census Division 4: West North Central",
+            "level": 4,
+            "geo_level": ["census-division", "indicatorsets"]
+        },
+        "pk": 4950
+    },
+    {
+        "model": "base.GeographyUnit",
+        "fields": {
+            "geo_id": "5",
+            "name": "South Atlantic",
+            "display_name": "Census Division 5: South Atlantic",
+            "level": 4,
+            "geo_level": ["census-division", "indicatorsets"]
+        },
+        "pk": 4951
+    },
+    {
+        "model": "base.GeographyUnit",
+        "fields": {
+            "geo_id": "6",
+            "name": "East South Central",
+            "display_name": "Census Division 6: East South Central",
+            "level": 4,
+            "geo_level": ["census-division", "indicatorsets"]
+        },
+        "pk": 4952
+    },
+    {
+        "model": "base.GeographyUnit",
+        "fields": {
+            "geo_id": "7",
+            "name": "West South Central",
+            "display_name": "Census Division 7: West South Central",
+            "level": 4,
+            "geo_level": ["census-division", "indicatorsets"]
+        },
+        "pk": 4953
+    },
+    {
+        "model": "base.GeographyUnit",
+        "fields": {
+            "geo_id": "8",
+            "name": "Mountain",
+            "display_name": "Census Division 8: Mountain",
+            "level": 4,
+            "geo_level": ["census-division", "indicatorsets"]
+        },
+        "pk": 4954
+    },
+    {
+        "model": "base.GeographyUnit",
+        "fields": {
+            "geo_id": "9",
+            "name": "Pacific",
+            "display_name": "Census Division 9: Pacific",
+            "level": 4,
+            "geo_level": ["census-division", "indicatorsets"]
+        },
+        "pk": 4955
+    }
+]

@@ -851,11 +851,12 @@ def get_available_geos(request):
                 if geo_unit.pk in units
             ],
         }
-        for geo_unit in GeographyUnit.objects.filter(
-            pk__in=set().union(*units_by_source.values())
+        for geo_unit in sorted(
+            GeographyUnit.objects.filter(
+                pk__in=set().union(*units_by_source.values())
+            ).select_related("geo_level"),
+            key=GeographyUnit.dropdown_sort_key,
         )
-        .prefetch_related("geo_level")
-        .order_by("level")
     ]
     grouped_geographic_granularities = group_by_property(
         geographic_granularities, "geoTypeDisplayName"
