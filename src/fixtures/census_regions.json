@@ -2,100 +2,45 @@
     {
         "model": "base.GeographyUnit",
         "fields": {
-            "geo_id": "cen1",
-            "name": "Census Region 1",
-            "display_name": "Census Region 1",
+            "geo_id": "1",
+            "name": "Northeast",
+            "display_name": "Census Region 1: Northeast",
             "level": 3,
             "geo_level": ["census-region", "indicatorsets"]
         },
-        "pk": 4947
+        "pk": 4988
     },
     {
         "model": "base.GeographyUnit",
         "fields": {
-            "geo_id": "cen2",
-            "name": "Census Region 2",
-            "display_name": "Census Region 2",
+            "geo_id": "2",
+            "name": "Midwest",
+            "display_name": "Census Region 2: Midwest",
             "level": 3,
             "geo_level": ["census-region", "indicatorsets"]
         },
-        "pk": 4948
+        "pk": 4989
     },
     {
         "model": "base.GeographyUnit",
         "fields": {
-            "geo_id": "cen3",
-            "name": "Census Region 3",
-            "display_name": "Census Region 3",
+            "geo_id": "3",
+            "name": "South",
+            "display_name": "Census Region 3: South",
             "level": 3,
             "geo_level": ["census-region", "indicatorsets"]
         },
-        "pk": 4949
+        "pk": 4990
     },
     {
         "model": "base.GeographyUnit",
         "fields": {
-            "geo_id": "cen4",
-            "name": "Census Region 4",
-            "display_name": "Census Region 4",
+            "geo_id": "4",
+            "name": "West",
+            "display_name": "Census Region 4: West",
             "level": 3,
             "geo_level": ["census-region", "indicatorsets"]
         },
-        "pk": 4950
-    },
-    {
-        "model": "base.GeographyUnit",
-        "fields": {
-            "geo_id": "cen5",
-            "name": "Census Region 5",
-            "display_name": "Census Region 5",
-            "level": 3,
-            "geo_level": ["census-region", "indicatorsets"]
-        },
-        "pk": 4951
-    },
-    {
-        "model": "base.GeographyUnit",
-        "fields": {
-            "geo_id": "cen6",
-            "name": "Census Region 6",
-            "display_name": "Census Region 6",
-            "level": 3,
-            "geo_level": ["census-region", "indicatorsets"]
-        },
-        "pk": 4952
-    },
-    {
-        "model": "base.GeographyUnit",
-        "fields": {
-            "geo_id": "cen7",
-            "name": "Census Region 7",
-            "display_name": "Census Region 7",
-            "level": 3,
-            "geo_level": ["census-region", "indicatorsets"]
-        },
-        "pk": 4953
-    },
-    {
-        "model": "base.GeographyUnit",
-        "fields": {
-            "geo_id": "cen8",
-            "name": "Census Region 8",
-            "display_name": "Census Region 8",
-            "level": 3,
-            "geo_level": ["census-region", "indicatorsets"]
-        },
-        "pk": 4954
-    },
-    {
-        "model": "base.GeographyUnit",
-        "fields": {
-            "geo_id": "cen9",
-            "name": "Census Region 9",
-            "display_name": "Census Region 9",
-            "level": 3,
-            "geo_level": ["census-region", "indicatorsets"]
-        },
-        "pk": 4955
+        "pk": 4991
     }
 ]

@@ -22,6 +22,7 @@ from indicatorsets.utils.epidata import (
 )
 from indicatorsets.utils.helpers import get_epiweek
 from indicatorsets.utils.locations import group_covidcast_geos
+from indicatorsets.utils.nwss import nwss_source_ids, nwss_source_label
 
 logger = get_structured_logger("indicatorsets.utils")
 
@@ -512,20 +513,18 @@ def generate_nwss_export_url(
     data_export_commands = []
     geo_value = ",".join(nwss_geographic_value)
     for indicator in indicators:
-        for source in nwss_source:
+        for source_id in nwss_source_ids(nwss_source):
             if indicator["_endpoint"] == "nwss":
-                label = (
-                    f"{indicator.get('display_name') or indicator['indicator']} "
-                    f"(source: {source['id']})"
-                )
+                label = nwss_source_label(indicator, source_id)
                 check_params = {
                     "source": "nwss",
                     "signal": indicator["indicator"],
                     "geo_type": "sewershed",
                     "geo_value": geo_value,
                     "reference_times": f"{start_date}:{end_date}",
-                    "extra_keys": f"nwss_source:{source['id']}",
                 }
+                if source_id:
+                    check_params["extra_keys"] = f"nwss_source:{source_id}"
                 if api_key:
                     check_params["token"] = api_key
                 if fill_method:
@@ -537,7 +536,10 @@ def generate_nwss_export_url(
                         f'<span class="text-muted">No data found for {label}. Export skipped.</span>'
                     )
                     continue
-                data_export_url = f"{settings.EPIDATA_V5_URL}viz/?source=nwss&signal={indicator['indicator']}&geo_type=sewershed&geo_value={geo_value}&reference_times={start_date}:{end_date}&extra_keys=nwss_source:{source['id']}&format={data_format}"
+                data_export_url = f"{settings.EPIDATA_V5_URL}viz/?source=nwss&signal={indicator['indicator']}&geo_type=sewershed&geo_value={geo_value}&reference_times={start_date}:{end_date}"
+                if source_id:
+                    data_export_url += f"&extra_keys=nwss_source:{source_id}"
+                data_export_url += f"&format={data_format}"
                 if data_format == "csv":
                     data_export_url += "&header=true"
                 if api_key:
@@ -545,7 +547,9 @@ def generate_nwss_export_url(
                 if fill_method:
                     data_export_url += f"&fill_method={fill_method}"
                 filename = (
-                    f"{indicator['indicator']}_source_{source['id']}.{data_format}"
+                    f"{indicator['indicator']}_source_{source_id}.{data_format}"
+                    if source_id
+                    else f"{indicator['indicator']}.{data_format}"
                 )
                 download_params = {
                     "source": "nwss",
@@ -553,11 +557,16 @@ def generate_nwss_export_url(
                     "geo_type": "sewershed",
                     "geo_value": geo_value,
                     "reference_times": f"{start_date}:{end_date}",
-                    "extra_keys": f"nwss_source:{source['id']}",
-                    "format": data_format,
-                    "header": "true" if data_format == "csv" else "false",
-                    "filename": filename,
                 }
+                if source_id:
+                    download_params["extra_keys"] = f"nwss_source:{source_id}"
+                download_params.update(
+                    {
+                        "format": data_format,
+                        "header": "true" if data_format == "csv" else "false",
+                        "filename": filename,
+                    }
+                )
                 if api_key:
                     download_params["token"] = api_key
                 if fill_method:

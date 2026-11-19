@@ -49,6 +49,7 @@ from indicatorsets.utils.locations import (
     nwss_counties,
     use_main_locations,
 )
+from indicatorsets.utils.nwss import NWSS_SOURCES
 from indicatorsets.utils.sources import EPIWEEK_SOURCES
 from indicatorsets.utils import (
     InvalidApiKeyError,
@@ -422,7 +423,9 @@ def epivis(request):
     fluview_geos = data.get("fluviewLocations", [])
     pophive_geos = data.get("pophiveLocations", [])
     pophive_age_group = data.get("pophiveAgeGroup", [])
-    nwss_source = data.get("nwssSource", [])
+    # EpiVis needs one series per source, so no source selected means one
+    # series per known source rather than one that mixes them.
+    nwss_source = data.get("nwssSource") or [{"id": s} for s in NWSS_SOURCES]
     nwss_geographic_value = data.get("nwssGeographicValue", "")
     fill_method = normalize_fill_method(data.get("fillMethod"))
     log_form_stats(request, data, "epivis")
@@ -851,11 +854,12 @@ def get_available_geos(request):
                 if geo_unit.pk in units
             ],
         }
-        for geo_unit in GeographyUnit.objects.filter(
-            pk__in=set().union(*units_by_source.values())
+        for geo_unit in sorted(
+            GeographyUnit.objects.filter(
+                pk__in=set().union(*units_by_source.values())
+            ).select_related("geo_level"),
+            key=GeographyUnit.dropdown_sort_key,
         )
-        .prefetch_related("geo_level")
-        .order_by("level")
     ]
     grouped_geographic_granularities = group_by_property(
         geographic_granularities, "geoTypeDisplayName"

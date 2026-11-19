@@ -19,10 +19,11 @@ from indicatorsets.utils.epidata import (
     group_v5_indicators_by_source,
     is_covidcast_indicator,
 )
-from indicatorsets.utils.helpers import get_epiweek, list_to_dict
+from indicatorsets.utils.helpers import get_epiweek
 from indicatorsets.utils.sources import EPIWEEK_SOURCES
 from indicatorsets.utils.locations import (
     EPIWEEK_MAIN_LOCATIONS,
+    group_covidcast_geos,
     to_covidcast_geo,
     to_fluview_region,
     to_nwss_sewersheds,
@@ -117,7 +118,8 @@ def get_indicators_based_on_geo_epidata(geos):
 def get_indicators_based_on_geo_epidata_v5(geos):
     indicators = []
     for geo_type, geo_values in geos.items():
-        url = f"{settings.EPIDATA_V5_URL}metadata/geo_signals"
+        # The trailing slash matters: without it v5 redirects to plain http.
+        url = f"{settings.EPIDATA_V5_URL}metadata/geo_signals/"
         params = {"geo_type": geo_type}
         for geo_value in geo_values:
             params["geo_value"] = geo_value.lower()
@@ -132,7 +134,10 @@ def get_indicators_based_on_geo_epidata_v5(geos):
 
 
 # v5 geo_types whose main-dropdown level is spelled differently.
-V5_GEO_TYPE_LEVELS = {"census_division": "census-region"}
+V5_GEO_TYPE_LEVELS = {
+    "census_region": "census-region",
+    "census_division": "census-division",
+}
 
 
 def v5_location_levels(indicators):
@@ -275,7 +280,7 @@ def get_covidcast_geo_coverage(
     def api_geo(indicator, on_v5):
         # Both APIs store geo values lowercase; the picker spells states upper.
         # ``None`` for a level the API has no data at (cities, territories,
-        # and census divisions on v4): no data, no request.
+        # and census regions and divisions on v4): no data, no request.
         pair = to_covidcast_geo(geo, on_v5)
         return (pair[0], pair[1].lower()) if pair else None
 
@@ -518,18 +523,20 @@ def get_nwss_sewersheds_with_values(
     """Return ``{signal: {sewershed ids with a real value}}`` for one NWSS source.
 
     Asks ``/viz/`` the way exports do: every signal in one request, with the
-    same ``fill_method`` and dates. A signal with no values anywhere is
-    missing from the result. ``None`` when the lookup failed, so the caller
-    can tell "no data" apart from "could not check".
+    same ``fill_method`` and dates. ``nwss_source`` ``None`` asks every source
+    at once. A signal with no values anywhere is missing from the result.
+    ``None`` when the lookup failed, so the caller can tell "no data" apart
+    from "could not check".
     """
     params = {
         "source": "nwss",
         "signal": ",".join(signals),
         "geo_type": "sewershed",
         "geo_value": ",".join(sewersheds),
-        "extra_keys": f"nwss_source:{nwss_source}",
         "token": settings.EPIDATA_API_KEY,
     }
+    if nwss_source:
+        params["extra_keys"] = f"nwss_source:{nwss_source}"
     if fill_method:
         params["fill_method"] = fill_method
     reference_times = v5_reference_times(window)
@@ -557,8 +564,8 @@ def get_nwss_geo_coverage(
     source (``extra_keys=nwss_source:<id>``), every selected signal at once,
     with the same ``fill_method`` and dates. Only real values count, so a
     signal a source reports for the county with nothing but nulls is not
-    covered. Nothing is selected until a source is, so no source means no
-    answer.
+    covered. No source selected means every source: one unfiltered request,
+    answered with ``nwss_source`` ``None``.
 
     ``geo`` is a ``"geo_type:geo_value"`` id. Returns one dict per (indicator,
     source) with ``data_source``, ``indicator`` and ``nwss_source``, plus
@@ -569,12 +576,12 @@ def get_nwss_geo_coverage(
     nwss_indicators = [
         indicator for indicator in indicators if indicator.get("_endpoint") == "nwss"
     ]
-    if not nwss_indicators or not nwss_sources:
+    if not nwss_indicators:
         return []
     sewersheds = to_nwss_sewersheds(geo)
     signals = [indicator["indicator"] for indicator in nwss_indicators]
     coverage = []
-    for nwss_source in nwss_sources:
+    for nwss_source in nwss_sources or [None]:
         # sewershed ids with a value, per signal; None when unknown.
         with_values = (
             get_nwss_sewersheds_with_values(
@@ -603,10 +610,18 @@ def get_nwss_geo_coverage(
 
 
 def get_list_of_indicators_filtered_by_geo(geos):
+    """The ``{"source", "signal"}`` pairs with data at any of ``geos``, a
+    ``"['state:PA', ...]"`` list of main-dropdown locations.
+
+    Each API is asked in its own geo_types, and only for the locations it
+    has: census regions and divisions are v5's alone.
+    """
+    picked = {"": [{"id": location} for location in ast.literal_eval(geos)]}
     indicators = []
-    geos = list_to_dict(ast.literal_eval(geos))
-    indicators.extend(get_indicators_based_on_geo_epidata(geos))
-    indicators.extend(get_indicators_based_on_geo_epidata_v5(geos))
+    indicators.extend(get_indicators_based_on_geo_epidata(group_covidcast_geos(picked)))
+    indicators.extend(
+        get_indicators_based_on_geo_epidata_v5(group_covidcast_geos(picked, on_v5=True))
+    )
     return indicators
 
 

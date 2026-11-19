@@ -120,7 +120,7 @@ def is_v5_only(indicator):
 def can_fall_back_to_v4(indicator, geo_type, fill_method):
     """Whether geos v5 has no values for may be served from v4 instead.
 
-    Not for a v5-only source or a geo_type only v5 has (census divisions),
+    Not for a v5-only source or a geo_type only v5 has (census regions and divisions),
     which v4 cannot answer; nor for a filled ``fill_method``, since v4 cannot
     fill and would serve the unfilled series instead of the one picked.
     """

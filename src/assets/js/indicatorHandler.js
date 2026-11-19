@@ -256,9 +256,9 @@ class IndicatorHandler {
                 return { id: s, text: s };
             });
             $("#nwssSource").select2({
-                placeholder: "Select NWSS Source",
+                // Nothing selected means every source.
+                placeholder: "All NWSS sources",
                 maximumSelectionLength: 5,
-                minimumSelectionLength: 1,
                 data: sources,
                 allowClear: true,
                 width: "100%",

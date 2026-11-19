@@ -685,6 +685,20 @@ class GeoCoverageUtilsTests(TestCase):
             ],
         )
 
+    @patch("indicatorsets.utils.geos.requests.get")
+    def test_census_locations_ask_only_v5_with_its_geo_types(self, mock_get):
+        mock_get.return_value = _json_response({"values": []})
+        get_list_of_indicators_filtered_by_geo(
+            "['census-region:1', 'census-division:9', 'us-city:jfk']"
+        )
+        calls = [(c.args[0], c.kwargs["params"]) for c in mock_get.call_args_list]
+        self.assertEqual(
+            [(params["geo_type"], params["geo_value"]) for _, params in calls],
+            [("census_region", "1"), ("census_division", "9")],
+        )
+        for url, _ in calls:
+            self.assertTrue(url.endswith("/v5/metadata/geo_signals/"), url)
+
     @patch("indicatorsets.utils.geos.requests.get", side_effect=requests.RequestException)
     def test_get_list_of_indicators_filtered_by_geo_handles_errors(self, _mock_get):
         result = get_list_of_indicators_filtered_by_geo("['state:pa']")
@@ -1554,6 +1568,27 @@ class PreviewNwssDataTests(TestCase):
         self.assertEqual(
             result, [{"message": "No data found for My Signal (source: CDC_Biobot)."}]
         )
+
+    @patch("indicatorsets.utils.previews.requests.get")
+    def test_no_source_previews_every_source_in_one_request(self, mock_get):
+        mock_response = MagicMock()
+        mock_response.status_code = 200
+        mock_response.json.return_value = []
+        mock_get.return_value = mock_response
+
+        result = preview_nwss_data(
+            [{"_endpoint": "nwss", "indicator": "sig", "display_name": "My Signal"}],
+            "2020-01-01",
+            "2020-01-20",
+            ["sewershed_1"],
+            [],
+            "source",
+            None,
+            "json",
+        )
+        self.assertEqual(mock_get.call_count, 1)
+        self.assertNotIn("extra_keys", mock_get.call_args.kwargs["params"])
+        self.assertEqual(result, [{"message": "No data found for My Signal."}])
 
 
 # A fluview indicator for view tests; they stub v5 routing so it stays on v4.
@@ -2635,6 +2670,38 @@ class GenerateQueryCodeNwssTests(TestCase):
         self.assertEqual(python_blocks, [])
         self.assertEqual(r_blocks, [])
 
+    def test_no_source_queries_every_source_in_one_call(self):
+        python_blocks, r_blocks = generate_query_code_nwss(
+            self._indicators(),
+            "2024-01-01",
+            "2024-03-01",
+            ["sewershed_1"],
+            [],
+            "ave",
+        )
+        self.assertEqual(
+            "".join(python_blocks),
+            "nwss_df = epidata.epidata_snapshot(\n"
+            '    source="nwss",\n'
+            '    signals=["sig_a", "sig_b"],\n'
+            '    geo_type="sewershed",\n'
+            '    geo_values=["sewershed_1"],\n'
+            '    reference_time=EpiRange("2024-01-01", "2024-03-01"),\n'
+            '    fill_method="ave",\n'
+            ").df()\n",
+        )
+        self.assertEqual(
+            "".join(r_blocks),
+            "epidata_nwss <- epidata_snapshot(\n"
+            '    source = "nwss",\n'
+            '    signals = c("sig_a", "sig_b"),\n'
+            '    geo_type = "sewershed",\n'
+            '    geo_values = c("sewershed_1"),\n'
+            '    reference_time = epirange("2024-01-01", "2024-03-01"),\n'
+            '    fill_method = "ave"\n'
+            ")\n",
+        )
+
 
 class PreviewCovidcastRoutingTests(V5RoutingTestMixin, TestCase):
     V5_INDICATOR = {
@@ -2992,6 +3059,28 @@ class GenerateNwssExportUrlTests(TestCase):
         )
         self.assertEqual(len(result), 1)
         self.assertIn("curl", result[0])
+
+    @patch("indicatorsets.utils.epidata.requests.get")
+    def test_no_source_exports_every_source_in_one_file(self, mock_get):
+        mock_response = MagicMock()
+        mock_response.status_code = 200
+        mock_response.json.return_value = [{"value": 3}]
+        mock_get.return_value = mock_response
+
+        result = generate_nwss_export_url(
+            [{"_endpoint": "nwss", "indicator": "sig", "display_name": "My Signal"}],
+            "2020-01-01",
+            "2020-01-20",
+            ["sewershed_1"],
+            [],
+            "source",
+            None,
+            "csv",
+        )
+        self.assertEqual(len(result), 1)
+        self.assertIn("curl -o sig.csv", result[0])
+        self.assertNotIn("extra_keys", result[0])
+        self.assertNotIn("extra_keys", mock_get.call_args.kwargs["params"])
 
 
 class LogFormDataTests(TestCase):
@@ -5852,7 +5941,7 @@ class ToFluviewRegionTests(TestCase):
             "hhs:3": "hhs3",
             "state:PA": "PA",
             "state:pa": "pa",
-            "census-region:cen1": "cen1",
+            "census-division:1": "cen1",
             "us-city:jfk": "jfk",
             "us-territory:pr": "pr",
             "ny_minus_jfk:ny_minus_jfk": "ny_minus_jfk",
@@ -5862,7 +5951,9 @@ class ToFluviewRegionTests(TestCase):
                 self.assertEqual(to_fluview_region(location_id), region)
 
     def test_levels_fluview_does_not_have(self):
-        for location_id in ("county:42003", "msa:38300", "hrr:357", "", "pa", None):
+        for location_id in (
+            "county:42003", "msa:38300", "hrr:357", "census-region:1", "", "pa", None,
+        ):
             with self.subTest(location_id):
                 self.assertIsNone(to_fluview_region(location_id))
 
@@ -5878,7 +5969,7 @@ class SplitLocationsTests(TestCase):
 
     def test_fluview_only_levels_leave_the_covidcast_share(self):
         geos = {
-            "census-region": [_geo("census-region:cen1", "Census Region 1")],
+            "census-division": [_geo("census-division:1", "Census Division 1")],
             "us-city": [_geo("us-city:jfk", "New York City")],
             "nation": [_geo("nation:US", "United States")],
         }
@@ -6535,7 +6626,7 @@ class FilterPanelIncludesFluviewTests(TestCase):
     def test_census_division_and_city_include_fluview_sets(self):
         from indicatorsets.filters import IndicatorSetFilter
 
-        for location in ("census-region:cen1", "us-city:jfk", "state:PA"):
+        for location in ("census-division:1", "us-city:jfk", "state:PA"):
             with self.subTest(location):
                 self.assertTrue(IndicatorSetFilter.include_fluview(str([location])))
         self.assertFalse(IndicatorSetFilter.include_fluview(str(["county:42003"])))
@@ -6980,7 +7071,7 @@ class ToPophiveLocationTests(TestCase):
     def test_places_pophive_has_no_data_for(self):
         for location_id in (
             "state:PR", "state:AS", "state:GU", "state:MP", "state:VI",
-            "us-territory:pr", "county:42003", "census-region:cen1", "us-city:jfk",
+            "us-territory:pr", "county:42003", "census-division:1", "us-city:jfk",
             "", "pa", None,
         ):
             with self.subTest(location_id):
@@ -7519,9 +7610,25 @@ class NwssGeoCoverageTests(TestCase):
         return {(e["indicator"], e["nwss_source"]): e for e in coverage}
 
     @patch("indicatorsets.utils.geos.requests.get")
-    def test_no_source_selected_answers_nothing(self, mock_get):
-        self.assertEqual(self._coverage("county:42003", [NWSS_INDICATOR], []), [])
-        mock_get.assert_not_called()
+    def test_no_source_selected_asks_every_source_at_once(self, mock_get):
+        mock_get.return_value = _viz_response(
+            [_nwss_row("flu_avg_conc", "1768", 0.5, "WastewaterSCAN")]
+        )
+        coverage = self._coverage("county:42003", [NWSS_INDICATOR], [])
+        self.assertEqual(mock_get.call_count, 1)
+        self.assertNotIn("extra_keys", mock_get.call_args.kwargs["params"])
+        self.assertEqual(
+            coverage,
+            [
+                {
+                    "data_source": "nwss",
+                    "indicator": "flu_avg_conc",
+                    "nwss_source": None,
+                    "covered": True,
+                    "not_covered_sewersheds": ["1764"],
+                }
+            ],
+        )
 
     @patch("indicatorsets.utils.geos.requests.get")
     def test_places_without_sewersheds_are_not_covered_without_asking(self, mock_get):
@@ -7718,10 +7825,14 @@ class CheckNwssGeoCoverageTests(TestCase):
         self.assertEqual(params["reference_times"], "2025-01-01:2025-06-30")
 
     @patch("indicatorsets.utils.geos.requests.get")
-    def test_no_source_means_no_answer(self, mock_get):
+    def test_no_source_means_every_source(self, mock_get):
+        mock_get.return_value = _viz_response([])
         response = self._check({"geo": "county:42003", "indicators": [NWSS_INDICATOR]})
-        self.assertEqual(response.json()["coverage"], [])
-        mock_get.assert_not_called()
+        self.assertEqual(
+            [(e["nwss_source"], e["covered"]) for e in response.json()["coverage"]],
+            [(None, False)],
+        )
+        self.assertNotIn("extra_keys", mock_get.call_args.kwargs["params"])
 
     def test_rejects_bad_dates(self):
         response = self._check(
@@ -7885,6 +7996,26 @@ class NwssPlotDropsEmptySewershedsTests(TestCase):
                 ("1768", "nwss_source:CDC_Biobot"),
                 ("1768", "nwss_source:State_Territory"),
                 ("1764", "nwss_source:CDC_Biobot"),
+            ],
+        )
+
+    @patch("indicatorsets.utils.geos.requests.get")
+    def test_no_source_selected_plots_every_source(self, mock_get):
+        mock_get.side_effect = _viz_by_source(
+            {
+                "CDC_Biobot": [],
+                "CDC_Verily": [_nwss_row("flu_avg_conc", "1764", 0.2, "CDC_Verily")],
+                "State_Territory": [
+                    _nwss_row("flu_avg_conc", "1768", 0.5, "State_Territory")
+                ],
+                "WastewaterSCAN": [],
+            }
+        )
+        self.assertEqual(
+            _series(self._plot({**self.PAYLOAD, "nwssSource": []})),
+            [
+                ("1768", "nwss_source:State_Territory"),
+                ("1764", "nwss_source:CDC_Verily"),
             ],
         )
 

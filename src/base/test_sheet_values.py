@@ -115,6 +115,20 @@ class GeographyIdsTests(TestCase):
             ["nation", "state"],
         )
 
+    def test_census_region_and_division_map_to_their_own_keys(self):
+        ids = geography_ids("U.S. Census Region, U.S. Census Division", "indicatorsets")
+        geographies = Geography.objects.filter(pk__in=ids.split(","))
+        self.assertEqual(
+            sorted(geographies.values_list("name", flat=True)),
+            ["census-division", "census-region"],
+        )
+        self.assertFalse(Geography.objects.filter(name="U.S. Census Division").exists())
+        division = geographies.get(name="census-division")
+        self.assertEqual(division.display_name, "U.S. Census Division")
+        # Regions list before divisions, which list before other subnational regions.
+        region = geographies.get(name="census-region")
+        self.assertLess(region.display_order_number, division.display_order_number)
+
     def test_unknown_level_created_when_table_empty(self):
         Geography.objects.filter(used_in="indicators").delete()
         geography_ids("Sewershed", "indicators")
